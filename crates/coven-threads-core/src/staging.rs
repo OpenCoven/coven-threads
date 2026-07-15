@@ -127,16 +127,32 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
     if raw.len() % 4 != 0 {
         return Err("base64 length not a multiple of 4".into());
     }
-    let mut out = Vec::with_capacity(raw.len() / 4 * 3);
-    for chunk in raw.chunks(4) {
+    let chunk_count = raw.len() / 4;
+    let mut out = Vec::with_capacity(chunk_count * 3);
+    for (index, chunk) in raw.chunks(4).enumerate() {
         let pad = chunk.iter().filter(|c| **c == b'=').count();
         if pad > 2 || chunk[..4 - pad].contains(&b'=') {
             return Err("malformed base64 padding".into());
         }
+        // Padding is only legal in the final chunk; interior padding would
+        // silently concatenate two independent encodings.
+        if pad > 0 && index + 1 != chunk_count {
+            return Err("base64 padding before final chunk".into());
+        }
+        let mut vals = [0u32; 4];
         let mut n: u32 = 0;
         for (i, c) in chunk.iter().enumerate() {
             let v = if *c == b'=' { 0 } else { val(*c)? };
+            vals[i] = v;
             n |= v << (18 - 6 * i as u32);
+        }
+        // Canonical padding: the unused low bits of the last data symbol must
+        // be zero, otherwise two different encodings decode to the same bytes.
+        if pad == 2 && vals[1] & 0x0F != 0 {
+            return Err("non-canonical base64 padding bits".into());
+        }
+        if pad == 1 && vals[2] & 0x03 != 0 {
+            return Err("non-canonical base64 padding bits".into());
         }
         out.push((n >> 16) as u8);
         if pad < 2 {
@@ -176,6 +192,27 @@ mod tests {
             let enc = base64_encode(&payload);
             assert_eq!(base64_decode(&enc).unwrap(), payload, "len {len}");
         }
+    }
+
+    #[test]
+    fn base64_rejects_interior_padding() {
+        // Review finding: padding was validated per chunk, so two encodings
+        // could be concatenated ("AA==AAAA") and accepted.
+        assert!(base64_decode("AA==AAAA").is_err());
+        assert!(base64_decode("AA==AA==").is_err());
+        // Padding in the final chunk stays legal.
+        assert!(base64_decode("AAAAAA==").is_ok());
+    }
+
+    #[test]
+    fn base64_rejects_non_canonical_padding_bits() {
+        // "AB==" and "AQ==" both decode to one byte under a lenient decoder;
+        // only "AQ==" (zero unused bits) is canonical.
+        assert_eq!(base64_decode("AQ==").unwrap(), vec![0x01]);
+        assert!(base64_decode("AB==").is_err());
+        // Two-byte case: "AAE=" is canonical, "AAF=" is not.
+        assert_eq!(base64_decode("AAE=").unwrap(), vec![0x00, 0x01]);
+        assert!(base64_decode("AAF=").is_err());
     }
 
     #[test]

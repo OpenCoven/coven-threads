@@ -13,7 +13,7 @@ use thiserror::Error;
 use crate::ids::{CovenId, FamiliarId, SurfaceId, ThreadId, WeaveId, WriterId};
 use crate::manifest::merkle_root;
 use crate::pattern::{PatternDescriptor, PatternPredicate, WeaveCoherence};
-use crate::thread::{TensionState, Thread};
+use crate::thread::Thread;
 
 /// Errors constructing or importing a weave.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -37,6 +37,12 @@ pub enum WeaveError {
         /// The hash recomputed from the record's threads.
         computed: Vec<u8>,
     },
+
+    /// An `update_threads` closure tried to add, remove, or rebind a
+    /// `(surface, writer)` pair. State updates may not change the authority
+    /// topology (§2.1); the weave was rolled back unchanged.
+    #[error("update_threads changed the authority topology; weave rolled back")]
+    TopologyChanged,
 }
 
 /// The pattern-bound bundle of threads for a familiar (§4).
@@ -120,13 +126,32 @@ impl Weave {
         &self.weave_hash
     }
 
-    /// Mutable access to threads for the daemon verifier lane (fray/snap updates).
-    /// The weave rehashes afterwards — tension is part of the commitment.
-    pub fn update_threads<F: FnOnce(&mut [Thread])>(&mut self, f: F) {
+    /// Update thread *state* (tension, strands) in place — the daemon verifier
+    /// lane. The weave re-sorts and rehashes afterwards: tension is part of the
+    /// commitment.
+    ///
+    /// The authority topology is frozen: the closure must not add, remove, or
+    /// rebind `(surface, writer)` pairs. A closure that changes topology gets
+    /// `WeaveError::TopologyChanged` and the weave is rolled back, unchanged —
+    /// otherwise this method would be a safe-API bypass of the one-thread-per-
+    /// pair construction rule (§2.1).
+    pub fn update_threads<F: FnOnce(&mut [Thread])>(&mut self, f: F) -> Result<(), WeaveError> {
+        let snapshot = self.threads.clone();
         f(&mut self.threads);
         self.threads
             .sort_by(|a, b| (&a.surface, &a.writer).cmp(&(&b.surface, &b.writer)));
+        let topology_unchanged = self.threads.len() == snapshot.len()
+            && self
+                .threads
+                .iter()
+                .zip(snapshot.iter())
+                .all(|(a, b)| a.surface == b.surface && a.writer == b.writer);
+        if !topology_unchanged {
+            self.threads = snapshot;
+            return Err(WeaveError::TopologyChanged);
+        }
         self.weave_hash = compute_weave_hash(&self.threads);
+        Ok(())
     }
 
     /// Evaluate coherence via the weave's own pattern — the authoritative
@@ -209,43 +234,38 @@ pub struct WeaveRecord {
 /// Merkle root over threads in canonical `(surface_path, writer_id)` order (§4).
 ///
 /// Each thread's leaf commits to: surface, writer, covered channels (as a sorted
-/// set), tension discriminant, and every strand's commitment bytes in a canonical
-/// (sorted) order with length prefixes. Strand *ids* and timestamps are identity,
-/// not commitment — two threads committing the same material hash identically.
+/// set), the **full tension state** (variant, blamed strand, channel, reason,
+/// timestamp — C7 equivalence covers all of it), and every strand's commitment
+/// bytes in a canonical (sorted) order. All variable-length fields are
+/// length-prefixed. Strand *ids* are identity, not commitment — two threads
+/// committing the same material hash identically.
 fn compute_weave_hash(threads: &[Thread]) -> Vec<u8> {
     merkle_root(threads.iter().map(thread_leaf_bytes)).to_vec()
 }
 
 fn thread_leaf_bytes(t: &Thread) -> Vec<u8> {
+    use crate::manifest::put_field;
     let mut leaf = Vec::new();
-    leaf.extend_from_slice(b"thread\n");
-    leaf.extend_from_slice(t.surface.as_str().as_bytes());
-    leaf.push(0);
-    leaf.extend_from_slice(t.writer.as_str().as_bytes());
-    leaf.push(0);
+    put_field(&mut leaf, b"thread:v2");
+    put_field(&mut leaf, t.surface.as_str().as_bytes());
+    put_field(&mut leaf, t.writer.as_str().as_bytes());
 
     let mut channel_tags: Vec<&'static str> = t.holds_under.iter().map(|c| c.tag()).collect();
     channel_tags.sort_unstable();
     channel_tags.dedup();
+    put_field(&mut leaf, &(channel_tags.len() as u64).to_be_bytes());
     for tag in channel_tags {
-        leaf.extend_from_slice(tag.as_bytes());
-        leaf.push(b',');
+        put_field(&mut leaf, tag.as_bytes());
     }
-    leaf.push(0);
 
-    let tension_tag: &[u8] = match &t.tension {
-        TensionState::Holds => b"holds",
-        TensionState::Frayed { .. } => b"frayed",
-        TensionState::Snapped { .. } => b"snapped",
-    };
-    leaf.extend_from_slice(tension_tag);
-    leaf.push(0);
+    // Full tension commitment — variant, blame, channel, reason, timestamp.
+    put_field(&mut leaf, &t.tension.commitment_bytes());
 
     let mut strand_bytes: Vec<Vec<u8>> = t.strands.iter().map(|s| s.commitment_bytes()).collect();
     strand_bytes.sort_unstable();
+    put_field(&mut leaf, &(strand_bytes.len() as u64).to_be_bytes());
     for sb in strand_bytes {
-        leaf.extend_from_slice(&(sb.len() as u64).to_be_bytes());
-        leaf.extend_from_slice(&sb);
+        put_field(&mut leaf, &sb);
     }
     leaf
 }
@@ -258,6 +278,7 @@ mod tests {
     use crate::ids::{ManifestId, StrandId};
     use crate::pattern::AllSurfacesHoldOnChannels;
     use crate::strand::{HashAlgo, Strand};
+    use crate::thread::TensionState;
     use time::OffsetDateTime;
 
     fn strands() -> Vec<Strand> {
@@ -400,7 +421,8 @@ mod tests {
                 SnapReason::Revoked,
                 OffsetDateTime::now_utc(),
             );
-        });
+        })
+        .unwrap();
         assert_ne!(w1.weave_hash(), w2.weave_hash());
     }
 
@@ -528,6 +550,138 @@ mod tests {
     }
 
     #[test]
+    fn fray_details_change_weave_hash() {
+        // Review finding: the leaf must commit the full tension state, not
+        // just the variant. Same variant, different reason/channel/timestamp
+        // must hash differently.
+        let base = floor_threads();
+        let fray_at = OffsetDateTime::UNIX_EPOCH;
+
+        let mut a = base.clone();
+        a[0].fray(
+            None,
+            Channel::Mutation,
+            crate::fray::FrayReason::ContentHashMismatch,
+            fray_at,
+        );
+        let mut b = base.clone();
+        b[0].fray(
+            None,
+            Channel::Mutation,
+            crate::fray::FrayReason::SignatureInvalid,
+            fray_at,
+        );
+        let mut c = base.clone();
+        c[0].fray(
+            None,
+            Channel::Forced,
+            crate::fray::FrayReason::ContentHashMismatch,
+            fray_at,
+        );
+        let mut d = base.clone();
+        d[0].fray(
+            None,
+            Channel::Mutation,
+            crate::fray::FrayReason::ContentHashMismatch,
+            fray_at + time::Duration::seconds(1),
+        );
+
+        let hash = |threads: Vec<Thread>| {
+            Weave::new(
+                WeaveId::new(),
+                FamiliarId::new(),
+                threads,
+                floor_pattern(),
+                None,
+            )
+            .unwrap()
+            .weave_hash()
+            .to_vec()
+        };
+        let (ha, hb, hc, hd) = (hash(a), hash(b), hash(c), hash(d));
+        assert_ne!(ha, hb, "reason must be committed");
+        assert_ne!(ha, hc, "channel must be committed");
+        assert_ne!(ha, hd, "timestamp must be committed");
+    }
+
+    #[test]
+    fn delimiter_bytes_in_ids_cannot_forge_leaves() {
+        // Review finding: delimiter-based framing let (surface="a", writer
+        // containing a delimiter) collide with a shifted split. With
+        // length-prefixed fields the two topologies must hash differently.
+        let make = |surface: &str, writer: &str| {
+            let mut t = thread(surface, writer);
+            t.strands.clear();
+            t
+        };
+        let w1 = Weave::new(
+            WeaveId::new(),
+            FamiliarId::new(),
+            vec![make("a", "b\0c")],
+            floor_pattern(),
+            None,
+        )
+        .unwrap();
+        let w2 = Weave::new(
+            WeaveId::new(),
+            FamiliarId::new(),
+            vec![make("a\0b", "c")],
+            floor_pattern(),
+            None,
+        )
+        .unwrap();
+        assert_ne!(w1.weave_hash(), w2.weave_hash());
+    }
+
+    #[test]
+    fn update_threads_rejects_topology_change_and_rolls_back() {
+        // Review finding: update_threads must not be a safe-API bypass of the
+        // one-thread-per-(surface, writer) construction rule.
+        let mut w = Weave::new(
+            WeaveId::new(),
+            FamiliarId::new(),
+            floor_threads(),
+            floor_pattern(),
+            None,
+        )
+        .unwrap();
+        let hash_before = w.weave_hash().to_vec();
+        let threads_before = w.threads().to_vec();
+
+        // Rebinding a writer is a topology change.
+        let err = w
+            .update_threads(|threads| {
+                threads[0].writer = WriterId::new("familiar:mallory");
+            })
+            .unwrap_err();
+        assert_eq!(err, WeaveError::TopologyChanged);
+        assert_eq!(w.threads(), threads_before.as_slice(), "rolled back");
+        assert_eq!(w.weave_hash(), hash_before.as_slice(), "hash unchanged");
+
+        // Duplicating a pair by rebinding onto an existing one is rejected too.
+        let existing = w.threads()[1].clone();
+        let err = w
+            .update_threads(move |threads| {
+                threads[0].surface = existing.surface.clone();
+                threads[0].writer = existing.writer.clone();
+            })
+            .unwrap_err();
+        assert_eq!(err, WeaveError::TopologyChanged);
+        assert_eq!(w.threads(), threads_before.as_slice());
+
+        // A pure tension update still succeeds.
+        w.update_threads(|threads| {
+            threads[0].snap(
+                Channel::Mutation,
+                crate::fray::SnapReason::Revoked,
+                OffsetDateTime::UNIX_EPOCH,
+            );
+        })
+        .unwrap();
+        assert_ne!(w.weave_hash(), hash_before.as_slice());
+    }
+
+    #[test]
     fn record_roundtrip_preserves_tension_and_hash() {
         // C7 groundwork (§3.3 #4): export → import produces a weave with
         // equivalent tension state.
@@ -545,7 +699,8 @@ mod tests {
                 SnapReason::Revoked,
                 OffsetDateTime::UNIX_EPOCH,
             );
-        });
+        })
+        .unwrap();
 
         let json = serde_json::to_string(&w.to_record()).unwrap();
         let record: WeaveRecord = serde_json::from_str(&json).unwrap();

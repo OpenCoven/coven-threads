@@ -378,7 +378,8 @@ mod tests {
                 FrayReason::ContentHashMismatch,
                 OffsetDateTime::now_utc(),
             );
-        });
+        })
+        .unwrap();
         let frayed_surface = w.threads()[0].surface.clone();
         let v = validate(
             &w,
@@ -400,7 +401,8 @@ mod tests {
                 SnapReason::Revoked,
                 OffsetDateTime::now_utc(),
             );
-        });
+        })
+        .unwrap();
         let snapped_surface = w.threads()[0].surface.clone();
 
         let v = validate(

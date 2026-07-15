@@ -115,16 +115,20 @@ impl Strand {
     /// Any change to a strand's committed payload changes these bytes, which changes
     /// the containing thread's leaf hash, which changes `weave_hash` (§4). Timestamps
     /// participate for `AuditTrail` because first-seen is part of the commitment.
+    ///
+    /// Every variable-length field is length-prefixed (`manifest::put_field`):
+    /// delimiter framing would let a field containing the delimiter forge the
+    /// boundary between adjacent fields.
     pub fn commitment_bytes(&self) -> Vec<u8> {
+        use crate::manifest::put_field;
         let mut out = Vec::new();
         match self {
             Strand::ContentHash {
                 algorithm, value, ..
             } => {
-                out.extend_from_slice(b"content-hash\n");
-                out.extend_from_slice(algorithm.tag().as_bytes());
-                out.push(b'\n');
-                out.extend_from_slice(value);
+                put_field(&mut out, b"content-hash");
+                put_field(&mut out, algorithm.tag().as_bytes());
+                put_field(&mut out, value);
             }
             Strand::Signature {
                 key_id,
@@ -132,40 +136,40 @@ impl Strand {
                 value,
                 ..
             } => {
-                out.extend_from_slice(b"signature\n");
-                out.extend_from_slice(key_id.as_bytes());
-                out.push(b'\n');
-                out.extend_from_slice(kind.tag().as_bytes());
-                out.push(b'\n');
-                out.extend_from_slice(value);
+                put_field(&mut out, b"signature");
+                put_field(&mut out, key_id.as_bytes());
+                put_field(&mut out, kind.tag().as_bytes());
+                put_field(&mut out, value);
             }
             Strand::ManifestEntry {
                 manifest_id,
                 entry_hash,
                 ..
             } => {
-                out.extend_from_slice(b"manifest-entry\n");
-                out.extend_from_slice(manifest_id.0.as_bytes());
-                out.extend_from_slice(entry_hash);
+                put_field(&mut out, b"manifest-entry");
+                put_field(&mut out, manifest_id.0.as_bytes());
+                put_field(&mut out, entry_hash);
             }
             Strand::AuditTrail {
                 first_seen,
                 event_log_ref,
                 ..
             } => {
-                out.extend_from_slice(b"audit-trail\n");
-                out.extend_from_slice(first_seen.unix_timestamp_nanos().to_be_bytes().as_slice());
-                out.extend_from_slice(event_log_ref.as_str().as_bytes());
+                put_field(&mut out, b"audit-trail");
+                put_field(
+                    &mut out,
+                    first_seen.unix_timestamp_nanos().to_be_bytes().as_slice(),
+                );
+                put_field(&mut out, event_log_ref.as_str().as_bytes());
             }
             Strand::SerializationMarker {
                 format_version,
                 contract_hash,
                 ..
             } => {
-                out.extend_from_slice(b"serialization-marker\n");
-                out.extend_from_slice(format_version.as_bytes());
-                out.push(b'\n');
-                out.extend_from_slice(contract_hash);
+                put_field(&mut out, b"serialization-marker");
+                put_field(&mut out, format_version.as_bytes());
+                put_field(&mut out, contract_hash);
             }
         }
         out
@@ -321,5 +325,38 @@ mod tests {
             contract_hash: vec![7; 32],
         };
         assert_ne!(hash.commitment_bytes(), marker.commitment_bytes());
+    }
+
+    #[test]
+    fn field_boundaries_are_unambiguous() {
+        // Review finding: with newline-delimited framing these two markers
+        // produced identical commitment bytes ("1.0\nX" + "Y" vs "1.0" +
+        // "X\nY"). Length-prefixed fields must keep them distinct.
+        let a = Strand::SerializationMarker {
+            id: StrandId::new(),
+            format_version: "1.0\nX".into(),
+            contract_hash: b"Y".to_vec(),
+        };
+        let b = Strand::SerializationMarker {
+            id: StrandId::new(),
+            format_version: "1.0".into(),
+            contract_hash: b"X\nY".to_vec(),
+        };
+        assert_ne!(a.commitment_bytes(), b.commitment_bytes());
+
+        // Same shape for Signature key_id vs value.
+        let c = Strand::Signature {
+            id: StrandId::new(),
+            key_id: "k\ned25519".into(),
+            kind: SigKind::Ed25519,
+            value: b"v".to_vec(),
+        };
+        let d = Strand::Signature {
+            id: StrandId::new(),
+            key_id: "k".into(),
+            kind: SigKind::Ed25519,
+            value: b"ed25519\nv".to_vec(),
+        };
+        assert_ne!(c.commitment_bytes(), d.commitment_bytes());
     }
 }

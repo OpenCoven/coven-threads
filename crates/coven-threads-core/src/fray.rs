@@ -43,6 +43,33 @@ pub enum FrayReason {
     Other(String),
 }
 
+impl FrayReason {
+    /// Canonical, length-prefixed commitment bytes — part of the thread leaf
+    /// hash (tension is committed in full; see `weave::thread_leaf_bytes`).
+    pub(crate) fn commitment_bytes(&self) -> Vec<u8> {
+        use crate::manifest::put_field;
+        let mut out = Vec::new();
+        match self {
+            FrayReason::ContentHashMismatch => put_field(&mut out, b"content-hash-mismatch"),
+            FrayReason::SignatureInvalid => put_field(&mut out, b"signature-invalid"),
+            FrayReason::ManifestEntryMismatch => put_field(&mut out, b"manifest-entry-mismatch"),
+            FrayReason::AuditTrailUnverifiable => put_field(&mut out, b"audit-trail-unverifiable"),
+            FrayReason::RequiredStrandMissing { kind } => {
+                put_field(&mut out, b"required-strand-missing");
+                put_field(&mut out, format!("{kind:?}").as_bytes());
+            }
+            FrayReason::SerializationMarkerMismatch => {
+                put_field(&mut out, b"serialization-marker-mismatch")
+            }
+            FrayReason::Other(detail) => {
+                put_field(&mut out, b"other");
+                put_field(&mut out, detail.as_bytes());
+            }
+        }
+        out
+    }
+}
+
 /// Why a thread snapped (terminal).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SnapReason {
@@ -54,6 +81,24 @@ pub enum SnapReason {
     PatternBroken,
     /// Freeform diagnostic.
     Other(String),
+}
+
+impl SnapReason {
+    /// Canonical, length-prefixed commitment bytes (see `FrayReason`).
+    pub(crate) fn commitment_bytes(&self) -> Vec<u8> {
+        use crate::manifest::put_field;
+        let mut out = Vec::new();
+        match self {
+            SnapReason::Revoked => put_field(&mut out, b"revoked"),
+            SnapReason::MultipleStrandFray => put_field(&mut out, b"multiple-strand-fray"),
+            SnapReason::PatternBroken => put_field(&mut out, b"pattern-broken"),
+            SnapReason::Other(detail) => {
+                put_field(&mut out, b"other");
+                put_field(&mut out, detail.as_bytes());
+            }
+        }
+        out
+    }
 }
 
 /// The failure result of `Thread::holds_under(channel)` (§4).

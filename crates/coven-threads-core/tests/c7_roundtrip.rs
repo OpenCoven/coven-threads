@@ -102,20 +102,22 @@ fn all_five_strand_kinds_round_trip_with_equivalent_state() {
 #[test]
 fn frayed_and_snapped_tension_survive_round_trip() {
     let mut weave = floor_weave();
-    weave.update_threads(|threads| {
-        let strand = threads[0].strands[0].id();
-        threads[0].fray(
-            Some(strand),
-            Channel::Forced,
-            FrayReason::ContentHashMismatch,
-            OffsetDateTime::UNIX_EPOCH,
-        );
-        threads[1].snap(
-            Channel::Mutation,
-            SnapReason::Revoked,
-            OffsetDateTime::UNIX_EPOCH,
-        );
-    });
+    weave
+        .update_threads(|threads| {
+            let strand = threads[0].strands[0].id();
+            threads[0].fray(
+                Some(strand),
+                Channel::Forced,
+                FrayReason::ContentHashMismatch,
+                OffsetDateTime::UNIX_EPOCH,
+            );
+            threads[1].snap(
+                Channel::Mutation,
+                SnapReason::Revoked,
+                OffsetDateTime::UNIX_EPOCH,
+            );
+        })
+        .unwrap();
 
     let bytes = to_json_bytes(&export_weave(&weave).unwrap()).unwrap();
     let imported = import_weave(from_json_bytes(&bytes).unwrap(), floor_pattern()).unwrap();
@@ -196,13 +198,15 @@ fn tension_tamper_fails_visibly_on_import() {
     // Flipping a snapped thread back to Holds in the artifact must not import:
     // tension is part of the weave commitment.
     let mut weave = floor_weave();
-    weave.update_threads(|threads| {
-        threads[0].snap(
-            Channel::Mutation,
-            SnapReason::Revoked,
-            OffsetDateTime::UNIX_EPOCH,
-        );
-    });
+    weave
+        .update_threads(|threads| {
+            threads[0].snap(
+                Channel::Mutation,
+                SnapReason::Revoked,
+                OffsetDateTime::UNIX_EPOCH,
+            );
+        })
+        .unwrap();
     let mut artifact = export_weave(&weave).unwrap();
     artifact.record.threads[0].tension = coven_threads_core::TensionState::Holds;
 
@@ -213,6 +217,42 @@ fn tension_tamper_fails_visibly_on_import() {
             PortabilityError::Weave(WeaveError::HashMismatch { .. })
         ),
         "resurrecting a snapped thread must fail visibly, got {err:?}"
+    );
+}
+
+#[test]
+fn fray_detail_tamper_fails_visibly_on_import() {
+    // Review finding: the leaf previously committed only the tension variant,
+    // so an artifact could rewrite *why* a thread frayed without changing the
+    // weave hash. Reason, channel, and timestamp are committed now.
+    let mut weave = floor_weave();
+    weave
+        .update_threads(|threads| {
+            let strand = threads[0].strands[0].id();
+            threads[0].fray(
+                Some(strand),
+                Channel::Forced,
+                FrayReason::ContentHashMismatch,
+                OffsetDateTime::UNIX_EPOCH,
+            );
+        })
+        .unwrap();
+    let mut artifact = export_weave(&weave).unwrap();
+    if let coven_threads_core::TensionState::Frayed { reason, .. } =
+        &mut artifact.record.threads[0].tension
+    {
+        *reason = FrayReason::Other("cosmic rays, nothing to see".into());
+    } else {
+        panic!("fixture: thread 0 should be frayed");
+    }
+
+    let err = import_weave(artifact, floor_pattern()).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            PortabilityError::Weave(WeaveError::HashMismatch { .. })
+        ),
+        "rewriting a fray reason must fail visibly, got {err:?}"
     );
 }
 

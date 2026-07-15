@@ -46,6 +46,50 @@ pub enum TensionState {
     },
 }
 
+impl TensionState {
+    /// Canonical, length-prefixed commitment bytes. Tension is committed **in
+    /// full** — variant, blamed strand, channel, reason, and timestamps — so a
+    /// portable artifact cannot change *why or when* a thread frayed or
+    /// snapped while keeping the same `weave_hash` (C7: equivalent tension
+    /// state means all of it, not just the discriminant).
+    pub(crate) fn commitment_bytes(&self) -> Vec<u8> {
+        use crate::manifest::put_field;
+        let mut out = Vec::new();
+        match self {
+            TensionState::Holds => put_field(&mut out, b"holds"),
+            TensionState::Frayed {
+                strand,
+                channel,
+                reason,
+                detected_at,
+            } => {
+                put_field(&mut out, b"frayed");
+                match strand {
+                    Some(id) => put_field(&mut out, id.0.as_bytes()),
+                    None => put_field(&mut out, b""),
+                }
+                put_field(&mut out, channel.tag().as_bytes());
+                put_field(&mut out, &reason.commitment_bytes());
+                put_field(
+                    &mut out,
+                    detected_at.unix_timestamp_nanos().to_be_bytes().as_slice(),
+                );
+            }
+            TensionState::Snapped {
+                channel,
+                reason,
+                at,
+            } => {
+                put_field(&mut out, b"snapped");
+                put_field(&mut out, channel.tag().as_bytes());
+                put_field(&mut out, &reason.commitment_bytes());
+                put_field(&mut out, at.unix_timestamp_nanos().to_be_bytes().as_slice());
+            }
+        }
+        out
+    }
+}
+
 /// An authority relationship binding one protected surface to one writer (§4).
 ///
 /// The three axes are split per Echo v0.1.1: `writer` names *who* proposes the

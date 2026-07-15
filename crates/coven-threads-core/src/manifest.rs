@@ -27,6 +27,16 @@ const LEAF_TAG: &[u8] = b"coven-threads:leaf:v1";
 const NODE_TAG: &[u8] = b"coven-threads:node:v1";
 const EMPTY_TAG: &[u8] = b"coven-threads:empty:v1";
 
+/// Append one variable-length field to a commitment buffer as
+/// `u64-BE(len) ‖ bytes`. Every variable-length field in every commitment
+/// encoding in this crate goes through here: delimiter-based framing is
+/// forgeable whenever a field can contain the delimiter, and `SurfaceId`,
+/// `WriterId`, key ids, and format versions all accept arbitrary bytes.
+pub(crate) fn put_field(out: &mut Vec<u8>, bytes: &[u8]) {
+    out.extend_from_slice(&(bytes.len() as u64).to_be_bytes());
+    out.extend_from_slice(bytes);
+}
+
 /// Compute the BLAKE3 Merkle root over an ordered sequence of leaf payloads.
 ///
 /// The caller supplies leaves in canonical order; this function is deliberately
