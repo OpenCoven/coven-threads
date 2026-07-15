@@ -545,15 +545,13 @@ layout: default
 
 # From client to <code>ward.audit</code>.
 
-```mermaid {scale: 0.75}
+```mermaid {scale: 0.52}
 flowchart LR
-  A["Untrusted<br/>client"] -->|HTTP over<br/>unix socket| B["coven daemon"]
+  A["Untrusted client"] -->|HTTP over unix socket| B["coven daemon"]
   B -->|"validate(request)"| C["coven-threads"]
-  C --> D["Load weave"]
-  D --> E["Check strands<br/>under channel"]
+  C --> D["Load weave"] --> E["Check strands<br/>under channel"]
   E --> F{{"Permit /<br/>DegradeToProposal /<br/>Reject"}}
-  F --> G["Daemon acts"]
-  G --> H["Append to<br/>ward.audit"]
+  F --> G["Daemon acts"] --> H["Append to ward.audit"]
   style A fill:#0F0A14,stroke:#C44536,color:#fff
   style B fill:#4A2E5C,stroke:#D4B5FF,color:#fff
   style C fill:#8B6BA8,stroke:#D4B5FF,color:#fff
@@ -564,8 +562,8 @@ flowchart LR
   style H fill:#4A2E5C,stroke:#D4B5FF,color:#fff
 ```
 
-<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 1rem;">
-<div class="card" style="text-align: center;">
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 0.4rem;">
+<div class="card" style="text-align: center; padding: 0.6rem 0.9rem;">
 <div style="color: #A8D89A; font-weight: 600;">Permit</div>
 <p style="margin: 0.3rem 0 0; font-size: 0.85rem;">All threads hold. Write proceeds.</p>
 </div>
