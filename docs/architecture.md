@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: the enforcement flow on this page is `[DESIGNED]` (frozen, `specs/PHASE-0-DESIGN.md` §5) with a crate-side implementation `[IMPLEMENTED, NOT ENFORCING]` in `coven-threads-core`. The daemon-side call site exists on an unmerged `coven` branch; **no deployed daemon runs this today.**
+> Status: the enforcement flow on this page is `[DESIGNED]` (frozen, `specs/PHASE-0-DESIGN.md` §5) with the crate implementation in `coven-threads-core` and the daemon-side call site **merged to coven `main`** (PR https://github.com/OpenCoven/coven/pull/382, 2026-07-15). Daemons built from coven `main` route tier-0 protected-surface edits through this flow.
 
 Vocabulary reminder (bound in full in [concepts.md](concepts.md)): a **Thread** is an authority relationship *surface → writer*; a **Weave** is the enforced pattern of threads across a familiar; a **Strand** is a fiber inside a thread (hash, signature, manifest entry, audit trail, serialization marker); a **Channel** is the axis of load a thread must hold under.
 

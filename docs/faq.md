@@ -33,7 +33,7 @@ The claim is source-verified, not vibes (design doc §12, checked 2026-07-14 aga
 
 That is, precisely, the failure mode WARD-C7 exists to refuse: **silent downgrade on import**. C7 requires that export followed by import produce a weave with equivalent tension state *or fail visibly* ([channels-and-strands.md](channels-and-strands.md#serialization)). A format that structurally cannot represent the protection contract cannot satisfy that, and adopting it anyway would falsify the external-authority thesis at the format layer.
 
-To be fair to `.af`: it serializes what Letta's model is — an editable persona-as-memory-block — and it does that fine. The divergence is a mismatch of models, not a defect claim: a Coven familiar has a *typed protected surface*, and the format must carry the type. Whether the eventual Coven format is a `.af` superset with namespaced extensions (Shape A) or a net-new envelope (Shape B) is a live decision (`specs/PHASE-3-PORTABILITY.md`, Val's call, bead `threads-986.16`) — but under either shape, silent-downgrade-on-import remains non-conformant.
+To be fair to `.af`: it serializes what Letta's model is — an editable persona-as-memory-block — and it does that fine. The divergence is a mismatch of models, not a defect claim: a Coven familiar has a *typed protected surface*, and the format must carry the type. The decision landed 2026-07-15 (`specs/PHASE-3-PORTABILITY.md` §6, bead `threads-986.16`): **Shape B — a net-new `.weave` envelope — is canonical**, with a clearly-marked lossy one-way `.af` exporter for Letta handoff. `.af` is never a round-trip surface, and silent-downgrade-on-import remains non-conformant.
 
 ## What happens if the daemon crashes mid-check?
 
@@ -43,7 +43,7 @@ The order of operations makes this work (design doc §5; [architecture.md](archi
 
 Within the check itself, the same posture holds for softer failures: a validator **panic** is caught by the daemon and treated as `Reject` with a diagnostic (Gate 4 fail-closed, RFC-0001 §5.4 — an error is an unknown, and unknowns reject). Defense in depth runs both directions: the crate provides a panic-catching wrapper, and the daemon must also catch at its boundary.
 
-One honest caveat: the crash-atomicity of the *post-verdict* steps — applying the write and appending to `ward.audit` as an effectively-atomic pair — is Phase 2 daemon territory (`[DESIGNED]`, unmerged; see [phases.md](phases.md)). The crate defines the contracts; the transactional discipline around them will land, and deserve scrutiny, with the daemon integration.
+One honest caveat: the crash-atomicity of the *post-verdict* steps — applying the write and appending to `ward.audit` as an effectively-atomic pair — is Phase 2 daemon territory (merged to coven `main` via PR #382; see [phases.md](phases.md)). The crate defines the contracts; the transactional discipline around them lives, and deserves scrutiny, in the daemon integration.
 
 ## Is this a policy engine?
 
