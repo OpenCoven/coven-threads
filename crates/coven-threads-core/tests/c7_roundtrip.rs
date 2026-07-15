@@ -12,8 +12,8 @@
 //! the exported ones — an artifact cannot smuggle wider authority in.
 
 use coven_threads_core::portability::{
-    export_weave, from_json_bytes, import_weave, to_json_bytes, PortabilityError,
-    SerializationContract, PORTABILITY_FORMAT_VERSION,
+    export_af, export_weave, export_weave_with_surfaces, from_json_bytes, import_weave,
+    to_json_bytes, PortabilityError, SerializationContract, PORTABILITY_FORMAT_VERSION,
 };
 use coven_threads_core::{
     AllSurfacesHoldOnChannels, Channel, EventRef, FamiliarId, FrayReason, HashAlgo, ManifestId,
@@ -53,12 +53,35 @@ fn all_five_strands() -> Vec<Strand> {
     ]
 }
 
+fn all_five_strands_for_content(content: &str) -> Vec<Strand> {
+    let mut strands = all_five_strands();
+    let content_hash = blake3::hash(content.as_bytes()).as_bytes().to_vec();
+    if let Strand::ContentHash { value, .. } = &mut strands[0] {
+        *value = content_hash;
+    } else {
+        panic!("fixture: first strand should be ContentHash");
+    }
+    strands
+}
+
 fn thread_on(surface: &str, writer: &str) -> Thread {
     Thread {
         id: ThreadId::new(),
         surface: SurfaceId::new(surface),
         writer: WriterId::new(writer),
         strands: all_five_strands(),
+        holds_under: vec![Channel::Forced, Channel::Serialization, Channel::Mutation],
+        created_at: OffsetDateTime::UNIX_EPOCH,
+        tension: coven_threads_core::TensionState::Holds,
+    }
+}
+
+fn thread_on_with_content(surface: &str, writer: &str, content: &str) -> Thread {
+    Thread {
+        id: ThreadId::new(),
+        surface: SurfaceId::new(surface),
+        writer: WriterId::new(writer),
+        strands: all_five_strands_for_content(content),
         holds_under: vec![Channel::Forced, Channel::Serialization, Channel::Mutation],
         created_at: OffsetDateTime::UNIX_EPOCH,
         tension: coven_threads_core::TensionState::Holds,
@@ -81,6 +104,29 @@ fn floor_weave() -> Weave {
         None,
     )
     .unwrap()
+}
+
+fn surfaced_weave() -> (Weave, Vec<(SurfaceId, String)>) {
+    let surfaces = vec![
+        (SurfaceId::new("SOUL.md"), "soul-body\n".to_string()),
+        (SurfaceId::new("IDENTITY.md"), "identity-body\n".to_string()),
+        (SurfaceId::new("MEMORY.md"), "memory-body\n".to_string()),
+        (SurfaceId::new("ward.toml"), "ward-body\n".to_string()),
+    ];
+    let weave = Weave::new(
+        coven_threads_core::WeaveId::new(),
+        FamiliarId::new(),
+        surfaces
+            .iter()
+            .map(|(surface, content)| {
+                thread_on_with_content(surface.as_str(), "principal:val", content)
+            })
+            .collect(),
+        floor_pattern(),
+        None,
+    )
+    .unwrap();
+    (weave, surfaces)
 }
 
 // ── Positive arm ─────────────────────────────────────────────────────────────
@@ -147,6 +193,91 @@ fn import_never_widens_authority() {
         .map(|t| (t.surface.clone(), t.writer.clone(), t.holds_under.clone()))
         .collect();
     assert_eq!(exported_topology, imported_topology);
+}
+
+#[test]
+fn surfaces_map_round_trips_and_verifies_content_hash() {
+    let (weave, surfaces) = surfaced_weave();
+    let artifact = export_weave_with_surfaces(&weave, surfaces.clone()).expect("export");
+    let bytes = to_json_bytes(&artifact).expect("encode");
+    let decoded = from_json_bytes(&bytes).expect("decode");
+    let imported = import_weave(decoded, floor_pattern()).expect("import verifies surfaces");
+
+    assert_eq!(imported.threads(), weave.threads());
+    assert_eq!(imported.weave_hash(), weave.weave_hash());
+}
+
+#[test]
+fn tampered_surface_content_fails_closed_after_envelope_verification() {
+    let (weave, surfaces) = surfaced_weave();
+    let mut artifact = export_weave_with_surfaces(&weave, surfaces).expect("export");
+    artifact
+        .surfaces
+        .get_mut(&SurfaceId::new("SOUL.md"))
+        .expect("surface")
+        .data
+        .push_str("tamper");
+
+    let err = import_weave(artifact, floor_pattern()).unwrap_err();
+    assert!(
+        matches!(err, PortabilityError::SurfaceContentHashMismatch { .. }),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn af_export_marks_non_round_trippable() {
+    let (weave, surfaces) = surfaced_weave();
+    let artifact = export_weave_with_surfaces(&weave, surfaces).expect("export");
+    let af = export_af(&artifact).expect("af export");
+    let json = serde_json::to_value(&af).expect("af json");
+
+    assert_eq!(json["round_trippable"], false);
+    assert_eq!(json["agent_type"], "coven_familiar_lossy_handoff");
+    assert_eq!(json["x_coven_threads"]["non_round_trippable"], true);
+    assert_eq!(
+        json["x_coven_threads"]["reentry"],
+        "re-entry requires the original .weave; .af import is unsupported"
+    );
+    assert!(json["embedding_config"].is_object());
+    assert!(json["llm_config"].is_object());
+    assert_eq!(json["messages"].as_array().unwrap().len(), 0);
+    assert_eq!(json["tools"].as_array().unwrap().len(), 0);
+    assert_eq!(json["core_memory"][0]["is_template"], false);
+    assert!(json["core_memory"][0]["limit"].as_u64().unwrap() > 0);
+}
+
+#[test]
+fn af_export_is_deterministic_and_contains_all_surfaces() {
+    let (weave, mut surfaces) = surfaced_weave();
+    surfaces.reverse();
+    let artifact = export_weave_with_surfaces(&weave, surfaces).expect("export");
+
+    let first = serde_json::to_vec(&export_af(&artifact).expect("af export")).unwrap();
+    let second = serde_json::to_vec(&export_af(&artifact).expect("af export")).unwrap();
+    assert_eq!(first, second);
+
+    let json: serde_json::Value = serde_json::from_slice(&first).unwrap();
+    let labels: Vec<&str> = json["core_memory"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        labels,
+        vec!["IDENTITY.md", "MEMORY.md", "SOUL.md", "ward.toml"]
+    );
+}
+
+#[test]
+fn legacy_weave_without_surfaces_still_imports() {
+    let weave = floor_weave();
+    let artifact = export_weave(&weave).expect("legacy export");
+    assert!(artifact.surfaces.is_empty());
+
+    let imported = import_weave(artifact, floor_pattern()).expect("legacy import");
+    assert_eq!(imported.threads(), weave.threads());
 }
 
 // ── Negative arms: every failure is visible ──────────────────────────────────
