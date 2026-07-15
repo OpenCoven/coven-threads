@@ -1,12 +1,29 @@
+%% stack — where coven-threads sits, with both boundaries drawn: the daemon
+%% trust boundary CONTAINS coven-threads-core (imported validator crate,
+%% Phase 2 reality), and familiar-controlled processes have no write path to
+%% protected surfaces (RFC-0001 §5.1).
+%% Source of truth: PHASE-0-DESIGN.md §1, §3.1, §3.2; RFC-0001 §5.1;
+%% coven/docs/SAFETY-MODEL.md.
+%% Form: containment subgraph + a forbidden edge for the §5.1 cut.
 flowchart TB
-  A["Protected surfaces<br/>(SOUL.md · MEMORY.md · identity fields)"]
-  B["coven-threads<br/><i>authority-boundary gate layer</i>"]
-  C["coven daemon<br/>(shipped Rust · trust boundary)"]
-  D["Runtimes · harnesses · familiars"]
-  A --> B
-  B --> C
-  C --> D
-  style A fill:#4A2E5C,stroke:#D4B5FF,color:#fff
-  style B fill:#8B6BA8,stroke:#D4B5FF,color:#fff
-  style C fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style D fill:#0F0A14,stroke:#4A2E5C,color:#8B6BA8
+  P["Protected surfaces<br/>SOUL.md · IDENTITY.md · MEMORY.md · ward.toml<br/><i>typed memory layers, not runtime config</i>"]
+
+  subgraph DAEMON["coven daemon — the trust boundary (Rust; every client untrusted)"]
+    direction TB
+    WARD["Ward<br/>Gate 1 authorization · Gate 2 materialization"]
+    CT["coven-threads-core<br/><i>authority-boundary gate layer —<br/>imported validator crate, reachable only in here</i>"]
+    WARD -->|"consults per tier-0 target"| CT
+  end
+
+  F["Familiar-controlled processes<br/>runtimes · harnesses · clients"]
+
+  DAEMON -->|"sole write authority<br/>(gated, audited)"| P
+  F -->|"requests over unix socket<br/>(untrusted for enforcement)"| DAEMON
+  F -.-x|"NO write path — RFC-0001 §5.1:<br/>MUST NOT modify the Ward ·<br/>restart the authority · bypass gates"| P
+
+  style P fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style DAEMON fill:#241B31,stroke:#A8D89A,color:#E8E3F5
+  style WARD fill:#1A1825,stroke:#8B6BA8,color:#E8E3F5
+  style CT fill:#8B6BA8,stroke:#D4B5FF,color:#FFFFFF
+  style F fill:#1A1825,stroke:#C44536,color:#C5BDED
+  linkStyle 3 stroke:#C44536,color:#E8B4B4

@@ -1,27 +1,40 @@
+%% weave-thread-strand — the vocabulary as the types actually relate:
+%% a Weave carries an authoritative PatternPredicate (its descriptor is
+%% derived, never enforced on — §2.2 anti-pattern) and N threads; each
+%% thread is one (surface → writer) pair with holds_under channels and a
+%% Vec of strands drawn from the five frozen kinds (NOT one kind per
+%% thread).
+%% Source of truth: PHASE-0-DESIGN.md §2.1–§2.3;
+%% crates/coven-threads-core/src/{weave.rs,thread.rs,strand.rs,pattern.rs}.
+%% Form: containment subgraphs; dashed derive edge for the anti-pattern.
 flowchart TB
-  W["Weave<br/><i>enforced pattern of threads</i>"]
-  T1["Thread<br/>surface → writer"]
-  T2["Thread<br/>surface → writer"]
-  T3["Thread<br/>surface → writer"]
-  S1["ContentHash"]
-  S2["Signature"]
-  S3["ManifestEntry"]
-  S4["AuditTrail"]
-  S5["SerializationMarker"]
-  W --> T1
-  W --> T2
-  W --> T3
-  T1 --> S1
-  T1 --> S2
-  T2 --> S3
-  T2 --> S4
-  T3 --> S5
-  style W fill:#4A2E5C,stroke:#D4B5FF,color:#fff
-  style T1 fill:#8B6BA8,stroke:#D4B5FF,color:#fff
-  style T2 fill:#8B6BA8,stroke:#D4B5FF,color:#fff
-  style T3 fill:#8B6BA8,stroke:#D4B5FF,color:#fff
-  style S1 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
-  style S2 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
-  style S3 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
-  style S4 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
-  style S5 fill:#1A1825,stroke:#D4B5FF,color:#D4B5FF
+  subgraph WV["Weave — enforced pattern of threads across a familiar"]
+    direction TB
+    PP["PatternPredicate::coherent()<br/><b>authoritative — enforcement gates here</b>"]
+    PD["PatternDescriptor (describe())<br/><i>derived — for humans, tools, Cave rendering;<br/>MUST NOT be enforced on</i>"]
+    PP -.->|derives| PD
+
+    subgraph T1["Thread — SOUL.md → principal:val"]
+      direction TB
+      H1["holds_under: Forced · Serialization · Mutation"]
+      T1S["strands: ContentHash · ManifestEntry ·<br/>SerializationMarker · Signature · AuditTrail"]
+    end
+    subgraph T2["Thread — MEMORY.md → principal:val"]
+      direction TB
+      H2["holds_under: Forced · Serialization · Mutation"]
+      T2S["strands: ContentHash · ManifestEntry ·<br/>SerializationMarker"]
+    end
+
+    PP -->|"evaluates: do these threads,<br/>in current tension, satisfy the pattern?"| T1
+    PP --> T2
+  end
+
+  style WV fill:#241B31,stroke:#D4B5FF,color:#E8E3F5
+  style PP fill:#4A2E5C,stroke:#A8D89A,color:#FFFFFF
+  style PD fill:#1A1825,stroke:#4A3D5C,color:#9B8BB4
+  style T1 fill:#1A1825,stroke:#8B6BA8,color:#E8E3F5
+  style T2 fill:#1A1825,stroke:#8B6BA8,color:#E8E3F5
+  style H1 fill:#241B31,stroke:#8B6BA8,color:#C5BDED
+  style H2 fill:#241B31,stroke:#8B6BA8,color:#C5BDED
+  style T1S fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style T2S fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF

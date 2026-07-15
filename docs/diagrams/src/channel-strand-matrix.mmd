@@ -1,37 +1,38 @@
+%% channel-strand-matrix — which strand kinds a thread MUST carry to hold
+%% under each channel of load.
+%% Source of truth: crates/coven-threads-core/src/channel.rs
+%% (Channel::required_strand_kinds) and PHASE-0-DESIGN.md §2.4.
+%% Form: per-channel grouping (contents ARE the floor) — no cross arrows.
 flowchart LR
-  subgraph Channels["Channels of load"]
-    direction TB
-    C1["Deliberate"]
-    C2["Forced<br/><i>WARD-C1–C6</i>"]
-    C3["Serialization<br/><i>WARD-C7</i>"]
-    C4["Mutation"]
+  subgraph MATRIX["Channel::required_strand_kinds() — a thread holds under a channel only if it carries that channel's floor strands (fail-closed: an uncovered channel is NotCovered, never a pass)"]
+    direction LR
+    subgraph DL["Deliberate<br/><i>familiar-initiated, principal-gated</i>"]
+      D0["no structural floor —<br/>the principal's consent path is the gate"]
+    end
+    subgraph FO["Forced<br/><i>runtime auto-compact · WARD-C1–C6</i>"]
+      direction TB
+      F1["ContentHash"]
+      F2["ManifestEntry<br/><i>external manifest — survives without<br/>agent cooperation</i>"]
+    end
+    subgraph SE["Serialization<br/><i>export/import round-trip · WARD-C7</i>"]
+      S1["SerializationMarker<br/><i>explicit survival contract</i>"]
+    end
+    subgraph MU["Mutation<br/><i>default daemon write path</i>"]
+      M1["ContentHash"]
+    end
+
+    DL ~~~ FO
+    FO ~~~ SE
+    SE ~~~ MU
   end
 
-  subgraph Strands["Required strands"]
-    direction TB
-    R1["ContentHash"]
-    R2["Signature"]
-    R3["ManifestEntry"]
-    R4["AuditTrail"]
-    R5["SerializationMarker"]
-  end
-
-  C1 --> R2
-  C1 --> R4
-  C2 --> R1
-  C2 --> R3
-  C2 --> R4
-  C3 --> R1
-  C3 --> R5
-  C4 --> R2
-  C4 --> R4
-
-  style C1 fill:#4A2E5C,stroke:#D4B5FF,color:#fff
-  style C2 fill:#4A2E5C,stroke:#A8D89A,color:#fff
-  style C3 fill:#4A2E5C,stroke:#A8D89A,color:#fff
-  style C4 fill:#4A2E5C,stroke:#D4B5FF,color:#fff
-  style R1 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style R2 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style R3 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style R4 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style R5 fill:#1A1825,stroke:#D4B5FF,color:#D4B5FF
+  style MATRIX fill:transparent,stroke:#8B6BA8,color:#9B8BB4
+  style DL fill:#241B31,stroke:#8B6BA8,color:#E8E3F5
+  style FO fill:#241B31,stroke:#A8D89A,color:#E8E3F5
+  style SE fill:#241B31,stroke:#A8D89A,color:#E8E3F5
+  style MU fill:#241B31,stroke:#8B6BA8,color:#E8E3F5
+  style D0 fill:#1A1825,stroke:#4A3D5C,color:#9B8BB4
+  style F1 fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style F2 fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style S1 fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style M1 fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF

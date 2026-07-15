@@ -1,14 +1,29 @@
-flowchart LR
-  A["Untrusted client"] -->|HTTP over unix socket| B["coven daemon"]
-  B -->|"validate(request)"| C["coven-threads"]
-  C --> D["Load weave"] --> E["Check strands<br/>under channel"]
-  E --> F{{"Permit /<br/>DegradeToProposal /<br/>Reject"}}
-  F --> G["Daemon acts"] --> H["Append to ward.audit"]
-  style A fill:#0F0A14,stroke:#C44536,color:#fff
-  style B fill:#4A2E5C,stroke:#D4B5FF,color:#fff
-  style C fill:#8B6BA8,stroke:#D4B5FF,color:#fff
-  style D fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style E fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style F fill:#4A7A3E,stroke:#A8D89A,color:#fff
-  style G fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
-  style H fill:#4A2E5C,stroke:#D4B5FF,color:#fff
+%% enforcement — the Phase 2 enforcement flow as shipped: the daemon's only
+%% arbitrary-file write path into familiar homes, with the coven-threads gate
+%% between Ward::evaluate and Ward::apply.
+%% Source of truth: PHASE-0-DESIGN.md §5; coven PR #382
+%% (crates/coven-cli/src/threads_gate.rs, api.rs apply_familiar_edits).
+%% Form: decision flowchart — the verdict branching IS the story.
+flowchart TD
+  CLIENT["Untrusted client"] -->|"POST /familiars/{id}/edits<br/>HTTP over unix socket"| HANDLER["coven daemon<br/>apply_familiar_edits"]
+  HANDLER --> EVAL["Ward::evaluate<br/>Gate 1 authorization · Gate 2 canonical paths · tier classification"]
+  EVAL --> BLOCKED{"any target<br/>Blocked?"}
+  BLOCKED -->|"yes — refused as a unit,<br/>nothing staged, nothing written"| R1["403 ward_refused"]
+  BLOCKED -->|no| GATE["coven-threads gate<br/>weave tier-0 surfaces · fray on drift<br/>vs ward_manifest baselines"]
+  GATE --> VERDICT{"validate_fail_closed<br/>per protected target"}
+  VERDICT -->|"Reject —<br/>unknown surface · writer not bound ·<br/>channel uncovered · snapped · panic"| R2["403 ward_refused"]
+  VERDICT -->|"DegradeToProposal —<br/>thread frayed (drift)"| STAGE["stage whole proposal at<br/>~/.coven/pending/<br/>202 disposition: staged"]
+  VERDICT -->|Permit| APPLY["Ward::apply<br/>atomic write (tier 2/3)<br/>or held for Gate 3 (tier 0/1)"]
+  VERDICT -.->|every verdict appended| AUDIT[("ward_audit<br/>in coven.sqlite3<br/>append-only (triggers)")]
+
+  style CLIENT fill:#1A1825,stroke:#C44536,color:#E8E3F5
+  style HANDLER fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style EVAL fill:#241B31,stroke:#8B6BA8,color:#E8E3F5
+  style BLOCKED fill:#241B31,stroke:#C4A536,color:#E8E3F5
+  style GATE fill:#8B6BA8,stroke:#D4B5FF,color:#FFFFFF
+  style VERDICT fill:#241B31,stroke:#C4A536,color:#E8E3F5
+  style R1 fill:#5C2E2E,stroke:#C44536,color:#FFFFFF
+  style R2 fill:#5C2E2E,stroke:#C44536,color:#FFFFFF
+  style STAGE fill:#4A4A2E,stroke:#C4C46A,color:#FFFFFF
+  style APPLY fill:#2E4A2E,stroke:#A8D89A,color:#FFFFFF
+  style AUDIT fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF

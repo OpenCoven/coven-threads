@@ -1,36 +1,61 @@
 # Architecture diagrams
 
-Source-of-truth mermaid renders for coven-threads v0.2 Phase 0.
+Source-authoritative diagrams for `coven-threads`. Every rendered artifact
+(`.svg`, `.png`) is generated from a committed source in [`src/`](src/) —
+rendered files are never hand-edited. If a diagram disagrees with
+`specs/PHASE-0-DESIGN.md` (FROZEN v0.2) or the shipped crate, the diagram is
+wrong; recreated 2026-07-15 against both (bead `threads-986.22`).
 
-| Diagram | What it shows | Source |
-|---|---|---|
-| `stack.{svg,png}` | Where coven-threads sits: protected surfaces → coven-threads → coven daemon → runtimes/harnesses/familiars | Deck slide "The stack" |
-| `enforcement.{svg,png}` | Client → daemon → coven-threads → weave load → strand check → Permit / DegradeToProposal / Reject → `ward.audit` | Deck slide "From client to ward.audit" |
-| `weave-thread-strand.{svg,png}` | Vocabulary made visual: one Weave contains N Threads, each Thread carries M Strands | New (this dir) |
-| `thread-tension-state.{svg,png}` | Thread state machine: Holds ↔ Frayed → Snapped, with outcome mapping (Permit / DegradeToProposal / Reject) | New (this dir) |
-| `channel-strand-matrix.{svg,png}` | Which strand types must be present under which channel of load; WARD-C1–C6 govern `Forced`, WARD-C7 governs `Serialization` | New (this dir) |
+| Diagram | What it shows | Form (why) | Source of truth |
+|---|---|---|---|
+| `stack.{svg,png}` | Where the gate layer sits: familiar-controlled processes → daemon trust boundary (containing `coven-threads-core` as the imported validator crate) → protected surfaces, with the RFC-0001 §5.1 no-write-path cut drawn | flowchart with containment subgraph + forbidden edge — the containment *is* the Phase 2 architecture | PHASE-0-DESIGN §1, §3.1–3.2; RFC-0001 §5.1; `coven/docs/SAFETY-MODEL.md` |
+| `enforcement.{svg,png}` | The shipped Phase 2 write path: `apply_familiar_edits` → `Ward::evaluate` → blocked-unit refusal → coven-threads gate → `Reject` / `DegradeToProposal` (staged) / `Permit` (`Ward::apply`), every verdict appended to `ward_audit` | decision flowchart — the verdict branching is the story | PHASE-0-DESIGN §5; coven PR #382 (`threads_gate.rs`, `api.rs`) |
+| `weave-thread-strand.{svg,png}` | Vocabulary as the types relate: Weave carries an authoritative `PatternPredicate` (descriptor derived, **never enforced on** — §2.2 anti-pattern) and threads = `(surface → writer)` pairs, each with `holds_under` channels and a Vec of strands | containment subgraphs; dashed derive edge for the anti-pattern | PHASE-0-DESIGN §2.1–2.3; `src/{weave,thread,strand,pattern}.rs` |
+| `thread-tension-state.{svg,png}` | The tension state machine (`Holds`/`Frayed`/`Snapped`) with the `holds_under(channel)` answer each state produces, incl. the fail-closed `NotCovered` answer | stateDiagram-v2 — a state machine is a state machine; verdicts are answers, not states, so they ride as notes | `src/thread.rs` (`TensionState`, `holds_under`, `fray`, `snap`); `src/fray.rs`; PHASE-0-DESIGN §2.3, §5 |
+| `channel-strand-matrix.{svg,png}` | Exactly which strand kinds each channel's floor requires: Deliberate — none (consent is the gate); Forced — ContentHash + ManifestEntry (WARD-C1–C6); Serialization — SerializationMarker (WARD-C7); Mutation — ContentHash | per-channel grouping (box contents *are* the floor; no cross-arrow spaghetti) | `src/channel.rs` (`Channel::required_strand_kinds`); PHASE-0-DESIGN §2.4 |
 
 ## Regenerating
 
-Mermaid sources are embedded in `slides/community-explainer/slides.md` (the two from the deck) and in this dir's git history (the three new ones — see the commit that added this README).
-
-To re-render:
+One command, from this directory:
 
 ```sh
-cd slides/community-explainer
-./node_modules/.bin/mmdc \
-  -i /path/to/source.mmd \
-  -o docs/diagrams/name.svg \
-  -b transparent \
-  -p /path/to/puppeteer-config.json
+./render.sh
 ```
 
-`puppeteer-config.json` should point `executablePath` at any installed Chromium (playwright's cached chromium works).
+It renders every `src/*.mmd` to `NAME.svg` and a 2x `NAME.png` through the
+shared [`mermaid-config.json`](mermaid-config.json) theme. Regeneration is
+byte-stable on a given toolchain (verified 2026-07-15: re-render diffed clean
+against the committed artifacts).
+
+**Toolchain (pinned):**
+
+- `@mermaid-js/mermaid-cli` **11.16.0**, installed locally at
+  `slides/community-explainer/node_modules` (`npm install` there first).
+- A Chromium for puppeteer-core: `PUPPETEER_EXECUTABLE_PATH` if set, else
+  Playwright's cached Chromium, else Google Chrome (see `resolve_chromium`
+  in `render.sh`).
+
+## Dark/light safety
+
+The canvas is transparent, and the theme puts every glyph on a surface it
+owns: nodes, clusters, edge labels, and notes all carry explicit fills with
+explicit text colors, and free-floating text (titles, lines) uses mid-tone
+`#9B8BB4`, legible on both white and near-black page backgrounds. Do not add
+diagram text that sits directly on the transparent canvas in a theme-default
+color.
+
+**Embedding:** embed the `.png` (rendered at 2x), not the `.svg` — mermaid's
+`htmlLabels` emit `<foreignObject>` nodes, which many `<img>`-context
+renderers (including some GitHub paths) drop, losing every label. The SVGs
+stay committed as the vector artifacts for direct viewing and print.
 
 ## Provenance
 
-- Design doc: `specs/PHASE-0-DESIGN.md` (v0.2 frozen 2026-07-14, tag `v0.2-phase0-design`)
-- Deck: `slides/community-explainer/slides.md` (Charm, commit `13e0baa`)
-- Diagrams rendered 2026-07-15 by 🌿 Sage from Val's request
-
-The `thread-tension-state` and `channel-strand-matrix` diagrams are *derived* from §2 vocabulary and §3.3 channel-survival requirements. They are legibility aids for docs/README/article use — the design doc and RFC-0001 §5 remain authoritative.
+- Design doc: `specs/PHASE-0-DESIGN.md` (v0.2 frozen 2026-07-14, tag
+  `v0.2-phase0-design`) — authoritative, with RFC-0001 upstream of it.
+- Crate: `crates/coven-threads-core` (tags `v0.1.0`–`v0.1.2`).
+- First diagram set rendered 2026-07-15 from the community-explainer deck;
+  recreated the same day against the frozen design + shipped crate after an
+  audit found content drift in all five (worst: the old matrix contradicted
+  `Channel::required_strand_kinds()` on every channel). Audit record: bead
+  `threads-986.22.1`.

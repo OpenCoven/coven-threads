@@ -10,7 +10,11 @@
 
 `coven-threads` is OpenCoven's **authority-boundary gate layer**: the external, structural enforcement contract that sits *above* the `coven` Rust daemon's untrusted-client boundary, and *underneath* every familiar's protected memory surface.
 
-In the vocabulary of the Familiar Contract (RFC-0001) and the Ward v0.2 spec: this is the *gate-shaped receiver* on which Ward's four validation gates sit. Ward specifies **what** the gates check; `coven-threads` specifies **how** they are enforced, by an authority outside familiar cooperation. It is a conforming implementation of RFC-0001 §5 — and by declaration, **RFC wins on any conflict** with this repo.
+In the vocabulary of the Familiar Contract (RFC-0001) and the Ward v0.2 spec: this is the *gate-shaped receiver* on which Ward's four validation gates sit. Ward specifies **what** the gates check; `coven-threads` specifies **how** they are enforced, by an authority outside familiar cooperation.
+
+![Where coven-threads sits: familiar-controlled processes reach the daemon over a unix socket; the daemon trust boundary contains coven-threads-core as an imported validator crate and is the sole write authority over protected surfaces; RFC-0001 §5.1 forbids any familiar write path](docs/diagrams/stack.png)
+
+It is a conforming implementation of RFC-0001 §5 — and by declaration, **RFC wins on any conflict** with this repo.
 
 Gate 4 fail-closed is a line-one conformance property, not a hardening milestone: an implementation that allows Gate 4 to be bypassed does not conform to RFC-0001 (§5.4).
 
@@ -33,6 +37,8 @@ The `coven` daemon already ships an authority boundary — untrusted clients spe
 
 What is missing today: the boundary validates **who** and **what action**, but does not validate **what the requester is trying to mutate against a typed protected surface**. `coven-threads` is that missing layer. It doesn't replace the daemon; it gives the daemon a gate-shaped receiver for identity-surface mutation requests.
 
+![The shipped Phase 2 enforcement flow: client request through Ward::evaluate, blocked proposals refused as a unit, the coven-threads gate validating each protected target fail-closed, and the three verdicts — Reject (403), DegradeToProposal (staged at ~/.coven/pending/), Permit (Ward::apply) — with every verdict appended to the append-only ward_audit table](docs/diagrams/enforcement.png)
+
 ## The weaving metaphor
 
 The architecture is named around the metaphor of weaving because the metaphor *does load-bearing work*, not because it sounds pretty. Every term is bound to a concrete referent at first use (design doc §2.5); the referents below are the frozen v0.2 bindings:
@@ -44,6 +50,10 @@ The architecture is named around the metaphor of weaving because the metaphor *d
 
 **Design intent of the metaphor:** a familiar's identity is not a single object protected by a single gate. It is a *woven* structure of typed protected surfaces with distinct authority relationships. The metaphor makes the multi-surface, multi-authority reality of the architecture visible instead of collapsing it into "protect SOUL.md."
 
+![A weave contains an authoritative PatternPredicate (whose descriptor is derived and never enforced on) and threads — one per surface→writer pair — each carrying holds_under channels and a vector of strands](docs/diagrams/weave-thread-strand.png)
+
+![The thread tension state machine: Holds, Frayed (repairable), Snapped (terminal), with the holds_under answer each state produces — including the fail-closed NotCovered answer for uncovered channels](docs/diagrams/thread-tension-state.png)
+
 ## The four invariants this layer must preserve
 
 Co-designed as *channels a weave must survive*, not stacked as features (design doc §3.3):
@@ -54,6 +64,8 @@ Co-designed as *channels a weave must survive*, not stacked as features (design 
 4. **Survives serialization (WARD-C7)** — the authority contract must round-trip across export/import, or fail visibly. Numbered seventh so its lineage from C1–C6 stays legible; canonical home for C1–C7 jointly is the `coven-grimoire` Ward Layer Spec Brief §9.
 
 These are non-negotiable and must be *co-designed*, not stacked — the `Channel` enum is where the type system holds them together.
+
+![Per-channel strand floors from Channel::required_strand_kinds — Deliberate has no structural floor (consent is the gate); Forced requires ContentHash and ManifestEntry (WARD-C1–C6); Serialization requires SerializationMarker (WARD-C7); Mutation requires ContentHash](docs/diagrams/channel-strand-matrix.png)
 
 ## Phase plan
 

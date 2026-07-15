@@ -1,15 +1,31 @@
+%% thread-tension-state — the tension state machine of a Thread, with the
+%% holds_under(channel) answers each state produces.
+%% Source of truth: crates/coven-threads-core/src/thread.rs (TensionState,
+%% Thread::holds_under, fray, snap), src/fray.rs (FrayOrSnap, reasons),
+%% PHASE-0-DESIGN.md §2.3 and §5.
+%% Form: stateDiagram-v2 (a state machine is a state machine); verdicts are
+%% answers, not states — they ride as notes.
 stateDiagram-v2
   direction TB
-  [*] --> Holds: thread bound
-  Holds --> Frayed: strand fails
+  [*] --> Holds: woven (typed surface bound at construction)
+
+  Holds --> Frayed: a strand fails —<br/>hash / manifest / signature mismatch,<br/>or a required strand kind is missing<br/>(RequiredStrandMissing is a fray, not a snap)
   Frayed --> Holds: repair
-  Frayed --> Snapped: additional strand fails
-  Holds --> Snapped: required strand missing
+  Frayed --> Snapped: multiple strands fray —<br/>no in-place repair
+  Holds --> Snapped: revoked · pattern broken
+  Snapped --> [*]: fresh authority ceremony —<br/>new thread (snap is terminal)
 
-  Holds --> Permit
-  Frayed --> DegradeToProposal
-  Snapped --> Reject
-
-  Permit --> [*]
-  DegradeToProposal --> [*]
-  Reject --> [*]
+  note right of Holds
+    holds_under(covered channel) → Ok → Permit path
+    holds_under(uncovered channel) → NotCovered → Reject
+    (fail-closed — absence of coverage is "no")
+  end note
+  note right of Frayed
+    every covered channel → Frayed
+    → DegradeToProposal: write staged, principal notified,
+    protected surface untouched
+  end note
+  note left of Snapped
+    every channel → Snapped → Reject
+    surface read-only until repair
+  end note
