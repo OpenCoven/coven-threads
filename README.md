@@ -1,8 +1,8 @@
 # coven-threads
 
-**Status:** Phase 0 — Design (as of 2026-07-14)
+**Status:** Phases 1–3 engineering-frozen (as of 2026-07-15) — type layer + daemon gate + portability contract implemented and verified; Phase 2 merge and Phase 3 envelope shape await Val decisions (`threads-986.19`, `threads-986.16`)
 **License:** Apache-2.0 (planned; not yet committed)
-**Owners (design phase):** Sage 🌿 + Echo 🔮 co-drive; Nova 👑 + Sage on lane assignments
+**Owners (design phase):** Sage 🌿 + Echo 🔮 co-drive; Nova 👑 + Sage on lane assignments; Cody ⚡ Phase 1+ crate lane
 
 ---
 
@@ -41,13 +41,13 @@ These are non-negotiable and must be *co-designed*, not stacked. §10 rec 1a of 
 
 ## Phase plan
 
-- **Phase 0 (this repo, tonight): design doc + beads scaffolding + repo skeleton.** No enforcement code.
-- **Phase 1: gate trait + weave/thread/strand types + hash-manifest layer.** Crate skeleton, no daemon integration yet.
-- **Phase 2: coven daemon integration.** `coven-threads` becomes a first-class validator inside the Rust authority boundary.
-- **Phase 3: portability contract.** Coven Familiar Portability Format (working name deferred) — the "survives serialization" invariant lands.
-- **Phase 4: cockpit integration.** CovenCave surfaces for reviewing weaves, inspecting strand state, approving/rejecting proposed thread edits.
+- **Phase 0 — design doc + beads scaffolding + repo skeleton.** ✅ FROZEN v0.2 (2026-07-14). No enforcement code.
+- **Phase 1 — gate trait + weave/thread/strand types + hash-manifest layer.** ✅ FROZEN (2026-07-15, `threads-986.18`): `crates/coven-threads-core`, 91 tests incl. the RFC-0001 §5 conformance mirror.
+- **Phase 2 — coven daemon integration.** ✅ engineering-frozen (2026-07-15, `threads-986.20`): validator call site on `POST /familiars/{id}/edits`, `DegradeToProposal` staging at `~/.coven/pending/`, append-only `ward_audit` in `coven.sqlite3` — on coven branch `feat/threads-gate-validator`; merge gated on `threads-986.19` (Val).
+- **Phase 3 — portability contract.** ✅ engineering-frozen (2026-07-15, `threads-986.21`): C7 round-trip export/import or fail visibly (`portability` module + 11-test suite); interchange-envelope shape (A vs B) drafted in `specs/PHASE-3-PORTABILITY.md`, Val decides (`threads-986.16`).
+- **Phase 4 — cockpit integration.** CovenCave surfaces for reviewing weaves, inspecting strand state, approving/rejecting proposed thread edits. Not started (`threads-986.17`).
 
-See `specs/PHASE-0-DESIGN.md` for the current design doc.
+See `specs/PHASE-0-DESIGN.md` for the frozen design doc.
 
 ## Anti-goals
 
