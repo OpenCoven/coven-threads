@@ -197,9 +197,9 @@ pub fn validate(weave: &Weave, request: &MutationRequest) -> Verdict {
             },
         },
         // Degraded elsewhere: §5 — the familiar continues on other surfaces.
-        WeaveCoherence::Degraded { .. } | WeaveCoherence::Coherent => Verdict::Permit {
-            thread: thread.id,
-        },
+        WeaveCoherence::Degraded { .. } | WeaveCoherence::Coherent => {
+            Verdict::Permit { thread: thread.id }
+        }
     }
 }
 
@@ -210,9 +210,8 @@ pub fn validate(weave: &Weave, request: &MutationRequest) -> Verdict {
 /// predicate must not become a bypass. The daemon should still catch at its own
 /// boundary — this is defense in depth, not a substitute.
 pub fn validate_fail_closed(weave: &Weave, request: &MutationRequest) -> Verdict {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        validate(weave, request)
-    }));
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| validate(weave, request)));
     match result {
         Ok(verdict) => verdict,
         Err(panic) => {
@@ -247,9 +246,7 @@ mod tests {
     use super::*;
     use crate::fray::FrayReason;
     use crate::ids::{FamiliarId, ManifestId, StrandId, WeaveId};
-    use crate::pattern::{
-        AllSurfacesHoldOnChannels, PatternDescriptor, PatternPredicate,
-    };
+    use crate::pattern::{AllSurfacesHoldOnChannels, PatternDescriptor, PatternPredicate};
     use crate::strand::{HashAlgo, Strand};
     use crate::thread::{TensionState, Thread};
     use time::OffsetDateTime;
@@ -353,7 +350,10 @@ mod tests {
         // §5: Unknown channel → Reject. Deliberate is not in the floor threads'
         // holds_under set.
         let w = floor_weave();
-        let v = validate(&w, &request("SOUL.md", "principal:val", Channel::Deliberate));
+        let v = validate(
+            &w,
+            &request("SOUL.md", "principal:val", Channel::Deliberate),
+        );
         assert!(
             matches!(
                 v,
@@ -384,7 +384,10 @@ mod tests {
             &w,
             &request(frayed_surface.as_str(), "principal:val", Channel::Mutation),
         );
-        assert!(v.requires_staging(), "expected DegradeToProposal, got {v:?}");
+        assert!(
+            v.requires_staging(),
+            "expected DegradeToProposal, got {v:?}"
+        );
     }
 
     #[test]
@@ -421,7 +424,10 @@ mod tests {
             .find(|t| t.surface != snapped_surface)
             .map(|t| t.surface.clone())
             .unwrap();
-        let v = validate(&w, &request(other.as_str(), "principal:val", Channel::Mutation));
+        let v = validate(
+            &w,
+            &request(other.as_str(), "principal:val", Channel::Mutation),
+        );
         assert!(v.permits_write(), "expected Permit on {other}, got {v:?}");
     }
 
@@ -494,10 +500,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let v = validate_fail_closed(
-            &w,
-            &request("SOUL.md", "principal:val", Channel::Mutation),
-        );
+        let v = validate_fail_closed(&w, &request("SOUL.md", "principal:val", Channel::Mutation));
         match v {
             Verdict::Reject {
                 reason: RejectReason::ValidatorPanic { diagnostic },

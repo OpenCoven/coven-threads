@@ -89,7 +89,10 @@ impl Thread {
     /// results back by setting `tension`.
     pub fn holds_under(&self, channel: Channel) -> Result<(), FrayOrSnap> {
         // Terminal state first: a snapped thread holds nowhere.
-        if let TensionState::Snapped { channel: c, reason, .. } = &self.tension {
+        if let TensionState::Snapped {
+            channel: c, reason, ..
+        } = &self.tension
+        {
             return Err(FrayOrSnap::Snapped {
                 channel: *c,
                 reason: reason.clone(),
@@ -158,7 +161,11 @@ impl Thread {
 
     /// Mark this thread snapped (terminal).
     pub fn snap(&mut self, channel: Channel, reason: SnapReason, at: OffsetDateTime) {
-        self.tension = TensionState::Snapped { channel, reason, at };
+        self.tension = TensionState::Snapped {
+            channel,
+            reason,
+            at,
+        };
     }
 }
 
@@ -221,7 +228,12 @@ mod tests {
         // v0.1.1 review caught: absence of coverage must read as "no", not "n/a".
         let t = thread(vec![content_hash()], vec![Channel::Mutation]);
         let err = t.holds_under(Channel::Forced).unwrap_err();
-        assert_eq!(err, FrayOrSnap::NotCovered { channel: Channel::Forced });
+        assert_eq!(
+            err,
+            FrayOrSnap::NotCovered {
+                channel: Channel::Forced
+            }
+        );
     }
 
     #[test]
@@ -258,10 +270,7 @@ mod tests {
             other => panic!("expected RequiredStrandMissing marker, got {other:?}"),
         }
 
-        let complete = thread(
-            vec![serialization_marker()],
-            vec![Channel::Serialization],
-        );
+        let complete = thread(vec![serialization_marker()], vec![Channel::Serialization]);
         assert!(complete.holds_under(Channel::Serialization).is_ok());
     }
 
@@ -311,7 +320,12 @@ mod tests {
     fn snap_is_terminal_fray_cannot_resurrect() {
         let mut t = thread(vec![content_hash()], vec![Channel::Mutation]);
         t.snap(Channel::Mutation, SnapReason::Revoked, now());
-        t.fray(None, Channel::Mutation, FrayReason::ContentHashMismatch, now());
+        t.fray(
+            None,
+            Channel::Mutation,
+            FrayReason::ContentHashMismatch,
+            now(),
+        );
         assert!(matches!(t.tension(), TensionState::Snapped { .. }));
     }
 
@@ -332,10 +346,7 @@ mod tests {
             let mut frayed = thread(strands(), vec![*channel]);
             frayed.fray(None, *channel, FrayReason::Other("test".into()), now());
             assert!(
-                matches!(
-                    frayed.holds_under(*channel),
-                    Err(FrayOrSnap::Frayed { .. })
-                ),
+                matches!(frayed.holds_under(*channel), Err(FrayOrSnap::Frayed { .. })),
                 "frayed thread must surface fray under {channel:?}"
             );
             // Snap.

@@ -111,9 +111,11 @@ impl WardAuditRecord {
         decided_at: OffsetDateTime,
     ) -> Self {
         let (decision, thread_id, event_type) = match verdict {
-            Verdict::Permit { thread } => {
-                ("permit".to_string(), Some(*thread), AuditEventType::ValidationVerdict)
-            }
+            Verdict::Permit { thread } => (
+                "permit".to_string(),
+                Some(*thread),
+                AuditEventType::ValidationVerdict,
+            ),
             Verdict::DegradeToProposal { thread, .. } => (
                 "degrade_to_proposal".to_string(),
                 Some(*thread),

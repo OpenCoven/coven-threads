@@ -224,8 +224,7 @@ fn thread_leaf_bytes(t: &Thread) -> Vec<u8> {
     leaf.extend_from_slice(t.writer.as_str().as_bytes());
     leaf.push(0);
 
-    let mut channel_tags: Vec<&'static str> =
-        t.holds_under.iter().map(|c| c.tag()).collect();
+    let mut channel_tags: Vec<&'static str> = t.holds_under.iter().map(|c| c.tag()).collect();
     channel_tags.sort_unstable();
     channel_tags.dedup();
     for tag in channel_tags {
@@ -242,8 +241,7 @@ fn thread_leaf_bytes(t: &Thread) -> Vec<u8> {
     leaf.extend_from_slice(tension_tag);
     leaf.push(0);
 
-    let mut strand_bytes: Vec<Vec<u8>> =
-        t.strands.iter().map(|s| s.commitment_bytes()).collect();
+    let mut strand_bytes: Vec<Vec<u8>> = t.strands.iter().map(|s| s.commitment_bytes()).collect();
     strand_bytes.sort_unstable();
     for sb in strand_bytes {
         leaf.extend_from_slice(&(sb.len() as u64).to_be_bytes());
@@ -365,8 +363,14 @@ mod tests {
         } else {
             panic!("fixture: first strand should be ContentHash");
         }
-        let w2 = Weave::new(WeaveId::new(), FamiliarId::new(), threads, floor_pattern(), None)
-            .unwrap();
+        let w2 = Weave::new(
+            WeaveId::new(),
+            FamiliarId::new(),
+            threads,
+            floor_pattern(),
+            None,
+        )
+        .unwrap();
         assert_ne!(w1.weave_hash(), w2.weave_hash());
     }
 
@@ -407,7 +411,10 @@ mod tests {
         let err = Weave::new(
             WeaveId::new(),
             FamiliarId::new(),
-            vec![thread("SOUL.md", "principal:val"), thread("SOUL.md", "principal:val")],
+            vec![
+                thread("SOUL.md", "principal:val"),
+                thread("SOUL.md", "principal:val"),
+            ],
             floor_pattern(),
             None,
         )
@@ -420,7 +427,10 @@ mod tests {
         let w = Weave::new(
             WeaveId::new(),
             FamiliarId::new(),
-            vec![thread("SOUL.md", "principal:val"), thread("SOUL.md", "daemon")],
+            vec![
+                thread("SOUL.md", "principal:val"),
+                thread("SOUL.md", "daemon"),
+            ],
             floor_pattern(),
             None,
         )

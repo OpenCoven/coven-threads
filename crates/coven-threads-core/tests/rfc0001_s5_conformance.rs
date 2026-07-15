@@ -18,9 +18,9 @@
 //! (RFC-0001 §5.4 Gate 4: line-one conformance, not hardening).
 
 use coven_threads_core::{
-    validate, AllSurfacesHoldOnChannels, Channel, FamiliarId, FrayReason, HashAlgo,
-    ManifestId, MutationRequest, RejectReason, Strand, StrandId, SurfaceId, TensionState,
-    Thread, ThreadId, Verdict, Weave, WeaveCoherence, WeaveId, WriterId,
+    validate, AllSurfacesHoldOnChannels, Channel, FamiliarId, FrayReason, HashAlgo, ManifestId,
+    MutationRequest, RejectReason, Strand, StrandId, SurfaceId, TensionState, Thread, ThreadId,
+    Verdict, Weave, WeaveCoherence, WeaveId, WriterId,
 };
 use time::OffsetDateTime;
 
@@ -52,7 +52,12 @@ fn floor_channels() -> Vec<Channel> {
     vec![Channel::Forced, Channel::Serialization, Channel::Mutation]
 }
 
-fn thread_on(surface: &str, writer: &str, strands: Vec<Strand>, holds_under: Vec<Channel>) -> Thread {
+fn thread_on(
+    surface: &str,
+    writer: &str,
+    strands: Vec<Strand>,
+    holds_under: Vec<Channel>,
+) -> Thread {
     Thread {
         id: ThreadId::new(),
         surface: SurfaceId::new(surface),
@@ -69,8 +74,14 @@ fn floor_pattern() -> Box<AllSurfacesHoldOnChannels> {
 }
 
 fn weave(threads: Vec<Thread>) -> Weave {
-    Weave::new(WeaveId::new(), FamiliarId::new(), threads, floor_pattern(), None)
-        .expect("conformance fixtures respect one-thread-per-(surface,writer)")
+    Weave::new(
+        WeaveId::new(),
+        FamiliarId::new(),
+        threads,
+        floor_pattern(),
+        None,
+    )
+    .expect("conformance fixtures respect one-thread-per-(surface,writer)")
 }
 
 fn request(surface: &str, writer: &str, channel: Channel) -> MutationRequest {
@@ -84,7 +95,11 @@ fn request(surface: &str, writer: &str, channel: Channel) -> MutationRequest {
 /// The all-green outcome positive cases must reach and negative cases must not:
 /// coherent weave, and the principal writer permitted on every floor surface.
 fn assert_conformant(w: &Weave) {
-    assert_eq!(w.coherence(), WeaveCoherence::Coherent, "weave must be coherent");
+    assert_eq!(
+        w.coherence(),
+        WeaveCoherence::Coherent,
+        "weave must be coherent"
+    );
     for surface in FLOOR {
         let v = validate(w, &request(surface, PRINCIPAL, Channel::Mutation));
         assert!(
@@ -159,17 +174,33 @@ fn positive_03_multi_role() {
         "roles/researcher.md",
         FAMILIAR,
         full_strands(),
-        vec![Channel::Mutation, Channel::Deliberate, Channel::Forced, Channel::Serialization],
+        vec![
+            Channel::Mutation,
+            Channel::Deliberate,
+            Channel::Forced,
+            Channel::Serialization,
+        ],
     ));
     let w = weave(threads);
     assert_conformant(&w);
     // The familiar writes its role file...
-    let v = validate(&w, &request("roles/researcher.md", FAMILIAR, Channel::Mutation));
-    assert!(v.permits_write(), "familiar edits its editable surface: {v:?}");
+    let v = validate(
+        &w,
+        &request("roles/researcher.md", FAMILIAR, Channel::Mutation),
+    );
+    assert!(
+        v.permits_write(),
+        "familiar edits its editable surface: {v:?}"
+    );
     // ...but has no path to the protected identity contract (RFC-0001 §5.1).
     let v = validate(&w, &request("SOUL.md", FAMILIAR, Channel::Mutation));
     assert!(
-        matches!(v, Verdict::Reject { reason: RejectReason::WriterNotBound { .. } }),
+        matches!(
+            v,
+            Verdict::Reject {
+                reason: RejectReason::WriterNotBound { .. }
+            }
+        ),
         "familiar must have no write path to SOUL.md: {v:?}"
     );
 }
@@ -188,8 +219,14 @@ fn positive_04_with_user_md() {
     // USER.md joins the protected pattern for this familiar.
     let mut pattern = AllSurfacesHoldOnChannels::rfc0001_floor();
     pattern.surfaces.push(SurfaceId::new("USER.md"));
-    let w = Weave::new(WeaveId::new(), FamiliarId::new(), threads, Box::new(pattern), None)
-        .unwrap();
+    let w = Weave::new(
+        WeaveId::new(),
+        FamiliarId::new(),
+        threads,
+        Box::new(pattern),
+        None,
+    )
+    .unwrap();
 
     assert_eq!(w.coherence(), WeaveCoherence::Coherent);
     for surface in surfaces {
@@ -213,16 +250,27 @@ fn positive_05_tier_rich_ward() {
         "TOOLS.md",
         "daemon:auto-tier",
         full_strands(),
-        vec![Channel::Deliberate, Channel::Forced, Channel::Serialization, Channel::Mutation],
+        vec![
+            Channel::Deliberate,
+            Channel::Forced,
+            Channel::Serialization,
+            Channel::Mutation,
+        ],
     ));
     let w = weave(threads);
     assert_conformant(&w);
 
-    let v = validate(&w, &request("TOOLS.md", "daemon:auto-tier", Channel::Deliberate));
+    let v = validate(
+        &w,
+        &request("TOOLS.md", "daemon:auto-tier", Channel::Deliberate),
+    );
     assert!(v.permits_write(), "auto tier promotes on Deliberate: {v:?}");
     // The auto tier never touches the protected surface (§5.3: no tier may
     // auto-promote proposals targeting the protected surface).
-    let v = validate(&w, &request("SOUL.md", "daemon:auto-tier", Channel::Deliberate));
+    let v = validate(
+        &w,
+        &request("SOUL.md", "daemon:auto-tier", Channel::Deliberate),
+    );
     assert!(
         matches!(v, Verdict::Reject { .. }),
         "auto tier must have no path to SOUL.md: {v:?}"
@@ -244,14 +292,21 @@ fn negative_01_missing_soul() {
             .collect(),
     );
     match w.coherence() {
-        WeaveCoherence::Degraded { degraded_surfaces, .. } => {
+        WeaveCoherence::Degraded {
+            degraded_surfaces, ..
+        } => {
             assert_eq!(degraded_surfaces, vec![SurfaceId::new("SOUL.md")]);
         }
         other => panic!("expected Degraded at SOUL.md, got {other:?}"),
     }
     let v = validate(&w, &request("SOUL.md", PRINCIPAL, Channel::Mutation));
     assert!(
-        matches!(v, Verdict::Reject { reason: RejectReason::UnknownSurface { .. } }),
+        matches!(
+            v,
+            Verdict::Reject {
+                reason: RejectReason::UnknownSurface { .. }
+            }
+        ),
         "got {v:?}"
     );
 }
@@ -268,7 +323,9 @@ fn negative_02_missing_ward() {
             .collect(),
     );
     match w.coherence() {
-        WeaveCoherence::Degraded { degraded_surfaces, .. } => {
+        WeaveCoherence::Degraded {
+            degraded_surfaces, ..
+        } => {
             assert_eq!(degraded_surfaces, vec![SurfaceId::new("ward.toml")]);
         }
         other => panic!("expected Degraded at ward.toml, got {other:?}"),
@@ -291,7 +348,9 @@ fn negative_03_no_person_binding() {
             .collect(),
     );
     assert!(
-        !w.threads().iter().any(|t| t.writer.as_str().starts_with("principal:")),
+        !w.threads()
+            .iter()
+            .any(|t| t.writer.as_str().starts_with("principal:")),
         "fixture: no principal binding anywhere"
     );
     for surface in FLOOR {
@@ -299,7 +358,9 @@ fn negative_03_no_person_binding() {
         assert!(
             matches!(
                 v,
-                Verdict::Reject { reason: RejectReason::WriterNotBound { .. } }
+                Verdict::Reject {
+                    reason: RejectReason::WriterNotBound { .. }
+                }
             ),
             "no person binding must reject principal on {surface}: {v:?}"
         );
@@ -320,7 +381,12 @@ fn negative_04_no_protected_section() {
     for surface in FLOOR {
         let v = validate(&w, &request(surface, PRINCIPAL, Channel::Mutation));
         assert!(
-            matches!(v, Verdict::Reject { reason: RejectReason::UnknownSurface { .. } }),
+            matches!(
+                v,
+                Verdict::Reject {
+                    reason: RejectReason::UnknownSurface { .. }
+                }
+            ),
             "got {v:?}"
         );
     }
@@ -339,7 +405,9 @@ fn negative_05_protected_missing_soul() {
             .collect(),
     );
     match w.coherence() {
-        WeaveCoherence::Degraded { degraded_surfaces, .. } => {
+        WeaveCoherence::Degraded {
+            degraded_surfaces, ..
+        } => {
             assert_eq!(degraded_surfaces, vec![SurfaceId::new("SOUL.md")]);
         }
         other => panic!("expected Degraded at SOUL.md, got {other:?}"),
@@ -362,7 +430,11 @@ fn negative_06_no_core_work() {
         .into_iter()
         .map(|s| thread_on(s, PRINCIPAL, full_strands(), floor_channels()))
         .collect();
-    assert_eq!(threads[0].surface, SurfaceId::new("SOUL.md"), "fixture order");
+    assert_eq!(
+        threads[0].surface,
+        SurfaceId::new("SOUL.md"),
+        "fixture order"
+    );
     let soul_strand = threads[0].strands[0].id();
     threads[0].fray(
         Some(soul_strand),
@@ -390,7 +462,11 @@ fn negative_07_no_what_i_am_not() {
         .into_iter()
         .map(|s| thread_on(s, PRINCIPAL, full_strands(), floor_channels()))
         .collect();
-    assert_eq!(threads[0].surface, SurfaceId::new("SOUL.md"), "fixture order");
+    assert_eq!(
+        threads[0].surface,
+        SurfaceId::new("SOUL.md"),
+        "fixture order"
+    );
     let manifest_strand = threads[0]
         .strands
         .iter()
@@ -452,14 +528,21 @@ fn negative_09_missing_memory() {
             .collect(),
     );
     match w.coherence() {
-        WeaveCoherence::Degraded { degraded_surfaces, .. } => {
+        WeaveCoherence::Degraded {
+            degraded_surfaces, ..
+        } => {
             assert_eq!(degraded_surfaces, vec![SurfaceId::new("MEMORY.md")]);
         }
         other => panic!("expected Degraded at MEMORY.md, got {other:?}"),
     }
     let v = validate(&w, &request("MEMORY.md", PRINCIPAL, Channel::Mutation));
     assert!(
-        matches!(v, Verdict::Reject { reason: RejectReason::UnknownSurface { .. } }),
+        matches!(
+            v,
+            Verdict::Reject {
+                reason: RejectReason::UnknownSurface { .. }
+            }
+        ),
         "got {v:?}"
     );
 }

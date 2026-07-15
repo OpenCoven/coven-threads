@@ -177,12 +177,7 @@ mod tests {
         let base = merkle_root([b"a".to_vec(), b"b".to_vec(), b"c".to_vec()]);
         let changed = merkle_root([b"a".to_vec(), b"B".to_vec(), b"c".to_vec()]);
         let reordered = merkle_root([b"b".to_vec(), b"a".to_vec(), b"c".to_vec()]);
-        let extended = merkle_root([
-            b"a".to_vec(),
-            b"b".to_vec(),
-            b"c".to_vec(),
-            b"d".to_vec(),
-        ]);
+        let extended = merkle_root([b"a".to_vec(), b"b".to_vec(), b"c".to_vec(), b"d".to_vec()]);
         assert_ne!(base, changed);
         assert_ne!(base, reordered, "ordering is part of the commitment");
         assert_ne!(base, extended);

@@ -59,6 +59,7 @@ pub mod fray;
 pub mod ids;
 pub mod manifest;
 pub mod pattern;
+pub mod portability;
 pub mod staging;
 pub mod strand;
 pub mod thread;
@@ -69,18 +70,20 @@ pub use audit::{AuditEventType, WardAuditRecord, WARD_AUDIT_SCHEMA_SQL};
 pub use channel::Channel;
 pub use fray::{FrayOrSnap, FrayReason, SnapReason};
 pub use ids::{
-    CovenId, EventRef, FamiliarId, ManifestId, ProposalId, StrandId, SurfaceId, ThreadId,
-    WeaveId, WriterId,
+    CovenId, EventRef, FamiliarId, ManifestId, ProposalId, StrandId, SurfaceId, ThreadId, WeaveId,
+    WriterId,
 };
 pub use manifest::{manifest_entry_hash, merkle_root, HashManifest};
 pub use pattern::{
     AllSurfacesHoldOnChannels, PatternDescriptor, PatternPredicate, StrandRequirement,
     WeaveCoherence,
 };
+pub use portability::{
+    export_weave, from_json_bytes, import_weave, to_json_bytes, PortabilityError, PortableWeave,
+    SerializationContract, PORTABILITY_FORMAT_VERSION,
+};
 pub use staging::{PendingProposal, StagedContents, StagedEdit};
 pub use strand::{HashAlgo, SigKind, Strand, StrandKind};
 pub use thread::{TensionState, Thread};
-pub use validate::{
-    validate, validate_fail_closed, MutationRequest, RejectReason, Verdict,
-};
+pub use validate::{validate, validate_fail_closed, MutationRequest, RejectReason, Verdict};
 pub use weave::{Weave, WeaveError, WeaveRecord};

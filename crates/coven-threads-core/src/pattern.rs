@@ -292,7 +292,10 @@ mod tests {
                 reason,
             } => {
                 assert_eq!(degraded_surfaces, vec![snapped_surface]);
-                assert!(reason.contains("snapped"), "reason should name the snap: {reason}");
+                assert!(
+                    reason.contains("snapped"),
+                    "reason should name the snap: {reason}"
+                );
             }
             other => panic!("expected localized degradation, got {other:?}"),
         }
