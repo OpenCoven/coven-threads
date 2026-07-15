@@ -72,6 +72,8 @@ uuid_newtype!(/// Identifier for a Coven (§4 `Weave.coven_ref`).
     CovenId);
 uuid_newtype!(/// Identifier for a manifest referenced by a `ManifestEntry` strand (§4).
     ManifestId);
+uuid_newtype!(/// Identifier for a staged proposal (§5 `DegradeToProposal`, RFC-0001 §5.6).
+    ProposalId);
 
 string_newtype!(
     /// Identifier for a protected surface (§4 `SurfaceId`).

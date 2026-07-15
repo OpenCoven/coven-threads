@@ -53,27 +53,31 @@
 //! writes, no staging. Those are the daemon's lane (Phase 2). This crate answers
 //! the gate question and names the verdict.
 
+pub mod audit;
 pub mod channel;
 pub mod fray;
 pub mod ids;
 pub mod manifest;
 pub mod pattern;
+pub mod staging;
 pub mod strand;
 pub mod thread;
 pub mod validate;
 pub mod weave;
 
+pub use audit::{AuditEventType, WardAuditRecord, WARD_AUDIT_SCHEMA_SQL};
 pub use channel::Channel;
 pub use fray::{FrayOrSnap, FrayReason, SnapReason};
 pub use ids::{
-    CovenId, EventRef, FamiliarId, ManifestId, StrandId, SurfaceId, ThreadId, WeaveId,
-    WriterId,
+    CovenId, EventRef, FamiliarId, ManifestId, ProposalId, StrandId, SurfaceId, ThreadId,
+    WeaveId, WriterId,
 };
 pub use manifest::{manifest_entry_hash, merkle_root, HashManifest};
 pub use pattern::{
     AllSurfacesHoldOnChannels, PatternDescriptor, PatternPredicate, StrandRequirement,
     WeaveCoherence,
 };
+pub use staging::{PendingProposal, StagedContents, StagedEdit};
 pub use strand::{HashAlgo, SigKind, Strand, StrandKind};
 pub use thread::{TensionState, Thread};
 pub use validate::{
