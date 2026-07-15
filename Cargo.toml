@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = ["crates/coven-threads-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+authors = ["Valentina Alexander <val@opencoven.dev>"]
+repository = "https://github.com/OpenCoven/coven-threads"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+blake3 = "1"
+time = { version = "0.3", features = ["serde", "macros"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

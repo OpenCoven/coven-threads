@@ -1,0 +1,20 @@
+[package]
+name = "coven-threads-core"
+description = "Authority-boundary gate layer for OpenCoven — core types: Strand, Thread, Weave, Channel, PatternPredicate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+blake3.workspace = true
+time.workspace = true
