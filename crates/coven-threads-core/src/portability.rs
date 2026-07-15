@@ -27,13 +27,17 @@
 //!   *identical authority topology* — never wider (RFC-0001 §5.1: import is
 //!   not a write path around the gates).
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::channel::Channel;
 use crate::ids::{SurfaceId, ThreadId};
 use crate::pattern::PatternPredicate;
-use crate::strand::{Strand, StrandKind};
+use crate::strand::{HashAlgo, Strand, StrandKind};
 use crate::weave::{Weave, WeaveError, WeaveRecord};
 
 /// The portability format version this crate exports and accepts.
@@ -102,6 +106,127 @@ pub struct PortableWeave {
     pub contract_hash: Vec<u8>,
     /// The weave record (threads, tension, weave hash, derived descriptor).
     pub record: WeaveRecord,
+    /// Optional protected-surface content payloads, keyed by typed surface.
+    ///
+    /// Legacy `.weave` artifacts without this field still import after envelope
+    /// verification. When present, every payload is checked against the
+    /// `ContentHash` strands for its surface after the weave itself verifies.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub surfaces: BTreeMap<SurfaceId, PortableSurfaceContent>,
+}
+
+/// A surface payload carried inside a Shape B `.weave` envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortableSurfaceContent {
+    /// Payload encoding. This crate currently exports and verifies `utf8`.
+    pub encoding: String,
+    /// The encoded content bytes as text for `utf8` payloads.
+    pub data: String,
+}
+
+impl PortableSurfaceContent {
+    /// Construct a UTF-8 surface payload.
+    pub fn utf8<S: Into<String>>(data: S) -> Self {
+        Self {
+            encoding: "utf8".to_string(),
+            data: data.into(),
+        }
+    }
+}
+
+/// Lossy one-way Letta `.af` export for handoff.
+///
+/// This type intentionally implements `Serialize` only. There is no `.af` import
+/// path: Coven re-entry is via the original `.weave` artifact only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LossyAfExport {
+    /// Letta-facing agent type marker.
+    pub agent_type: String,
+    /// Explicitly false: the protection layer does not survive `.af`.
+    pub round_trippable: bool,
+    /// Letta core-memory blocks, deterministically sorted by surface id.
+    pub core_memory: Vec<AfCoreMemoryBlock>,
+    /// Deterministic creation timestamp for this lossy artifact.
+    pub created_at: String,
+    /// Handoff description warning that this is not a Coven re-entry artifact.
+    pub description: Option<String>,
+    /// Minimal Letta embedding config for schema-compatible handoff.
+    pub embedding_config: serde_json::Value,
+    /// Minimal Letta LLM config for schema-compatible handoff.
+    pub llm_config: serde_json::Value,
+    /// Letta message-buffer setting.
+    pub message_buffer_autoclear: bool,
+    /// In-context message indices; empty for a content-only handoff.
+    pub in_context_message_indices: Vec<usize>,
+    /// Letta messages; empty for a content-only handoff.
+    pub messages: Vec<serde_json::Value>,
+    /// Letta metadata field.
+    pub metadata_: Option<serde_json::Value>,
+    /// Letta multi-agent group field.
+    pub multi_agent_group: Option<serde_json::Value>,
+    /// Deterministic agent name derived from the weave's familiar id.
+    pub name: String,
+    /// System prompt for the lossy handoff.
+    pub system: String,
+    /// Letta tags.
+    pub tags: Vec<AfTag>,
+    /// Letta tool environment variables; empty for a content-only handoff.
+    pub tool_exec_environment_variables: Vec<serde_json::Value>,
+    /// Letta tool rules; empty for a content-only handoff.
+    pub tool_rules: Vec<serde_json::Value>,
+    /// Letta tools; empty for a content-only handoff.
+    pub tools: Vec<serde_json::Value>,
+    /// Deterministic update timestamp for this lossy artifact.
+    pub updated_at: String,
+    /// Letta `.af` schema version marker.
+    pub version: String,
+    /// Coven warning metadata, not an import surface.
+    pub x_coven_threads: AfNonRoundTrippableMarker,
+}
+
+/// Letta core-memory block in the lossy `.af` handoff.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AfCoreMemoryBlock {
+    /// Deterministic creation timestamp for this memory block.
+    pub created_at: String,
+    /// Optional Letta block description.
+    pub description: Option<String>,
+    /// Letta template marker; false for concrete exported surfaces.
+    pub is_template: bool,
+    /// Surface id rendered as Letta's block label.
+    pub label: String,
+    /// Letta block character budget.
+    pub limit: usize,
+    /// Letta block metadata.
+    pub metadata_: Option<serde_json::Value>,
+    /// Optional Letta template name.
+    pub template_name: Option<String>,
+    /// Deterministic update timestamp for this memory block.
+    pub updated_at: String,
+    /// Surface content rendered as Letta's block value.
+    pub value: String,
+}
+
+/// Letta tag object.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AfTag {
+    /// Tag text.
+    pub tag: String,
+}
+
+/// Explicit warning that `.af` is not a Coven round-trip format.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AfNonRoundTrippableMarker {
+    /// Always true for this exporter.
+    pub non_round_trippable: bool,
+    /// Human-readable loss reason.
+    pub loss_reason: String,
+    /// Re-entry rule for operators and tools.
+    pub reentry: String,
+    /// Canonical source format.
+    pub source_format: String,
+    /// Source weave hash for operator correlation only; not an import verifier.
+    pub source_weave_hash: Vec<u8>,
 }
 
 /// Why an export or import failed — every arm is a *visible* refusal (C7).
@@ -159,6 +284,48 @@ pub enum PortabilityError {
     /// duplicate `(surface, writer)` pair).
     #[error("weave verification failed on import: {0}")]
     Weave(#[from] WeaveError),
+
+    /// A surface payload uses an encoding this runtime cannot verify.
+    #[error("surface {surface} uses unsupported content encoding {encoding:?}")]
+    UnsupportedSurfaceEncoding {
+        /// The surface whose payload could not be decoded.
+        surface: SurfaceId,
+        /// The unsupported encoding string.
+        encoding: String,
+    },
+
+    /// A surface payload was present but no thread `ContentHash` strand commits
+    /// to that surface.
+    #[error("surface {surface} content has no matching thread ContentHash strand")]
+    SurfaceContentUnbound {
+        /// The unbound surface.
+        surface: SurfaceId,
+    },
+
+    /// A non-empty surfaces map omitted a content payload needed to verify a
+    /// thread `ContentHash` strand.
+    #[error("surface {surface} has a ContentHash strand but no content payload")]
+    SurfaceContentMissing {
+        /// The missing surface.
+        surface: SurfaceId,
+    },
+
+    /// A surface payload does not match a thread's `ContentHash` strand.
+    #[error("surface {surface} content hash mismatch for {algorithm:?}")]
+    SurfaceContentHashMismatch {
+        /// The surface whose content failed verification.
+        surface: SurfaceId,
+        /// Hash algorithm named by the strand.
+        algorithm: HashAlgo,
+        /// Hash bytes recorded in the strand.
+        expected: Vec<u8>,
+        /// Hash bytes computed from the payload.
+        actual: Vec<u8>,
+    },
+
+    /// A Letta `.af` handoff requires actual surface content.
+    #[error("cannot export lossy .af: no surface content is present in the .weave artifact")]
+    AfExportMissingSurfaces,
 }
 
 /// Export a weave as a portable artifact.
@@ -185,6 +352,148 @@ pub fn export_weave(weave: &Weave) -> Result<PortableWeave, PortabilityError> {
         format_version: contract.format_version.clone(),
         contract_hash: contract.contract_hash(),
         record: weave.to_record(),
+        surfaces: BTreeMap::new(),
+    })
+}
+
+/// Export a weave with UTF-8 surface content payloads.
+///
+/// The resulting Shape B `.weave` envelope carries surface content keyed by
+/// [`SurfaceId`]. The map is verified against the weave's `ContentHash` strands
+/// before it leaves this runtime, so a mismatched payload fails visibly at export
+/// instead of producing an invalid artifact.
+pub fn export_weave_with_surfaces<I>(
+    weave: &Weave,
+    surfaces: I,
+) -> Result<PortableWeave, PortabilityError>
+where
+    I: IntoIterator<Item = (SurfaceId, String)>,
+{
+    let mut portable = export_weave(weave)?;
+    portable.surfaces = surfaces
+        .into_iter()
+        .map(|(surface, data)| (surface, PortableSurfaceContent::utf8(data)))
+        .collect();
+    verify_surface_content(weave.threads(), &portable.surfaces)?;
+    Ok(portable)
+}
+
+/// Export a lossy, one-way Letta `.af` handoff.
+///
+/// The output is deliberately marked non-round-trippable. It contains surface
+/// text for Letta's `core_memory`, but not the Coven protection layer; no `.af`
+/// import path exists in this crate.
+pub fn export_af(portable: &PortableWeave) -> Result<LossyAfExport, PortabilityError> {
+    if portable.surfaces.is_empty() {
+        return Err(PortabilityError::AfExportMissingSurfaces);
+    }
+    verify_surface_content(&portable.record.threads, &portable.surfaces)?;
+
+    let timestamp = "1970-01-01T00:00:00Z";
+    let core_memory = portable
+        .surfaces
+        .iter()
+        .map(|(surface, content)| {
+            if content.encoding != "utf8" {
+                return Err(PortabilityError::UnsupportedSurfaceEncoding {
+                    surface: surface.clone(),
+                    encoding: content.encoding.clone(),
+                });
+            }
+            Ok(AfCoreMemoryBlock {
+                created_at: timestamp.to_string(),
+                description: Some(
+                    "Lossy Coven surface handoff; not a protection boundary".to_string(),
+                ),
+                is_template: false,
+                label: surface.as_str().to_string(),
+                limit: content.data.len(),
+                metadata_: None,
+                template_name: None,
+                updated_at: timestamp.to_string(),
+                value: content.data.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(LossyAfExport {
+        agent_type: "coven_familiar_lossy_handoff".to_string(),
+        round_trippable: false,
+        core_memory,
+        created_at: timestamp.to_string(),
+        description: Some(
+            "Lossy one-way Letta .af handoff exported from Coven .weave; not round-trippable"
+                .to_string(),
+        ),
+        embedding_config: json!({
+            "embedding_endpoint_type": "openai",
+            "embedding_endpoint": "https://api.openai.com/v1",
+            "embedding_model": "text-embedding-3-small",
+            "embedding_dim": 1536,
+            "embedding_chunk_size": 300,
+            "handle": null,
+            "batch_size": 32,
+            "azure_endpoint": null,
+            "azure_version": null,
+            "azure_deployment": null
+        }),
+        llm_config: json!({
+            "model": "gpt-4o-mini",
+            "display_name": null,
+            "model_endpoint_type": "openai",
+            "model_endpoint": "https://api.openai.com/v1",
+            "provider_name": null,
+            "provider_category": null,
+            "model_wrapper": null,
+            "context_window": 128000,
+            "put_inner_thoughts_in_kwargs": false,
+            "handle": null,
+            "temperature": 1.0,
+            "max_tokens": null,
+            "enable_reasoner": true,
+            "reasoning_effort": null,
+            "max_reasoning_tokens": 0,
+            "effort": null,
+            "frequency_penalty": null,
+            "compatibility_type": null,
+            "verbosity": null,
+            "tier": null,
+            "parallel_tool_calls": false,
+            "response_format": null,
+            "strict": false,
+            "return_logprobs": false,
+            "top_logprobs": null,
+            "return_token_ids": false,
+            "tool_call_parser": null
+        }),
+        message_buffer_autoclear: false,
+        in_context_message_indices: Vec::new(),
+        messages: Vec::new(),
+        metadata_: None,
+        multi_agent_group: None,
+        name: format!("coven-familiar-{}", portable.record.familiar_id),
+        system: "Lossy Coven familiar handoff. Use the original .weave for Coven re-entry."
+            .to_string(),
+        tags: vec![
+            AfTag {
+                tag: "coven".to_string(),
+            },
+            AfTag {
+                tag: "lossy-af-export".to_string(),
+            },
+        ],
+        tool_exec_environment_variables: Vec::new(),
+        tool_rules: Vec::new(),
+        tools: Vec::new(),
+        updated_at: timestamp.to_string(),
+        version: "0.1.0".to_string(),
+        x_coven_threads: AfNonRoundTrippableMarker {
+            non_round_trippable: true,
+            loss_reason: "Coven protection layer is stripped in Letta .af handoff".to_string(),
+            reentry: "re-entry requires the original .weave; .af import is unsupported".to_string(),
+            source_format: "coven-threads PortableWeave .weave".to_string(),
+            source_weave_hash: portable.record.weave_hash.clone(),
+        },
     })
 }
 
@@ -251,7 +560,88 @@ pub fn import_weave(
 
     // Structural verification: recomputed weave hash must equal the recorded
     // one; duplicate (surface, writer) pairs are refused (§2.1).
-    Ok(Weave::from_record(portable.record, pattern)?)
+    let surfaces = portable.surfaces;
+    let weave = Weave::from_record(portable.record, pattern)?;
+
+    // Shape B content-map verification happens only after the envelope itself
+    // verifies. Legacy artifacts without a surfaces map remain valid C7
+    // round-trip artifacts; non-empty maps are fail-closed.
+    verify_surface_content(weave.threads(), &surfaces)?;
+
+    Ok(weave)
+}
+
+fn verify_surface_content(
+    threads: &[crate::thread::Thread],
+    surfaces: &BTreeMap<SurfaceId, PortableSurfaceContent>,
+) -> Result<(), PortabilityError> {
+    if surfaces.is_empty() {
+        return Ok(());
+    }
+
+    for (surface, content) in surfaces {
+        let bytes = surface_content_bytes(surface, content)?;
+        let mut matched = false;
+        for thread in threads.iter().filter(|thread| &thread.surface == surface) {
+            for strand in &thread.strands {
+                if let Strand::ContentHash {
+                    algorithm, value, ..
+                } = strand
+                {
+                    matched = true;
+                    let actual = hash_surface_bytes(*algorithm, bytes);
+                    if &actual != value {
+                        return Err(PortabilityError::SurfaceContentHashMismatch {
+                            surface: surface.clone(),
+                            algorithm: *algorithm,
+                            expected: value.clone(),
+                            actual,
+                        });
+                    }
+                }
+            }
+        }
+        if !matched {
+            return Err(PortabilityError::SurfaceContentUnbound {
+                surface: surface.clone(),
+            });
+        }
+    }
+
+    for thread in threads {
+        let has_content_hash = thread
+            .strands
+            .iter()
+            .any(|strand| matches!(strand, Strand::ContentHash { .. }));
+        if has_content_hash && !surfaces.contains_key(&thread.surface) {
+            return Err(PortabilityError::SurfaceContentMissing {
+                surface: thread.surface.clone(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn surface_content_bytes<'a>(
+    surface: &SurfaceId,
+    content: &'a PortableSurfaceContent,
+) -> Result<&'a [u8], PortabilityError> {
+    if content.encoding == "utf8" {
+        Ok(content.data.as_bytes())
+    } else {
+        Err(PortabilityError::UnsupportedSurfaceEncoding {
+            surface: surface.clone(),
+            encoding: content.encoding.clone(),
+        })
+    }
+}
+
+fn hash_surface_bytes(algorithm: HashAlgo, bytes: &[u8]) -> Vec<u8> {
+    match algorithm {
+        HashAlgo::Blake3 => blake3::hash(bytes).as_bytes().to_vec(),
+        HashAlgo::Sha256 => Sha256::digest(bytes).to_vec(),
+    }
 }
 
 #[cfg(test)]

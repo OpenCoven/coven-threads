@@ -79,8 +79,10 @@ pub use pattern::{
     WeaveCoherence,
 };
 pub use portability::{
-    export_weave, from_json_bytes, import_weave, to_json_bytes, PortabilityError, PortableWeave,
-    SerializationContract, PORTABILITY_FORMAT_VERSION,
+    export_af, export_weave, export_weave_with_surfaces, from_json_bytes, import_weave,
+    to_json_bytes, AfCoreMemoryBlock, AfNonRoundTrippableMarker, AfTag, LossyAfExport,
+    PortabilityError, PortableSurfaceContent, PortableWeave, SerializationContract,
+    PORTABILITY_FORMAT_VERSION,
 };
 pub use staging::{PendingProposal, StagedContents, StagedEdit};
 pub use strand::{HashAlgo, SigKind, Strand, StrandKind};
