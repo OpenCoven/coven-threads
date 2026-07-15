@@ -1,6 +1,6 @@
 # PHASE-3 — Coven Familiar Portability Format: Shape A vs Shape B
 
-**Status:** DRAFT for Val decision (bead `threads-986.16` — both shapes drafted, Val selects; per MEMORY.md 2026-07-14 escalation policy, the decision is made from concrete drafts, not abstract framing)
+**Status:** DECIDED — Val selected **Shape B + lossy one-way `.af` exporter** on 2026-07-15 (see §6). The `.weave` envelope is the canonical portability format.
 **Date:** 2026-07-15
 **Upstream:** RFC-0001 §5 (round-trip anchor); `PHASE-0-DESIGN.md` §2.4 `Channel::Serialization`, §3.3 C7
 **Implemented substrate (shape-agnostic):** `coven-threads-core::portability` — `PortableWeave` envelope, `SerializationContract`, `export_weave` / `import_weave` with the fail-visibly matrix; C7 round-trip conformance suite green (11 tests, `tests/c7_roundtrip.rs`)
@@ -105,5 +105,11 @@ Shape B for the canonical artifact, plus a clearly-marked **lossy one-way** `.af
 
 ## 6. Decision record
 
-- [ ] Val selects: ☐ Shape A ☐ Shape B ☐ B + lossy A exporter
-- [ ] On selection: bead `threads-986.16` closes with the round-trip suite passing on the selected shape; format doc graduates from DRAFT.
+- [x] Val selects: ☐ Shape A ☐ Shape B ☑ **B + lossy A exporter** (2026-07-15, session decision gate; Sage-lane recommendation §5 adopted)
+- [x] On selection: bead `threads-986.16` closes with the round-trip suite passing on the selected shape; format doc graduates from DRAFT.
+
+**Consequences of record:**
+
+- `.weave` (Shape B / `PortableWeave`) is the **only round-trip surface**. Conformance = "accepted by `import_weave`" — the C7 suite (`tests/c7_roundtrip.rs`, 11 tests) is the binding suite.
+- The `.af` exporter is **one-way and lossy by contract**: it MUST mark its output as non-round-trippable (protection layer does not survive), and no `.af` import path may be added — re-entry to Coven happens only via `.weave`, per the §1 non-drift constraint.
+- Follow-up implementation (lossy `.af` exporter + `surfaces` content map on the envelope) tracked as a Phase 3 follow-up bead; not a blocker for `threads-986.16` closure since the selected shape's round-trip suite is green.
