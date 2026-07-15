@@ -1,6 +1,6 @@
 # Phases
 
-> This page is the honest status ledger. Labels used throughout: `[FROZEN]` (design complete and change-controlled), `[SHIPPED]` (merged into a deployed system and reachable at runtime), `[ENGINEERING FROZEN]` (code complete, tests green, awaiting one named decision to reach a deployed system), `[BLOCKED]` (waiting on a named decision), `[NOT STARTED]`.
+> This page is the honest status ledger. Labels used throughout: `[FROZEN]` (design complete and change-controlled), `[MERGED]` (landed on the `main` branch of a downstream system that will call this crate at runtime once cut into a release; buildable and integration-tested but **not in a released binary** yet), `[RELEASED]` (in a tagged downstream release users can install), `[ENGINEERING FROZEN]` (code complete, tests green, awaiting one named decision to reach a deployed system), `[BLOCKED]` (waiting on a named decision), `[NOT STARTED]`.
 >
 > The one-sentence truth: **the design is frozen, the core crate is written and tested, and no enforcement exists anywhere in production.** No daemon in the wild calls this code. If a doc or deck implies otherwise, this page wins.
 
@@ -14,7 +14,7 @@ Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relatio
 
 The frozen doc is change-controlled. These docs describe it; they do not amend it.
 
-## Phase 1 — Core crate `[SHIPPED]`
+## Phase 1 — Core crate `[MERGED, NOT RELEASED]`
 
 **Scope (beads `threads-986.6`–`.11`, Cody's Rust lane):** the `coven-threads-core` crate — `Strand`, `Thread`, `Weave`, `Channel`, `TensionState` types; the `PatternPredicate` trait with its derived `describe()` introspection; the hash-manifest layer (Merkle over strand hashes in canonical `(surface_path, writer_id)` order); and the RFC-0001 §5 conformance test suite mirrored into Rust.
 
@@ -29,7 +29,7 @@ The frozen doc is change-controlled. These docs describe it; they do not amend i
 **Status, in two halves:**
 
 - **Crate side — landed** (commit `5e68957`): `audit.rs` defines the `ward.audit` record shape and DDL (append-only via triggers, RFC-0001 §5.6 event vocabulary); `staging.rs` defines the pending-proposal record shape. The crate owns the *contracts*; the daemon owns the connection, the writes, and the directory.
-- **Daemon side — merged** `[SHIPPED TO MAIN]`: the validator call site (on `POST /familiars/{id}/edits`), staging path, and the live audit table landed on coven `main` via **PR https://github.com/OpenCoven/coven/pull/382** (branch `feat/threads-gate-validator`, squash-merged 2026-07-15). The Phase 2 epic bead `threads-986.14` is **closed** (engineering complete), **`threads-986.20` (Phase 2 FREEZE) is closed**, and **`threads-986.19` (merge gate) is closed** — resolved by flipping `coven-threads` public so coven CI can fetch the pinned git dependency (deny.toml `[sources]` allow-lists it). Cross-repo write authority for the branch work itself was already gated and Val-granted (bead `threads-986.15`, closed).
+- **Daemon side — merged** `[MERGED, NOT RELEASED]`: the validator call site (on `POST /familiars/{id}/edits`), staging path, and the live audit table landed on coven `main` via **PR https://github.com/OpenCoven/coven/pull/382** (branch `feat/threads-gate-validator`, squash-merged 2026-07-15). The Phase 2 epic bead `threads-986.14` is **closed** (engineering complete), **`threads-986.20` (Phase 2 FREEZE) is closed**, and **`threads-986.19` (merge gate) is closed** — resolved by flipping `coven-threads` public so coven CI can fetch the pinned git dependency (deny.toml `[sources]` allow-lists it). Cross-repo write authority for the branch work itself was already gated and Val-granted (bead `threads-986.15`, closed).
 
 Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built from coven `main` now flows through this gate.
 
@@ -52,8 +52,8 @@ Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built f
 | Phase | What it is | Status | Gate to next step |
 |---|---|---|---|
 | 0 | Design doc + scaffold | `[FROZEN]` v0.2, tag `v0.2-phase0-design` | — (done) |
-| 1 | `coven-threads-core` crate | `[SHIPPED]` — imported by the deployed coven daemon; 98 tests green; `.18` closed | — (frozen) |
-| 2 | Daemon integration | `[FROZEN, MERGED]`, `.14` + `.20` + `.19` closed; PR #382 merged | — (shipped to coven `main`) |
+| 1 | `coven-threads-core` crate | `[MERGED, NOT RELEASED]` — imported by coven `main` (Cargo.toml git dep at tag `v0.1.2`); the running coven daemon binary (release `v0.0.54`, 2026-07-14) predates PR #382 and does not yet call it; 98 tests green; `.18` closed | — (frozen) |
+| 2 | Daemon integration | `[MERGED, NOT RELEASED]`, `.14` + `.20` + `.19` closed; PR #382 merged 2026-07-15 as commit `f745117`; next coven release will include it (current release `v0.0.54` predates the merge) | — (release-cut) |
 | 3 | Portability format | `[ENGINEERING FROZEN]`, `.21` + `.16` closed; envelope `[DECIDED: Shape B + lossy .af export]` | follow-up `threads-jq4` (exporter) |
 | 4 | Coven Cave UX | `[NOT STARTED]` | Phase 2 shipping |
 
