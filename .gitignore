@@ -1,6 +1,33 @@
-
-# Beads / Dolt files (added by bd init)
-.dolt/
+/target/
+/.coven/
+/.worktrees/
+.DS_Store
+*.log
+/.comux-hooks
+/.comux
+# Local runtime state and credentials
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
 *.db
-.beads-credential-key
-.beads/proxieddb/
+*.sock
+*.pem
+*.key
+*.p12
+*.pfx
+node_modules/
+packages/*/node_modules/
+packages/*/dist/
+*.tgz
+packages/*/pnpm-workspace.yaml
+__pycache__/
+*.pyc
+
+/npm/dist/
+
+# Git worktrees (project-local)
+.worktrees/
+/.fastembed_cache
+*.bak-*
