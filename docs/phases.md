@@ -1,6 +1,6 @@
 # Phases
 
-> This page is the honest status ledger. Labels used throughout: `[FROZEN]` (design complete and change-controlled), `[IMPLEMENTED, NOT ENFORCING]` (code exists with green tests in this repo, but nothing deployed runs it), `[BLOCKED]` (waiting on a named decision), `[NOT STARTED]`.
+> This page is the honest status ledger. Labels used throughout: `[FROZEN]` (design complete and change-controlled), `[SHIPPED]` (merged into a deployed system and reachable at runtime), `[ENGINEERING FROZEN]` (code complete, tests green, awaiting one named decision to reach a deployed system), `[BLOCKED]` (waiting on a named decision), `[NOT STARTED]`.
 >
 > The one-sentence truth: **the design is frozen, the core crate is written and tested, and no enforcement exists anywhere in production.** No daemon in the wild calls this code. If a doc or deck implies otherwise, this page wins.
 
@@ -14,7 +14,7 @@ Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relatio
 
 The frozen doc is change-controlled. These docs describe it; they do not amend it.
 
-## Phase 1 — Core crate `[IMPLEMENTED, NOT ENFORCING]`
+## Phase 1 — Core crate `[SHIPPED]`
 
 **Scope (beads `threads-986.6`–`.11`, Cody's Rust lane):** the `coven-threads-core` crate — `Strand`, `Thread`, `Weave`, `Channel`, `TensionState` types; the `PatternPredicate` trait with its derived `describe()` introspection; the hash-manifest layer (Merkle over strand hashes in canonical `(surface_path, writer_id)` order); and the RFC-0001 §5 conformance test suite mirrored into Rust.
 
@@ -52,7 +52,7 @@ Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built f
 | Phase | What it is | Status | Gate to next step |
 |---|---|---|---|
 | 0 | Design doc + scaffold | `[FROZEN]` v0.2, tag `v0.2-phase0-design` | — (done) |
-| 1 | `coven-threads-core` crate | `[ENGINEERING FROZEN]`, 98 tests green, `.18` closed | — (frozen) |
+| 1 | `coven-threads-core` crate | `[SHIPPED]` — imported by the deployed coven daemon; 98 tests green; `.18` closed | — (frozen) |
 | 2 | Daemon integration | `[FROZEN, MERGED]`, `.14` + `.20` + `.19` closed; PR #382 merged | — (shipped to coven `main`) |
 | 3 | Portability format | `[ENGINEERING FROZEN]`, `.21` + `.16` closed; envelope `[DECIDED: Shape B + lossy .af export]` | follow-up `threads-jq4` (exporter) |
 | 4 | Coven Cave UX | `[NOT STARTED]` | Phase 2 shipping |
