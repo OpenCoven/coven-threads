@@ -1,0 +1,37 @@
+flowchart LR
+  subgraph Channels["Channels of load"]
+    direction TB
+    C1["Deliberate"]
+    C2["Forced<br/><i>WARD-C1–C6</i>"]
+    C3["Serialization<br/><i>WARD-C7</i>"]
+    C4["Mutation"]
+  end
+
+  subgraph Strands["Required strands"]
+    direction TB
+    R1["ContentHash"]
+    R2["Signature"]
+    R3["ManifestEntry"]
+    R4["AuditTrail"]
+    R5["SerializationMarker"]
+  end
+
+  C1 --> R2
+  C1 --> R4
+  C2 --> R1
+  C2 --> R3
+  C2 --> R4
+  C3 --> R1
+  C3 --> R5
+  C4 --> R2
+  C4 --> R4
+
+  style C1 fill:#4A2E5C,stroke:#D4B5FF,color:#fff
+  style C2 fill:#4A2E5C,stroke:#A8D89A,color:#fff
+  style C3 fill:#4A2E5C,stroke:#A8D89A,color:#fff
+  style C4 fill:#4A2E5C,stroke:#D4B5FF,color:#fff
+  style R1 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style R2 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style R3 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style R4 fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style R5 fill:#1A1825,stroke:#D4B5FF,color:#D4B5FF

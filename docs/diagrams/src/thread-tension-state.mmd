@@ -1,0 +1,15 @@
+stateDiagram-v2
+  direction TB
+  [*] --> Holds: thread bound
+  Holds --> Frayed: strand fails
+  Frayed --> Holds: repair
+  Frayed --> Snapped: additional strand fails
+  Holds --> Snapped: required strand missing
+
+  Holds --> Permit
+  Frayed --> DegradeToProposal
+  Snapped --> Reject
+
+  Permit --> [*]
+  DegradeToProposal --> [*]
+  Reject --> [*]

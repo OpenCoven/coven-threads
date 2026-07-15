@@ -1,0 +1,14 @@
+flowchart LR
+  A["Untrusted client"] -->|HTTP over unix socket| B["coven daemon"]
+  B -->|"validate(request)"| C["coven-threads"]
+  C --> D["Load weave"] --> E["Check strands<br/>under channel"]
+  E --> F{{"Permit /<br/>DegradeToProposal /<br/>Reject"}}
+  F --> G["Daemon acts"] --> H["Append to ward.audit"]
+  style A fill:#0F0A14,stroke:#C44536,color:#fff
+  style B fill:#4A2E5C,stroke:#D4B5FF,color:#fff
+  style C fill:#8B6BA8,stroke:#D4B5FF,color:#fff
+  style D fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style E fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style F fill:#4A7A3E,stroke:#A8D89A,color:#fff
+  style G fill:#1A1825,stroke:#8B6BA8,color:#C5BDED
+  style H fill:#4A2E5C,stroke:#D4B5FF,color:#fff

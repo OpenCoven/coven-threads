@@ -1,0 +1,27 @@
+flowchart TB
+  W["Weave<br/><i>enforced pattern of threads</i>"]
+  T1["Thread<br/>surface → writer"]
+  T2["Thread<br/>surface → writer"]
+  T3["Thread<br/>surface → writer"]
+  S1["ContentHash"]
+  S2["Signature"]
+  S3["ManifestEntry"]
+  S4["AuditTrail"]
+  S5["SerializationMarker"]
+  W --> T1
+  W --> T2
+  W --> T3
+  T1 --> S1
+  T1 --> S2
+  T2 --> S3
+  T2 --> S4
+  T3 --> S5
+  style W fill:#4A2E5C,stroke:#D4B5FF,color:#fff
+  style T1 fill:#8B6BA8,stroke:#D4B5FF,color:#fff
+  style T2 fill:#8B6BA8,stroke:#D4B5FF,color:#fff
+  style T3 fill:#8B6BA8,stroke:#D4B5FF,color:#fff
+  style S1 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
+  style S2 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
+  style S3 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
+  style S4 fill:#1A1825,stroke:#C5BDED,color:#C5BDED
+  style S5 fill:#1A1825,stroke:#D4B5FF,color:#D4B5FF
