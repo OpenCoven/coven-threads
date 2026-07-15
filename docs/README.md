@@ -7,7 +7,7 @@ If you are new here, read [concepts.md](concepts.md) first. Everything else assu
 ## Current status (2026-07-15, honest version)
 
 - **Phase 0 (design) — `[FROZEN]`.** The design doc `specs/PHASE-0-DESIGN.md` is frozen at v0.2 (2026-07-14, tag `v0.2-phase0-design`), with Nova sign-off and an RFC-0001 §5 round-trip verified.
-- **Phases 1–3 (code) — `[IMPLEMENTED, NOT ENFORCING]`.** The `coven-threads-core` crate exists in this repo with a green test suite (98 tests including the RFC-0001 §5 conformance mirror and the C7 round-trip suite). **Nothing is enforcing anything yet**: the daemon-side integration is unmerged (pending a Val decision, bead `threads-986.19`) and no deployment runs this code. Code can churn; the frozen design cannot.
+- **Phases 1–3 (code) — `[ENGINEERING FROZEN, NOT ENFORCING]`.** All three engineering phases are frozen with evidence — bead `threads-986.18` (Phase 1 crate FREEZE), `threads-986.20` (Phase 2 daemon-integration FREEZE, PR https://github.com/OpenCoven/coven/pull/382), `threads-986.21` (Phase 3 C7 portability FREEZE) — all closed. Full workspace test suite is green (98 tests: 72 unit + 12 C7 round-trip + 14 §5 conformance). **Nothing is enforcing anything in production yet**: PR #382 is unmerged, gated on Val decision `threads-986.19` (private-repo CI access). What's left before enforcement ships is three human gates, not more engineering.
 - **Phase 4 (cockpit UX) — `[NOT STARTED]`.**
 
 These docs describe the **frozen design**. Where implemented code goes beyond or refines the design, that is labeled explicitly. See [phases.md](phases.md) for the full breakdown.

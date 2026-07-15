@@ -1,6 +1,6 @@
 # coven-threads
 
-**Status:** Phase 0 design **FROZEN v0.2** (2026-07-14, tag `v0.2-phase0-design`). Past Phase 0: the `coven-threads-core` crate exists in this repo with a green test suite, but **nothing is enforcing anywhere** — the daemon-side integration is unmerged (Val decision, `threads-986.19`) and the portability envelope shape is undecided (Val decision, `threads-986.16`). See [docs/phases.md](docs/phases.md) for the honest phase-by-phase ledger.
+**Status:** Engineering phases 0–3 are **frozen**. Phase 0 design FROZEN v0.2 (2026-07-14, tag `v0.2-phase0-design`); Phase 1 crate FROZEN (`threads-986.18` closed); Phase 2 daemon integration FROZEN (`threads-986.20` closed, PR https://github.com/OpenCoven/coven/pull/382); Phase 3 C7 portability FROZEN (`threads-986.21` closed). 98 workspace tests green. **Nothing is enforcing in production yet**: what's left is three human gates — Val on `threads-986.19` (coven CI access, unblocks PR #382 merge), Val on `threads-986.16` (portability envelope Shape A vs B), Nova on `threads-986.12` (grimoire C7 canonicalization). See [docs/phases.md](docs/phases.md) for the phase-by-phase ledger.
 **License:** stated as Apache-2.0 (planned) in the design doc; the committed `LICENSE` file is currently MIT — a known discrepancy pending reconciliation (see `docs/STATUS-2026-07-15.md` §6).
 **Owners (design phase):** Sage 🌿 + Echo 🔮 co-drive; Nova 👑 + Sage on lane assignments; Cody ⚡ Phase 1+ crate lane
 
@@ -61,7 +61,7 @@ Honest labels; the detailed ledger is [docs/phases.md](docs/phases.md).
 
 - **Phase 0 — design doc + beads scaffolding + repo skeleton.** ✅ **FROZEN v0.2** (2026-07-14, tag `v0.2-phase0-design`). Nova sign-off; RFC-0001 §5 round-trip verified. No enforcement code, by design.
 - **Phase 1 — core crate.** Implemented in-repo, **not enforcing**: `crates/coven-threads-core` (types, hash-manifest layer, §5 receiver, RFC-0001 §5 conformance mirror; 98 tests green). A library with no side effects — until a daemon calls it, it enforces nothing.
-- **Phase 2 — coven daemon integration.** Crate-side contracts landed (`audit.rs`, `staging.rs`); daemon-side call site written on coven branch `feat/threads-gate-validator` but **unmerged — blocked on Val (`threads-986.19`)**. No deployed daemon runs this today.
+- **Phase 2 — coven daemon integration.** `[ENGINEERING FROZEN]` — crate-side contracts landed (`audit.rs`, `staging.rs`); daemon-side call site engineering-complete on coven branch `feat/threads-gate-validator`, opened as draft PR #382. Beads `.14` (epic) and `.20` (FREEZE) closed with evidence. Merge **blocked on Val (`threads-986.19`)** — private-repo CI access decision. No deployed daemon runs this today.
 - **Phase 3 — portability contract.** C7 round-trip semantics implemented and tested (`portability` module + 11-test suite); the interchange-envelope shape (A vs B, `specs/PHASE-3-PORTABILITY.md`) is **blocked on Val (`threads-986.16`)**.
 - **Phase 4 — cockpit integration.** CovenCave surfaces for reviewing weaves, inspecting strand state, approving/rejecting proposals. **Not started** (`threads-986.17`).
 

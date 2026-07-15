@@ -18,26 +18,26 @@ The frozen doc is change-controlled. These docs describe it; they do not amend i
 
 **Scope (beads `threads-986.6`–`.11`, Cody's Rust lane):** the `coven-threads-core` crate — `Strand`, `Thread`, `Weave`, `Channel`, `TensionState` types; the `PatternPredicate` trait with its derived `describe()` introspection; the hash-manifest layer (Merkle over strand hashes in canonical `(surface_path, writer_id)` order); and the RFC-0001 §5 conformance test suite mirrored into Rust.
 
-**Status:** landed on `main` (commit `86550d8`), beads `986.6`–`.11` closed with evidence. The full workspace test suite is green — 98 tests as of 2026-07-15 (72 unit, 12 C7 round-trip, 14 §5 conformance). `unsafe_code = "forbid"` at the workspace level.
+**Status:** landed on `main` (commit `86550d8`), beads `986.6`–`.11` closed with evidence; **Phase 1 FREEZE recorded in `threads-986.18` (closed).** The full workspace test suite is green — 98 tests as of 2026-07-15 (72 unit, 12 C7 round-trip, 14 §5 conformance). `unsafe_code = "forbid"` at the workspace level.
 
 **What "implemented" does not mean:** the crate is a library. It has no side effects by design — no filesystem verification, no audit writes, no staging I/O. Until a daemon calls it (Phase 2), it enforces nothing.
 
-## Phase 2 — Daemon integration `[IMPLEMENTED CRATE-SIDE; DAEMON MERGE BLOCKED]`
+## Phase 2 — Daemon integration `[ENGINEERING FROZEN; MERGE BLOCKED]`
 
 **Scope:** the validator call site inside the `coven` daemon's existing socket handling; the `DegradeToProposal` staging path at `~/.coven/pending/`; the `ward.audit` table live in `coven.sqlite3`; the notification protocol to the principal.
 
 **Status, in two halves:**
 
 - **Crate side — landed** (commit `5e68957`): `audit.rs` defines the `ward.audit` record shape and DDL (append-only via triggers, RFC-0001 §5.6 event vocabulary); `staging.rs` defines the pending-proposal record shape. The crate owns the *contracts*; the daemon owns the connection, the writes, and the directory.
-- **Daemon side — written but unmerged** `[BLOCKED]`: the validator call site (on `POST /familiars/{id}/edits`), staging, and the live audit table exist on the `coven` branch `feat/threads-gate-validator`. **Merge is gated on a Val decision (bead `threads-986.19`)** — integration touches `coven` internals, and cross-repo write authority was itself gated (bead `threads-986.15`, Val-granted for the branch work; the merge remains Val's call).
+- **Daemon side — engineering-frozen, PR unmerged** `[BLOCKED]`: the validator call site (on `POST /familiars/{id}/edits`), staging path, and the live audit table are implemented on the `coven` branch `feat/threads-gate-validator`, opened as **draft PR https://github.com/OpenCoven/coven/pull/382**. The Phase 2 epic bead `threads-986.14` is **closed** (engineering complete) and **`threads-986.20` (Phase 2 FREEZE) is closed** with evidence. **Merge is gated on Val decision `threads-986.19`** — private-repo CI access for `coven-threads-core` (options: flip `coven-threads` public / add org-read token / publish crate to crates.io). Cross-repo write authority for the branch work itself was already gated and Val-granted (bead `threads-986.15`, closed).
 
 Until that merge lands and ships, **no request anywhere flows through this gate.** That is the honest current state.
 
-## Phase 3 — Portability format `[IMPLEMENTED SEMANTICS; ENVELOPE BLOCKED]`
+## Phase 3 — Portability format `[ENGINEERING FROZEN; ENVELOPE SHAPE BLOCKED]`
 
 **Scope:** the Coven Familiar Portability Format — the artifact a familiar exports to and imports from, with C7 enforced across the round-trip.
 
-**Status:** the *semantics* are implemented and tested (`portability.rs` + the 11-test `c7_roundtrip.rs` suite): the `PortableWeave` envelope, the `SerializationContract` with its drift-visible contract hash, `export_weave`/`import_weave` with the full fail-visibly matrix (tamper → hash mismatch; version skew, contract skew, duplicate pairs → typed refusals; import never widens authority). The *interchange encoding* — Shape A (`.af` superset) vs Shape B (net-new `.weave`) — is drafted in `specs/PHASE-3-PORTABILITY.md` and **blocked on a Val decision (bead `threads-986.16`)**.
+**Status:** **Phase 3 FREEZE recorded in `threads-986.21` (closed).** The *semantics* are implemented and tested (`portability.rs` + the 11-test `c7_roundtrip.rs` suite): the `PortableWeave` envelope, the `SerializationContract` with its drift-visible contract hash, `export_weave`/`import_weave` with the full fail-visibly matrix (tamper → hash mismatch; version skew, contract skew, duplicate pairs → typed refusals; import never widens authority). The *interchange encoding* — Shape A (`.af` superset) vs Shape B (net-new `.weave`) — is drafted in `specs/PHASE-3-PORTABILITY.md` and **blocked on a Val decision (bead `threads-986.16`)**.
 
 **Not `.af`-compatible — documented divergence.** Whatever shape wins, the format will not be a compatible `.af` round-trip surface. The reason is factual, source-verified 2026-07-14 against `letta-ai/letta/main/letta/serialize_schemas/pydantic_agent_schema.py`: Letta's `CoreMemoryBlockSchema` has no protection field, and the runtime `read_only` flag is stripped at export. An artifact format that cannot represent the protection contract cannot satisfy C7 — silent downgrade on import is precisely the failure mode C7 exists to refuse. This is a neutral engineering constraint, not a judgment of `.af` for its own goals; see the [FAQ](faq.md#why-isnt-it-af-compatible).
 
@@ -52,9 +52,9 @@ Until that merge lands and ships, **no request anywhere flows through this gate.
 | Phase | What it is | Status | Gate to next step |
 |---|---|---|---|
 | 0 | Design doc + scaffold | `[FROZEN]` v0.2, tag `v0.2-phase0-design` | — (done) |
-| 1 | `coven-threads-core` crate | `[IMPLEMENTED, NOT ENFORCING]`, 98 tests green | — (landed on main) |
-| 2 | Daemon integration | Crate contracts landed; daemon branch unmerged `[BLOCKED]` | Val decision `threads-986.19` |
-| 3 | Portability format | C7 semantics implemented; envelope shape `[BLOCKED]` | Val decision `threads-986.16` |
+| 1 | `coven-threads-core` crate | `[ENGINEERING FROZEN]`, 98 tests green, `.18` closed | — (frozen) |
+| 2 | Daemon integration | `[ENGINEERING FROZEN]`, `.14` + `.20` closed; PR #382 unmerged `[BLOCKED]` | Val decision `threads-986.19` |
+| 3 | Portability format | `[ENGINEERING FROZEN]`, `.21` closed; envelope shape `[BLOCKED]` | Val decision `threads-986.16` |
 | 4 | Coven Cave UX | `[NOT STARTED]` | Phase 2 shipping |
 
 ## Known housekeeping discrepancies
