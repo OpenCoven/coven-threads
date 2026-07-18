@@ -277,40 +277,62 @@ and issues closed before this decision record was written.
    Channel remains the load axis (why a thread is stressed). ApprovalPath is
    the promotion ceremony. Conflating them would make Phase 0 load-axis
    semantics ambiguous. `ApprovalPath` proceeds as a distinct type.
+   *Follows the source-authoritative-enforcement rule: ApprovalPath is
+   authoritative; Channel is a derived load descriptor. Never gate on Channel.
+   If this rule shifts, revisit all eight decisions.* (Echo, Sage 2026-07-18)
 
 2. **Veto windows: delayed-apply or provisional-apply? → DELAYED APPLY ONLY.**
    Matches Gate-4 fail-closed posture and Phase 4 "no optimistic UI, no queued
    decisions." Provisional apply + rollback is a distinct threat model; not
    opening that door in Phase 5.
+   *Audit implication: the veto window close event needs an explicit reason
+   field — `applied | vetoed | expired | superseded`. Without it,
+   delayed-apply is a post-hoc audit black hole. Confirm `ApplyAudit` (issue
+   #5) captures the close event, not just the apply event. (Echo 2026-07-18)*
 
 3. **Harness regions: classify ceremony or become threads? → CLASSIFY FIRST.**
    Region → thread promotion only when a stable source-authoritative projection
    exists. Default: threads source-bound, region evidence on proposal
    classification. No premature thread proliferation.
+   *Forward-only promotion: if a region reclassifies mid-session, promotion
+   applies forward only. Retroactive projection would corrupt the authority
+   trail with apparently-authored writes from before the promotion decision.
+   (Echo 2026-07-18)*
 
 4. **Invariants: deterministic extraction, identity probes, or both?
    → DETERMINISTIC WHERE POSSIBLE; probes as Gate-3 evidence, not sole authority.**
    Consistent with RFC-0001 rule that LLM-judge-only is forbidden for auto-tier.
    Same logic applies to invariant checking.
+   *When deterministic extraction fails or is ambiguous, default is
+   fail-closed (no promotion) — not silent fallback to LLM judgment.
+   Ambiguity is an explicit ignored/blocked state. (Echo 2026-07-18)*
 
 5. **Must RFC issues #3/#4 land before freeze? → MOOT; both landed.**
    OpenCoven/coven-threads#3 and #4 closed 2026-07-18. Phase 5 freeze has no
-   RFC amendment blocker.
+   RFC amendment blocker. See familiar-contract@2a5bb98 for the resolved shape;
+   issues #3/#4 preserved in git history for provenance.
 
 6. **Cave `ProposalView` extension: daemon contract first or simultaneous?
    → DAEMON CONTRACT FIRST.**
    Cave extension only after daemon read models exist. Consistent with Phase 4
-   pattern.
+   pattern. Cave ProposalView for Phase 5 starts as `[DESIGNED, NOT SHIPPED]`
+   until release evidence exists. (Echo 2026-07-18)
 
 7. **Preserve display labels `auto`, `familiar_review`, `human_review`,
    `human_required`? → YES — display names preserved, typed variants internal.**
    Daemon owns the typed `ApprovalPath` enum; Cave renders the human-readable
    labels. No mental-model breakage.
+   *Label-variant round-trip must be a daemon wire contract, not Cave
+   convention. Daemon emits `{variant, label, veto_deadline}`; Cave has zero
+   policy freedom over label strings. Daemon should reject at load if a variant
+   has no corresponding display label or vice versa. (Sage 2026-07-18)*
 
 8. **Add `proposal_window_opened` audit event? → YES, when delayed apply ships.**
    Minimal ledger entry for auditable veto windows. Connects to issue #5
    (`ward_audit` / `ApplyAudit`); that lane (Cody) can consume both in the same
    schema pass.
+   *Also requires a corresponding close event with reason field (see decision
+   #2 audit note). The window is a first-class audit interval, not a gap.*
 
 ---
 
@@ -324,6 +346,14 @@ Phase 5 opened 2026-07-18 (Val + Nova decision). Beads are live.
 - `threads-uqx.2` — ✅ RESOLVED: RFC #3/#4 landed (familiar-contract@2a5bb98).
 - `threads-uqx.3` — Core type sketch: `ApprovalPath`, `VetoWindow`,
   `ProposalClassification`, region evidence, audit event shape.
+  *Design constraints from Sage/Echo (2026-07-18) to incorporate:*
+  *(a) `evidence_replay_hash` on `ProposalClassification` — delayed-apply*
+  *revalidation at deadline must prove it replays the same evidence that*
+  *opened the window (WARD-C7 generalizes: evidence must survive the time gap).*
+  *(b) `VetoWindow.min_visible: Duration` — veto window is only fail-closed if*
+  *pending state was actually visible long enough for a human to act on it*
+  *(same shape as two-compaction contract).*
+  *(c) Label mapping as daemon wire contract with load-time reject on drift.*
 - `threads-uqx.4` — Predicate design: identity invariant
   `PatternPredicate`; descriptor-derived proof.
 - `threads-uqx.5` — Surface-region design: extractor predicates over
