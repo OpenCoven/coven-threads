@@ -13,7 +13,7 @@ All notable changes to `coven-threads-core` are documented here.
 - `WardAuditRecord::for_apply(...)` constructor — builds the audit row for a Gate-4 applied write.
 - `WardAuditRecord::apply_prev_sha256_hex()` / `apply_bytes_written()` — decode helpers for `ApplyAudit` detail.
 - `APPLY_AUDIT_DETAIL_KEY_PREV` / `APPLY_AUDIT_DETAIL_KEY_BYTES` — stable JSON key constants.
-- `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL to rebuild `ward_audit` for stores created against v0.1.3 (which lacked the `apply_audit` CHECK entry and the `detail` column). SQLite cannot `ALTER` a CHECK; the daemon should run this migration at startup when `sqlite_master` shows the old schema (i.e. no `apply_audit` in the `ward_audit` DDL).
+- `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL to rebuild `ward_audit` for stores created against v0.1.3 (which lacked the `apply_audit` CHECK entry and the `detail` column). Bumps `PRAGMA user_version = 14` inside the transaction so future migrations can gate on `user_version < N` instead of substring-sniffing `sqlite_master` DDL. The daemon should run this migration when `PRAGMA user_version < 14`.
 - Exhaustiveness test `schema_names_all_event_tags` extended to cover `ApplyAudit`.
 - New tests: `for_apply_produces_correct_shape`, `for_apply_roundtrips_json`, `migration_sql_contains_apply_audit_and_detail_column`.
 

@@ -141,9 +141,15 @@ pub struct WardAuditRecord {
     pub diff_hash: Option<Vec<u8>>,
     /// Opaque JSON detail payload, event-type–specific.
     ///
-    /// For `ApplyAudit` events: `{"prev_sha256":"<hex>","bytes_written":N}`.
-    /// Absent for all other event types (non-`ApplyAudit` rows leave this
-    /// `None`).
+    /// **Invariant for `ApplyAudit` rows:** `detail` MUST be a JSON object
+    /// containing exactly:
+    /// - `"prev_sha256"` — hex string (64 lower-case ASCII chars), the
+    ///   pre-write SHA-256 of the surface content, or `""` when unknown.
+    /// - `"bytes_written"` — u64, number of bytes written to the surface.
+    ///
+    /// Other event types MAY leave `detail` as `None`, or use event-type-
+    /// specific shapes documented at their construction site. Callers MUST
+    /// NOT assume `detail` is non-null for non-`ApplyAudit` rows.
     pub detail: Option<String>,
     /// The surfaces this event touches.
     pub files_touched: Vec<SurfaceId>,
@@ -309,13 +315,17 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
 /// 4. Renames the new table into place.
 /// 5. Re-creates indexes and append-only triggers.
 ///
-/// **Run condition:** execute this only when
-/// `SELECT sql FROM sqlite_master WHERE type='table' AND name='ward_audit'`
-/// returns a string that does NOT contain the literal `'apply_audit'` — i.e.
-/// the store was created against v0.1.3. Idempotent if re-run on a v0.1.4
-/// store because `ward_audit_new` won't contain `apply_audit` in that schema.
-/// The daemon should gate this migration on the presence/absence of the tag
-/// in `sqlite_master`.
+/// **Run condition:** execute this only when `PRAGMA user_version` returns a
+/// value less than `14` — i.e. the store was created before this migration.
+/// `PRAGMA user_version` is `0` for stores that predate any explicit versioning
+/// (all v0.1.3 stores). After this migration runs, `user_version` is `14`
+/// (matching `0.1.4`), giving future migrations a clean integer ladder to gate
+/// on instead of substring-sniffing `sqlite_master` DDL.
+///
+/// Idempotent in the sense that if `user_version >= 14` the daemon must not
+/// re-run it; the `ward_audit_new` table name is not guarded with `IF NOT
+/// EXISTS`, so a double-run would fail on the `CREATE` step (intentional:
+/// prevents silent data loss from a buggy migration controller).
 pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = r#"
 BEGIN;
 
@@ -370,6 +380,11 @@ BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
+
+-- Stamp schema version so future migrations can gate on `PRAGMA user_version`
+-- instead of substring-sniffing the CHECK DDL. Gate rule for callers:
+--   run this migration when `PRAGMA user_version < 14`.
+PRAGMA user_version = 14;
 
 COMMIT;
 "#;
