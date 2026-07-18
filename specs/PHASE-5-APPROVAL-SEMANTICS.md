@@ -1,9 +1,11 @@
 # PHASE-5 PROPOSAL — Approval semantics over the Phase-2 Ward
 
-**Status:** PROPOSAL (draft — Phase 5 has not opened; phase gates per `AGENTS.md` still bind)
+**Status:** PROPOSAL (decisions recorded — awaiting PR merge to open Phase 5)
 **Date:** 2026-07-18
+**Decision date:** 2026-07-18
 **Bead:** `threads-uqx`
 **Authors:** Sage lane (drafted by coordinator session agent)
+**Decided by:** Val Alexander + Nova (main session)
 
 ---
 
@@ -265,38 +267,61 @@ exists; until then unknown or stale veto state renders blocked under Phase 4 §4
 
 ---
 
-## 6. Open questions for Val/Nova
+## 6. Decisions (Val + Nova, 2026-07-18)
 
-1. Should approval semantics be `ApprovalPath`, separate from `Channel`?
-   Recommended default: yes; channels remain load axes.
-2. Are veto windows delayed-apply or provisional-apply?
-   Recommended default: delayed apply only.
-3. Do harness regions classify proposal ceremony only, or become threads?
-   Recommended default: classify first; promote only with stable source
-   projection.
-4. Are invariants checked by deterministic extraction, identity probes, or both?
-   Recommended default: deterministic where possible; probes are Gate-3
-   evidence, not sole auto authority.
-5. Must RFC issues #3/#4 land before freeze?
-   Recommended default: yes for freeze, no for exploratory design.
-6. Should Phase 5 extend Cave `ProposalView`, or wait for daemon policy?
-   Recommended default: daemon contract first, Cave extension second.
-7. Preserve labels `auto`, `familiar_review`, `human_review`, `human_required`?
-   Recommended default: preserve display names, encode typed variants.
-8. Add `proposal_window_opened` audit event?
-   Recommended default: yes if delayed apply ships.
+All eight questions resolved on Sage's recommended defaults. RFC dependency
+blocker (issues #3/#4) resolved: both landed in OpenCoven/familiar-contract@2a5bb98
+and issues closed before this decision record was written.
+
+1. **`ApprovalPath` separate from `Channel`? → YES.**
+   Channel remains the load axis (why a thread is stressed). ApprovalPath is
+   the promotion ceremony. Conflating them would make Phase 0 load-axis
+   semantics ambiguous. `ApprovalPath` proceeds as a distinct type.
+
+2. **Veto windows: delayed-apply or provisional-apply? → DELAYED APPLY ONLY.**
+   Matches Gate-4 fail-closed posture and Phase 4 "no optimistic UI, no queued
+   decisions." Provisional apply + rollback is a distinct threat model; not
+   opening that door in Phase 5.
+
+3. **Harness regions: classify ceremony or become threads? → CLASSIFY FIRST.**
+   Region → thread promotion only when a stable source-authoritative projection
+   exists. Default: threads source-bound, region evidence on proposal
+   classification. No premature thread proliferation.
+
+4. **Invariants: deterministic extraction, identity probes, or both?
+   → DETERMINISTIC WHERE POSSIBLE; probes as Gate-3 evidence, not sole authority.**
+   Consistent with RFC-0001 rule that LLM-judge-only is forbidden for auto-tier.
+   Same logic applies to invariant checking.
+
+5. **Must RFC issues #3/#4 land before freeze? → MOOT; both landed.**
+   OpenCoven/coven-threads#3 and #4 closed 2026-07-18. Phase 5 freeze has no
+   RFC amendment blocker.
+
+6. **Cave `ProposalView` extension: daemon contract first or simultaneous?
+   → DAEMON CONTRACT FIRST.**
+   Cave extension only after daemon read models exist. Consistent with Phase 4
+   pattern.
+
+7. **Preserve display labels `auto`, `familiar_review`, `human_review`,
+   `human_required`? → YES — display names preserved, typed variants internal.**
+   Daemon owns the typed `ApprovalPath` enum; Cave renders the human-readable
+   labels. No mental-model breakage.
+
+8. **Add `proposal_window_opened` audit event? → YES, when delayed apply ships.**
+   Minimal ledger entry for auditable veto windows. Connects to issue #5
+   (`ward_audit` / `ApplyAudit`); that lane (Cody) can consume both in the same
+   schema pass.
 
 ---
 
-## 7. Rough phase shape, if Phase 5 opens
+## 7. Phase shape — Phase 5 is open
 
-Skeleton only; do not create these beads until Val/Nova open Phase 5.
+Phase 5 opened 2026-07-18 (Val + Nova decision). Beads are live.
 
 - `threads-uqx` — [EPIC] approval semantics over the Phase-2 Ward.
-- `threads-uqx.1` — Sage/Nova gate: decide `ApprovalPath` vs `Channel` and veto
-  semantics.
-- `threads-uqx.2` — RFC dependency check: issues #3/#4; freeze blocked unless
-  landed or waived.
+- `threads-uqx.1` — ✅ RESOLVED: `ApprovalPath` separate from `Channel`; delayed
+  apply; classify-first for regions; deterministic+probe for invariants.
+- `threads-uqx.2` — ✅ RESOLVED: RFC #3/#4 landed (familiar-contract@2a5bb98).
 - `threads-uqx.3` — Core type sketch: `ApprovalPath`, `VetoWindow`,
   `ProposalClassification`, region evidence, audit event shape.
 - `threads-uqx.4` — Predicate design: identity invariant
@@ -318,10 +343,10 @@ rendering gate; final Val freeze after Nova sign-off.
 
 ---
 
-## 8. Recommendation
+## 8. Recommendation — executed
 
-Open Phase 5 only if Val/Nova want to recover semantic approval behavior, not
-just document why it was lost.
+Phase 5 opened. Val and Nova confirmed: we want to recover semantic approval
+behavior, not just document why it was lost.
 
 Carry forward: approval paths as typed promotion ceremony over existing
 channels; harness blocks as daemon-replayable surface-region classifiers;
