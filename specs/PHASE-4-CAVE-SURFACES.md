@@ -225,6 +225,29 @@ never dropped from the list silently (§4.R7).
 }
 ```
 
+### 2.7 `DegradedFamiliarView` — a familiar whose ward config cannot be parsed
+
+Amendment 2026-07-18 (bead `threads-k9s`, follow-up to `threads-vmf`/`threads-v60`).
+A familiar with a ward.toml the daemon cannot deserialize must not vanish from
+the weave rail (fail-visible) and must not abort the fleet read (coven#418).
+The daemon includes one degraded entry per such familiar in the §3 route-1
+response, alongside the healthy `{weave, coherence}` entries:
+
+```jsonc
+{
+  "degraded": {
+    "familiarId": "nova",                       // human id, same as weave.familiar_id
+    "reason": "ward-config-unparseable",        // closed enum; only this value today
+    "error": "missing field `principal_key_fingerprint`"  // single-line, sanitized parse error; no paths beyond the familiar home-relative ward.toml
+  }
+}
+```
+
+Compatibility: the entry carries no `weave` key, so pre-amendment Cave
+normalizers drop it silently (older UI degrades to the previous skip
+behavior); post-amendment normalizers render it per §4.R12. The daemon keeps
+logging the full error to its recovery log.
+
 ## 3. API routes
 
 All routes live in `coven-cave` `src/app/api/`, are registered in
@@ -235,7 +258,7 @@ never apply edits, never touch `pending/`, never write sqlite.
 
 | # | Route | Method | Returns |
 |---|---|---|---|
-| 1 | `/api/weaves` | GET | `WeaveSummary[]` — optional `?familiar=<id>` filter |
+| 1 | `/api/weaves` | GET | `WeaveSummary[]` — optional `?familiar=<id>` filter; degraded familiars surface per §2.7 + §4.R12 |
 | 2 | `/api/weaves/[id]` | GET | `WeaveDetail` |
 | 3 | `/api/threads/[id]` | GET | `ThreadView` |
 | 4 | `/api/threads/[id]/strands` | GET | `StrandView[]` (with `fray` diff blocks where blamed) |
@@ -310,6 +333,7 @@ approval actions disabled, evidence trace still reachable.
 | R9 | Stale response | now > `staleAfter` | §3.9 stale treatment |
 | R10 | Snapped thread | `state: "snapped"` | Terminal treatment: read-only, "fresh authority ceremony required" copy; no repair affordance |
 | R11 | Unknown route/id (404s) | id not in source | 404 with envelope, `blocked: true`; UI renders not-found as blocked, not empty-healthy |
+| R12 | Familiar ward config unparseable | §2.7 `degraded` entry in weaves response | Blocked rail row named for the familiar, "ward unreadable — protection not verifiable" copy, sanitized error in trace, zero threads shown, all actions disabled; never silently absent (added 2026-07-18) |
 
 Rollup arithmetic (R1, normative): `snapped > frayed > unknown > stale > holds`.
 
