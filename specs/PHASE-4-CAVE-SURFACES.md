@@ -258,7 +258,7 @@ never apply edits, never touch `pending/`, never write sqlite.
 
 | # | Route | Method | Returns |
 |---|---|---|---|
-| 1 | `/api/weaves` | GET | `WeaveSummary[]` — optional `?familiar=<id>` filter; degraded familiars surface per §2.7 + §4.R12 |
+| 1 | `/api/weaves` | GET | `WeaveListView` — `{ "weaves": WeaveSummary[], "degraded": DegradedFamiliarView[] }` (§2.7); optional `?familiar=<id>` filter; degraded familiars render per §4.R12 |
 | 2 | `/api/weaves/[id]` | GET | `WeaveDetail` |
 | 3 | `/api/threads/[id]` | GET | `ThreadView` |
 | 4 | `/api/threads/[id]/strands` | GET | `StrandView[]` (with `fray` diff blocks where blamed) |
