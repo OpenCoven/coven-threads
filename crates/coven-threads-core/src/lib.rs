@@ -56,6 +56,7 @@
 pub mod approval;
 pub mod audit;
 pub mod channel;
+pub mod identity_invariants;
 pub mod fray;
 pub mod ids;
 pub mod manifest;
@@ -67,6 +68,10 @@ pub mod thread;
 pub mod validate;
 pub mod weave;
 
+pub use identity_invariants::{
+    AdvisoryProbeResult, AdvisoryProbes, CompositeIdentityInvariant, FamiliarNameInvariant,
+    ManifestAnchoredInvariant,
+};
 pub use approval::{
     ApprovalPath, ApprovalPathKind, ApprovalPathWireEnvelope, ProposalClassification,
     ProposalWindowAuditDetail, ProposalWindowCloseAuditDetail, SurfaceRegionId, VetoWindow,
