@@ -57,6 +57,7 @@ pub mod approval;
 pub mod audit;
 pub mod channel;
 pub mod identity_invariants;
+pub mod surface_regions;
 pub mod fray;
 pub mod ids;
 pub mod manifest;
@@ -68,6 +69,11 @@ pub mod thread;
 pub mod validate;
 pub mod weave;
 
+pub use surface_regions::{
+    ExecutionPromptRegion, HeartbeatBehaviorRegion, MaterializedDiff, RegionEvidence,
+    SurfaceDiff, SurfaceRegionDescriptor, SurfaceRegionPredicate, SurfaceRegionRegistry,
+    ToolDefaultsRegion,
+};
 pub use identity_invariants::{
     AdvisoryProbeResult, AdvisoryProbes, CompositeIdentityInvariant, FamiliarNameInvariant,
     ManifestAnchoredInvariant,
