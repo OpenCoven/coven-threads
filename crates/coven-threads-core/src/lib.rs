@@ -53,6 +53,7 @@
 //! writes, no staging. Those are the daemon's lane (Phase 2). This crate answers
 //! the gate question and names the verdict.
 
+pub mod approval;
 pub mod audit;
 pub mod channel;
 pub mod fray;
@@ -66,6 +67,11 @@ pub mod thread;
 pub mod validate;
 pub mod weave;
 
+pub use approval::{
+    ApprovalPath, ApprovalPathKind, ApprovalPathWireEnvelope, ProposalClassification,
+    ProposalWindowAuditDetail, ProposalWindowCloseAuditDetail, SurfaceRegionId, VetoWindow,
+    WindowCloseReason,
+};
 pub use audit::{AuditEventType, WardAuditRecord, WARD_AUDIT_SCHEMA_SQL};
 pub use channel::Channel;
 pub use fray::{FrayOrSnap, FrayReason, SnapReason};
