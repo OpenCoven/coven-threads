@@ -236,12 +236,17 @@ Phase 5 adds daemon-owned scheduling metadata without making Cave an approval
 engine. The daemon adapter joins each parse-ok staged file to
 `GET /api/v1/threads/proposals` by proposal id. Staged contents remain visible
 for principal inspection; every lifecycle field and display label comes from
-the daemon response.
+the daemon response. `proposalRevision` commits the complete authority envelope,
+including staged contents. `familiarUuid` is compared directly with the staged
+payload; the daemon's human `familiarId` remains display data and is not used as
+the identity join key.
 
 ```jsonc
 // Scheduled proposal whose daemon metadata is verified.
 {
   "state": "verified",
+  "proposalRevision": "64-char lowercase hex", // daemon commitment to the complete authority envelope
+  "familiarUuid": "familiar-uuid",             // canonical join key for the staged payload
   "approvalPath": {
     "variant": "auto-regression|familiar-coherence|human-approval|human-approval-with-rationale",
     "label": "auto|familiar_review|human_review|human_required", // daemon text, rendered verbatim
@@ -277,7 +282,11 @@ fields, not local authorization:
 Cave MUST NOT compare its clock to `vetoDeadline` or `earliestClose` to change
 the action set. Deadline expiry triggers daemon replay; only a fresh daemon
 response may move lifecycle. Every POST remains a forwarder and the daemon
-re-validates the decision.
+re-validates the decision. Approve/reject bodies carry
+`expectedRevision: authority.proposalRevision`; the daemon rejects a changed or
+missing revision before accepting a manual Phase 5 decision. This binds the
+principal's action to the exact proposal contents inspected, not merely its id
+and target list.
 
 ### 2.7 `DegradedFamiliarView` — a familiar whose ward config cannot be parsed
 
@@ -323,7 +332,9 @@ never apply edits, never touch `pending/`, never write sqlite.
 
 ### 3.7 Approve/reject semantics (fail-closed)
 
-- Body: `{ "note": "optional principal note" }`. `readsJson: true`,
+- Body:
+  `{ "note": "optional principal note", "expectedRevision": "daemon-issued proposal revision" }`.
+  `expectedRevision` is mandatory for manual Phase 5 decisions. `readsJson: true`,
   `invalidJson: "guarded"`.
 - `daemon-present`: forward to the daemon socket; the daemon re-validates
   (staging is data, not authority — replay goes back through `validate`,
@@ -398,7 +409,7 @@ approval actions disabled, evidence trace still reachable.
 | R11 | Unknown route/id (404s) | id not in source | 404 with envelope, `blocked: true`; UI renders not-found as blocked, not empty-healthy |
 | R12 | Familiar ward config unparseable | §2.7 `degraded` entry in weaves response | Blocked rail row named for the familiar, "ward unreadable — protection not verifiable" copy, sanitized error in trace, zero threads shown, all actions disabled; never silently absent (added 2026-07-18) |
 | R13 | Scheduled proposal lacks daemon lifecycle metadata | staged file has Phase 5 schema but daemon join is absent/unavailable | Proposal remains inspectable with blocked authority; both actions disabled |
-| R14 | Daemon proposal metadata disagrees with staged identity/targets | id, familiar, writer, staged time, or target set mismatch | Blocked `daemon-mismatch`; no locally preferred source |
+| R14 | Daemon proposal metadata disagrees with staged authority | id, canonical `familiarUuid`, writer, staged time, target set, or committed proposal contents mismatch | Blocked `daemon-mismatch`; no locally preferred source |
 | R15 | Unknown lifecycle/path combination | unrecognized enum value or invalid combination | Blocked `unknown-lifecycle`; never fall back to legacy actions |
 | R16 | Scheduled proposal metadata stale | response is past `staleAfter` | Last-known lifecycle may render as trace only; both actions disabled until a fresh daemon response |
 
@@ -445,6 +456,8 @@ need; Phase 5+.
       mismatched, and unknown daemon metadata
 - [ ] Cave renders daemon approval labels verbatim and never advances lifecycle
       from its own clock
+- [ ] Every manual Phase 5 decision forwards the daemon-issued
+      `proposalRevision`; missing or changed revisions fail closed
 - [ ] `availableDecisions` follows the §2.6 closed mapping; rationale-required
       approval stays disabled until a non-empty note exists
 - [ ] `pnpm typecheck`, `pnpm test:app`, `pnpm test:api` green
