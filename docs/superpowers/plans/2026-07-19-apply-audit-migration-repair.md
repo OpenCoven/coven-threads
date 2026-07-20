@@ -4,21 +4,22 @@
 schema fingerprint/state contract built around exact durable
 `main.sqlite_master.sql` fingerprints for the table/indexes/triggers plus
 ordered column metadata, reserve the durable `ward_audit` /
-`ward_audit_*` namespace, fail closed on any TEMP shadow/reserved temp object,
-make schema initialization fail closed and atomic, preserve evidence and
-unrelated `user_version`, and prove rollback behavior with executable rusqlite
-tests.
+`ward_audit_*` namespace to an exact five-object whitelist in every state, fail
+closed on any TEMP shadow/reserved temp object, make schema initialization fail
+closed and atomic, preserve evidence and unrelated `user_version`, and prove
+rollback behavior with executable rusqlite tests.
 
 **Architecture:** Keep ownership in `crates/coven-threads-core/src/audit.rs`.
 Expose `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable tags so callers can branch on
 `missing` / `legacy_v013` / `current_v014` / `unknown`, reserve `missing` for
-an absent `main.ward_audit` with no preexisting durable reserved object and no
-temp shadow/reserved temp object, wrap `WARD_AUDIT_SCHEMA_SQL` in atomic
+an absent `main.ward_audit` with no unexpected durable reserved-name object and
+no temp shadow/reserved temp object, require the same exact durable whitelist
+for `legacy_v013` and `current_v014`, wrap `WARD_AUDIT_SCHEMA_SQL` in atomic
 pre/post guards that allow only `missing`/`current_v014`, and embed the same
-exact `legacy_v013` + no-temp-shadow predicate inside
-`WARD_AUDIT_MIGRATION_V014_SQL` before any `ALTER TABLE`. Durable DDL/DML stays
-explicitly qualified to `main` wherever SQLite permits it, and the init/
-migration paths never write database-wide `user_version`.
+exact `legacy_v013` + no-unexpected-durable-object + no-temp-shadow predicate
+inside `WARD_AUDIT_MIGRATION_V014_SQL` before any `ALTER TABLE`. Durable
+DDL/DML stays explicitly qualified to `main` wherever SQLite permits it, and
+the init/migration paths never write database-wide `user_version`.
 
 **Tech Stack:** Rust 2021, SQLite, Cargo, bundled `rusqlite` for in-memory
 tests.
@@ -43,8 +44,12 @@ files:
   - empty DB → `missing`;
   - exact legacy fixture → `legacy_v013`;
   - exact current schema → `current_v014`;
+  - exact legacy/current with only the durable whitelist objects still
+    classifying correctly;
   - absent-table reserved-name collisions (`ward_audit_event_idx`,
     `ward_audit_append_only_update`) → `unknown`;
+  - exact current + extra durable reserved-name view/table → `unknown`;
+  - exact legacy + preexisting `main.ward_audit_new` → `unknown`;
   - current/legacy/missing durable states plus a TEMP `ward_audit` shadow or
     reserved temp object → `unknown`.
 - Add syntax-verification tests for bundled SQLite:
@@ -89,10 +94,11 @@ files:
   main/temp mutation and rollback preserves the exact legacy durable table.
 - Add reason-demo coverage proving an unqualified `INSERT INTO ward_audit ...`
   lands in TEMP while the durable contract remains `unknown`.
-- Add post-`ALTER` rollback coverage by precreating conflicting
-  `ward_audit_new`, forcing `CREATE TABLE ward_audit_new` to fail after the
-  guard and `ALTER TABLE` succeed, then rolling back and asserting the legacy
-  row/schema are restored.
+- Add a controlled post-`ALTER` rollback coverage path that starts from exact
+  legacy, performs the same `ALTER TABLE main.ward_audit ADD COLUMN detail
+  TEXT`, then forces a later SQL error by creating `main.ward_audit_new` twice
+  inside the same transaction; require the error, explicit rollback success,
+  full row/schema/user_version restoration, and `legacy_v013` classification.
 - Add exact-stored-SQL tests proving fresh current and successfully migrated
   current both classify `current_v014` while matching only their controlled
   SQLite-emitted table-SQL variants, and that the shipped legacy fixture
@@ -109,9 +115,11 @@ files:
   - explicit durable index discovery from `pragma_index_list('ward_audit',
     'main')`, with exact index SQL then read from `main.sqlite_master`;
   - exact append-only trigger SQL from `main.sqlite_master`;
-  - when `ward_audit` is absent, an empty reserved main-schema
-    `ward_audit` / `ward_audit_*` namespace across tables/indexes/triggers/
-    views;
+  - at every durable state, an exact reserved main-schema whitelist consisting
+    only of table `main.ward_audit`, indexes `ward_audit_event_idx` and
+    `ward_audit_familiar_idx` attached to it, and triggers
+    `ward_audit_append_only_update` / `ward_audit_append_only_delete` attached
+    to it, with every other `ward_audit` / `ward_audit_*` main object rejected;
   - at every durable state, rejection when any temp-schema table/view/index/
     trigger is named `ward_audit` or begins with `ward_audit_`; and
   - only the controlled fresh/migrated current table-SQL variants plus the
@@ -136,7 +144,8 @@ files:
   - starts a transaction;
   - creates a uniquely named TEMP guard table with `CHECK (ok = 1)`;
   - inserts `1` only when the full exact legacy durable predicate holds and no
-    temp shadow/reserved temp object exists, otherwise inserts `0` and aborts;
+    unexpected durable reserved-name object or temp shadow/reserved temp object
+    exists, otherwise inserts `0` and aborts;
   - drops the guard on the success path;
   - keeps `ALTER ADD detail`, strict replacement-table creation, detail copy,
     and explicit main index/trigger recreation, all qualified to `main`
@@ -149,8 +158,9 @@ files:
   say that the durable audit contract is `main.ward_audit`, exact stored
   `main.sqlite_master.sql` equality covers every declared table-level
   constraint, schema-qualified PRAGMAs are required for durable column/index
-  inspection, temp shadows/reserved temp objects fail closed, and no
-  whitespace-destroying normalization is allowed.
+  inspection, the exact durable namespace whitelist applies in every state,
+  temp shadows/reserved temp objects fail closed, and no whitespace-destroying
+  normalization is allowed.
 - Document the caller contract explicitly:
   - query `WARD_AUDIT_SCHEMA_STATE_SQL`;
   - initialize on `missing` only;
@@ -171,7 +181,7 @@ files:
 Create a new commit (no amend) with:
 
 ```text
-fix(audit): reject temporary schema shadows
+fix(audit): reject durable namespace drift
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```

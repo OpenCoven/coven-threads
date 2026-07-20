@@ -19,29 +19,35 @@ All notable changes to `coven-threads-core` are documented here.
   `main.sqlite_master.sql` fingerprints for the durable `main.ward_audit`
   table, explicit main indexes, and append-only main triggers, plus ordered
   durable column metadata discovered through schema-qualified PRAGMAs.
-  `missing` now means `main.ward_audit` is absent, the reserved main-schema
-  `ward_audit` / `ward_audit_*` namespace is otherwise empty, **and** no temp
-  shadow/reserved temp object exists; any temp-schema table/view/index/trigger
-  named `ward_audit` or `ward_audit_*` fail-closes as `unknown`. Only the
-  controlled fresh/migrated v0.1.4 table SQL variants and the shipped v0.1.3
-  table SQL are accepted; no whitespace-destroying normalization is applied.
+  Across all durable states, the reserved main-schema `ward_audit` /
+  `ward_audit_*` namespace is whitelisted to exactly `main.ward_audit`, its two
+  explicit indexes, and its two append-only triggers attached to
+  `main.ward_audit`; every other reserved main object (including
+  `ward_audit_new`, views, backup/shadow tables, or reserved-name
+  indexes/triggers attached elsewhere) fail-closes as `unknown`. `missing` now
+  means `main.ward_audit` is absent, no unexpected durable reserved object
+  exists, **and** no temp shadow/reserved temp object exists; any temp-schema
+  table/view/index/trigger named `ward_audit` or `ward_audit_*` also
+  fail-closes as `unknown`. Only the controlled fresh/migrated v0.1.4 table SQL
+  variants and the shipped v0.1.3 table SQL are accepted; no
+  whitespace-destroying normalization is applied.
 - `WARD_AUDIT_SCHEMA_SQL` — atomic, self-guarding schema initialization for the
   exact `current_v014` fingerprint. It begins a transaction, permits only
   `missing` or exact `current_v014` before any mutation, uses idempotent `IF NOT
   EXISTS` DDL for daemon compatibility, targets durable schema objects in
   `main` wherever SQLite syntax permits, then requires exact `current_v014`
-  before `COMMIT`. Exact `legacy_v013`, every drifted `unknown` shape, and any
-  temp shadow/reserved temp object fail closed; callers must `ROLLBACK` after
-  any init error.
+  before `COMMIT`. Exact `legacy_v013`, every drifted `unknown` shape, any
+  unexpected durable reserved object, and any temp shadow/reserved temp object
+  fail closed; callers must `ROLLBACK` after any init error.
 - `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL for a detail-preserving
   rebuild of `main.ward_audit` guarded by the exact `legacy_v013` fingerprint
-  plus temp-shadow rejection. The daemon should query
+  plus durable-whitelist and temp-shadow rejection. The daemon should query
   `WARD_AUDIT_SCHEMA_STATE_SQL`, initialize when missing, migrate only
   `legacy_v013`, continue on `current_v014`, and fail closed on `unknown`. The
   migration independently re-checks `legacy_v013` before any `ALTER`, using the
-  same exact stored-table + column/index/trigger predicate plus temp-shadow
-  rejection, then copies rows into the replacement table without discarding
-  evidence.
+  same exact stored-table + column/index/trigger predicate plus durable
+  namespace whitelist and temp-shadow rejection, then copies rows into the
+  replacement table without discarding evidence.
 - Exhaustiveness test `schema_names_all_event_tags` extended to cover `ApplyAudit`.
 - New tests: `for_apply_produces_correct_shape`,
   `for_apply_roundtrips_json`,
@@ -65,15 +71,17 @@ All notable changes to `coven-threads-core` are documented here.
   `current_schema_with_extra_index_is_unknown`,
   `current_schema_with_desc_index_is_unknown`,
   `current_schema_with_collated_index_is_unknown`,
+  `current_schema_with_extra_reserved_main_view_or_table_is_unknown_and_schema_sql_preserves_state`,
   `current_schema_with_altered_trigger_error_literal_is_unknown`,
   `current_schema_with_altered_trigger_body_is_unknown`,
   `absent_ward_audit_with_reserved_index_collision_is_unknown_and_schema_sql_preserves_other_objects`,
   `absent_ward_audit_with_reserved_trigger_collision_is_unknown_and_schema_sql_preserves_other_objects`,
   `unknown_partial_current_schema_rejects_schema_sql_and_preserves_state`,
   `migration_rejects_current_schema_rows_with_detail_and_preserves_state`,
-  `legacy_schema_upgrades_and_preserves_append_only_behavior`, and
-  `rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows`, and
-  `post_alter_failure_rollback_restores_legacy_schema_after_create_conflict`, and
+  `legacy_schema_with_preexisting_main_ward_audit_new_is_unknown_and_guard_rejects_before_alter`,
+  `legacy_schema_upgrades_and_preserves_append_only_behavior`,
+  `rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows`,
+  `sqlite_post_alter_failure_rollback_restores_legacy_schema_for_production_migration_contract`,
   `schema_qualified_table_valued_pragmas_resolve_main_and_temp_separately`,
   `current_main_with_temp_shadow_is_unknown_and_guards_preserve_main_and_temp_rows`,
   `missing_main_with_temp_ward_audit_shadow_is_unknown_and_schema_sql_rejects_without_creating_main`,
@@ -90,7 +98,9 @@ All notable changes to `coven-threads-core` are documented here.
   `legacy_v013` / `current_v014` / `unknown`, perform a quiet fail-closed init
   or upgrade, and recover cleanly with explicit rollback after any init or
   migration error. The durable contract is explicitly `main.ward_audit`, and
-  any TEMP shadow/reserved temp object keeps the contract fail-closed as
+  the reserved durable namespace is valid only for that table plus its two
+  explicit indexes and two append-only triggers; any extra durable reserved
+  object or TEMP shadow/reserved temp object keeps the contract fail-closed as
   `unknown`. Production dependencies stay unchanged, while `coven-threads-core`
   now carries bundled `rusqlite` as a dev-dependency for executable migration
   tests.
