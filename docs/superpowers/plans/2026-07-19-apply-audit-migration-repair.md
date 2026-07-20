@@ -3,16 +3,18 @@
 **Goal:** Replace the old two-boolean `ward_audit` migration gate with a full
 schema fingerprint/state contract built around exact stored
 `sqlite_master.sql` fingerprints for the table/indexes/triggers plus ordered
-column metadata, add an in-migration legacy guard, preserve evidence and
-unrelated `user_version`, and prove rollback behavior with executable
-rusqlite tests.
+column metadata, reserve the `ward_audit*` namespace on fresh installs, make
+schema initialization fail closed and atomic, preserve evidence and unrelated
+`user_version`, and prove rollback behavior with executable rusqlite tests.
 
 **Architecture:** Keep ownership in `crates/coven-threads-core/src/audit.rs`.
 Expose `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable tags so callers can branch on
-`missing` / `legacy_v013` / `current_v014` / `unknown`, and embed the same
-exact `legacy_v013` predicate inside `WARD_AUDIT_MIGRATION_V014_SQL` before any
-`ALTER TABLE`. The migration remains table-local and never writes
-database-wide `user_version`.
+`missing` / `legacy_v013` / `current_v014` / `unknown`, reserve `missing` for
+an absent table with no preexisting main-schema `ward_audit*` objects, wrap
+`WARD_AUDIT_SCHEMA_SQL` in atomic pre/post guards that allow only
+`missing`/`current_v014`, and embed the same exact `legacy_v013` predicate
+inside `WARD_AUDIT_MIGRATION_V014_SQL` before any `ALTER TABLE`. The init and
+migration paths remain table-local and never write database-wide `user_version`.
 
 **Tech Stack:** Rust 2021, SQLite, Cargo, bundled `rusqlite` for in-memory
 tests.
@@ -36,7 +38,18 @@ files:
 - Add schema-state tests for:
   - empty DB → `missing`;
   - exact legacy fixture → `legacy_v013`;
-  - exact current schema → `current_v014`.
+  - exact current schema → `current_v014`;
+  - absent-table reserved-name collisions (`ward_audit_event_idx`,
+    `ward_audit_append_only_update`) → `unknown`.
+- Add init-safety tests for:
+  - clean empty DB → `WARD_AUDIT_SCHEMA_SQL` succeeds atomically, lands on
+    `current_v014`, and append-only UPDATE/DELETE still abort;
+  - exact current schema → rerunning `WARD_AUDIT_SCHEMA_SQL` is idempotent and
+    preserves rows/objects;
+  - exact legacy schema → `WARD_AUDIT_SCHEMA_SQL` rejects, requires explicit
+    `ROLLBACK`, and preserves state/data;
+  - unknown partial current schema → `WARD_AUDIT_SCHEMA_SQL` rejects and
+    preserves the drifted state.
 - Add drift tests for:
   - legacy + extra column/data → `unknown`, migration guard failure, explicit
     `ROLLBACK`, and preservation of row data, extra column, indexes, triggers,
@@ -74,12 +87,26 @@ files:
     constraints;
   - ordered column metadata (including `recorded_at` default and PK metadata);
   - exact explicit index SQL (ordered by name, excluding SQLite autoindexes);
-  - exact append-only trigger SQL (ordered by name); and
+  - exact append-only trigger SQL (ordered by name);
+  - when `ward_audit` is absent, an empty reserved main-schema
+    `ward_audit*` namespace across tables/indexes/triggers/views; and
   - only the controlled fresh/migrated current table-SQL variants plus the
     shipped legacy table-SQL variant, including the presence of `apply_audit`
     and any preserved inline comments.
 - Re-export the state query and tags from `crates/coven-threads-core/src/lib.rs`
   for root-API callers.
+- Update `WARD_AUDIT_SCHEMA_SQL` so it:
+  - starts a transaction;
+  - creates a TEMP pre-install guard with `CHECK (ok = 1)`;
+  - inserts `1` only when the shared schema-state expression returns
+    `missing` or `current_v014`, otherwise inserts `0` and aborts before any
+    mutation;
+  - keeps `CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS` for current daemon
+    compatibility;
+  - creates a TEMP post-install guard that requires exact `current_v014`,
+    aborting on any silent no-op/collision or malformed result;
+  - commits on success; and
+  - requires callers to `ROLLBACK` after any init error.
 - Update `WARD_AUDIT_MIGRATION_V014_SQL` so it:
   - starts a transaction;
   - creates a TEMP guard table with `CHECK (ok = 1)`;
@@ -94,16 +121,17 @@ files:
 
 - Update `audit.rs` docs, the design doc, the plan doc, and `CHANGELOG.md` to
   say that exact stored `sqlite_master.sql` equality covers every declared
-  table-level constraint, alongside column/index/trigger fingerprints, and that
+  table-level constraint, alongside column/index/trigger fingerprints, that the
+  main-schema `ward_audit*` namespace is reserved on fresh installs, and that
   no whitespace-destroying normalization is allowed.
 - Document the caller contract explicitly:
   - query `WARD_AUDIT_SCHEMA_STATE_SQL`;
-  - initialize on `missing`;
+  - initialize on `missing` only;
   - migrate only `legacy_v013`;
   - continue on `current_v014`;
   - fail closed on `unknown`;
-  - rely on the migration’s independent legacy guard as a second line of
-    defense.
+  - `ROLLBACK` after any init or migration error; and
+  - rely on the init/migration independent guards as second lines of defense.
 - Run:
   - `cargo fmt`
   - focused audit tests
@@ -116,7 +144,7 @@ files:
 Create a new commit (no amend) with:
 
 ```text
-fix(audit): compare exact stored schema SQL
+fix(audit): make schema initialization fail closed
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```

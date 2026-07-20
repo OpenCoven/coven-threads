@@ -17,9 +17,18 @@ All notable changes to `coven-threads-core` are documented here.
   `legacy_v013`, `current_v014`, `unknown`) — reusable table-local schema
   fingerprint contract for daemon callers, using exact stored
   `sqlite_master.sql` fingerprints for the `ward_audit` table, explicit
-  indexes, and append-only triggers, plus ordered column metadata. Only the
+  indexes, and append-only triggers, plus ordered column metadata. `missing`
+  now means the `ward_audit` table is absent **and** the reserved main-schema
+  `ward_audit*` namespace is otherwise empty; absent-table collisions on any
+  `ward_audit*` table/index/trigger/view fail closed as `unknown`. Only the
   controlled fresh/migrated v0.1.4 table SQL variants and the shipped v0.1.3
   table SQL are accepted; no whitespace-destroying normalization is applied.
+- `WARD_AUDIT_SCHEMA_SQL` — atomic, self-guarding schema initialization for the
+  exact `current_v014` fingerprint. It begins a transaction, permits only
+  `missing` or exact `current_v014` before any mutation, uses idempotent `IF NOT
+  EXISTS` DDL for daemon compatibility, then requires exact `current_v014`
+  before `COMMIT`. Exact `legacy_v013` and every `unknown` shape fail closed;
+  callers must `ROLLBACK` after any init error.
 - `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL for a detail-preserving
   rebuild of `ward_audit` guarded by the exact `legacy_v013` fingerprint. The
   daemon should query `WARD_AUDIT_SCHEMA_STATE_SQL`, initialize when missing,
@@ -31,11 +40,14 @@ All notable changes to `coven-threads-core` are documented here.
 - New tests: `for_apply_produces_correct_shape`,
   `for_apply_roundtrips_json`,
   `schema_state_query_returns_missing_on_empty_db`,
+  `fresh_schema_sql_initializes_current_schema_atomically_and_enforces_append_only`,
   `exact_legacy_fixture_returns_legacy_v013`,
   `exact_current_schema_returns_current_v014`,
+  `current_schema_sql_reruns_idempotently_and_preserves_rows_and_objects`,
   `fresh_and_migrated_current_schemas_use_controlled_exact_sql_variants`,
   `current_schema_with_spaced_event_type_literal_is_unknown`,
   `legacy_schema_with_spaced_event_type_literal_is_unknown_and_guard_preserves_state`,
+  `legacy_schema_sql_rejects_and_rollback_preserves_state`,
   `fresh_schema_preserves_user_version_zero_and_creates_current_shape`,
   `fresh_schema_preserves_user_version_ninety_nine_and_creates_current_shape`,
   `legacy_plus_extra_column_and_data_is_unknown_and_guard_preserves_state`,
@@ -49,6 +61,9 @@ All notable changes to `coven-threads-core` are documented here.
   `current_schema_with_collated_index_is_unknown`,
   `current_schema_with_altered_trigger_error_literal_is_unknown`,
   `current_schema_with_altered_trigger_body_is_unknown`,
+  `absent_ward_audit_with_reserved_index_collision_is_unknown_and_schema_sql_preserves_other_objects`,
+  `absent_ward_audit_with_reserved_trigger_collision_is_unknown_and_schema_sql_preserves_other_objects`,
+  `unknown_partial_current_schema_rejects_schema_sql_and_preserves_state`,
   `migration_rejects_current_schema_rows_with_detail_and_preserves_state`,
   `legacy_schema_upgrades_and_preserves_append_only_behavior`, and
   `rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows`, and
@@ -58,11 +73,13 @@ All notable changes to `coven-threads-core` are documented here.
 
 - **Column approach (Option A):** `diff_hash` carries `next_sha256`; `prev_sha256` + `bytes_written` ride in the new `detail` TEXT column as JSON. This avoids a second table rebuild by not adding typed hash columns while keeping the data query-accessible via SQLite JSON functions.
 - **Migration approach (Option B-lite):** exports
-  `WARD_AUDIT_SCHEMA_STATE_SQL` and `WARD_AUDIT_MIGRATION_V014_SQL` so the
-  daemon can perform a quiet, fail-closed upgrade after querying the exact
-  `ward_audit` schema fingerprint. Production dependencies stay unchanged,
-  while `coven-threads-core` now carries bundled `rusqlite` as a
-  dev-dependency for executable migration tests.
+  `WARD_AUDIT_SCHEMA_STATE_SQL`, `WARD_AUDIT_SCHEMA_SQL`, and
+  `WARD_AUDIT_MIGRATION_V014_SQL` so the daemon can classify `missing` /
+  `legacy_v013` / `current_v014` / `unknown`, perform a quiet fail-closed init
+  or upgrade, and recover cleanly with explicit rollback after any init or
+  migration error. Production dependencies stay unchanged, while
+  `coven-threads-core` now carries bundled `rusqlite` as a dev-dependency for
+  executable migration tests.
 
 ## [0.1.3] — prior release
 

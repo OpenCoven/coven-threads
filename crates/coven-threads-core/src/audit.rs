@@ -20,18 +20,25 @@
 //!
 //! ## Schema shape and migration gating
 //!
-//! `WARD_AUDIT_SCHEMA_SQL` creates the fresh v0.1.4 `ward_audit` shape without
-//! mutating database-wide `PRAGMA user_version`.
+//! `WARD_AUDIT_SCHEMA_SQL` initializes or verifies the exact v0.1.4
+//! `ward_audit` shape in one transaction, without mutating database-wide
+//! `PRAGMA user_version`. It is safe for the daemon to execute unconditionally
+//! on every store open: a pre-install guard permits only `missing` or exact
+//! `current_v014`, the DDL runs with `IF NOT EXISTS` compatibility, and a
+//! post-install guard requires exact `current_v014` before `COMMIT`. If either
+//! guard fails, callers must explicitly `ROLLBACK` before continuing.
 //! `WARD_AUDIT_SCHEMA_STATE_SQL` is the reusable, table-local fingerprint query
 //! that returns one of four stable tags:
-//! - `missing` — `ward_audit` does not exist; initialize with
+//! - `missing` — `ward_audit` does not exist **and** no reserved main-schema
+//!   `ward_audit*` table/index/trigger/view names already exist; initialize with
 //!   `WARD_AUDIT_SCHEMA_SQL`;
 //! - `legacy_v013` — the table exactly matches the v0.1.3 legacy fingerprint;
 //!   run `WARD_AUDIT_MIGRATION_V014_SQL`;
 //! - `current_v014` — the table exactly matches the v0.1.4 current
 //!   fingerprint; continue without schema work;
 //! - `unknown` — every other shape, including any extra or missing declared
-//!   table constraint, column, index, or trigger; fail closed.
+//!   table constraint, column, index, or trigger, plus absent-table collisions
+//!   anywhere else in the reserved `ward_audit*` namespace; fail closed.
 //! The fingerprint uses exact `sqlite_master.sql` text for the table, explicit
 //! indexes, and append-only triggers, plus ordered `pragma_table_info`
 //! metadata. It does **not** normalize whitespace: the only accepted
@@ -318,7 +325,8 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
 }
 
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] when `ward_audit` is
-/// absent.
+/// absent and the reserved main-schema `ward_audit*` namespace is otherwise
+/// empty.
 pub const WARD_AUDIT_SCHEMA_STATE_MISSING: &str = "missing";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for the exact
 /// v0.1.3 legacy schema fingerprint.
@@ -327,7 +335,8 @@ pub const WARD_AUDIT_SCHEMA_STATE_LEGACY_V013: &str = "legacy_v013";
 /// v0.1.4 current schema fingerprint.
 pub const WARD_AUDIT_SCHEMA_STATE_CURRENT_V014: &str = "current_v014";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for every other
-/// `ward_audit` shape.
+/// `ward_audit` shape, plus absent-table reserved-name collisions elsewhere in
+/// the main-schema `ward_audit*` namespace.
 pub const WARD_AUDIT_SCHEMA_STATE_UNKNOWN: &str = "unknown";
 
 macro_rules! ward_audit_schema_state_ctes_sql {
@@ -382,13 +391,21 @@ WITH
             ORDER BY name
         )
     ),
+    ward_audit_reserved_namespace_object_count AS (
+        SELECT COUNT(*) AS count
+        FROM sqlite_master
+        WHERE type IN ('table', 'index', 'trigger', 'view')
+          AND lower(name) GLOB 'ward_audit*'
+          AND NOT (type = 'table' AND name = 'ward_audit')
+    ),
     ward_audit_shape AS (
         SELECT
             (SELECT ok FROM ward_audit_exists) AS table_exists,
             COALESCE((SELECT sql FROM ward_audit_table), '') AS table_sql,
             (SELECT fp FROM ward_audit_column_fingerprint) AS column_fp,
             (SELECT fp FROM ward_audit_index_fingerprint) AS index_fp,
-            (SELECT fp FROM ward_audit_trigger_fingerprint) AS trigger_fp
+            (SELECT fp FROM ward_audit_trigger_fingerprint) AS trigger_fp,
+            (SELECT count FROM ward_audit_reserved_namespace_object_count) AS reserved_namespace_count
     )
 "#
     };
@@ -536,11 +553,30 @@ AND trigger_fp = "#,
     };
 }
 
+macro_rules! ward_audit_schema_state_case_sql {
+    () => {
+        concat!(
+            r#"CASE
+    WHEN table_exists = 0 AND reserved_namespace_count = 0 THEN 'missing'
+    WHEN "#,
+            ward_audit_exact_legacy_predicate_sql!(),
+            r#" THEN 'legacy_v013'
+    WHEN "#,
+            ward_audit_exact_current_predicate_sql!(),
+            r#" THEN 'current_v014'
+    ELSE 'unknown'
+END"#
+        )
+    };
+}
+
 /// Table-local schema-state query for `ward.audit` inside `coven.sqlite3`
 /// (§3.4).
 ///
 /// Callers run this exact query and branch on the stable text result:
-/// - [`WARD_AUDIT_SCHEMA_STATE_MISSING`] — initialize with
+/// - [`WARD_AUDIT_SCHEMA_STATE_MISSING`] — `ward_audit` is absent and the
+///   reserved main-schema `ward_audit*` namespace is otherwise empty; initialize
+///   with
 ///   [`WARD_AUDIT_SCHEMA_SQL`];
 /// - [`WARD_AUDIT_SCHEMA_STATE_LEGACY_V013`] — run
 ///   [`WARD_AUDIT_MIGRATION_V014_SQL`];
@@ -554,25 +590,22 @@ AND trigger_fp = "#,
 /// append-only trigger SQL set must all match. Full stored-table-SQL equality
 /// covers every declared table-level constraint (`CHECK`, `UNIQUE`, foreign-key
 /// clauses, and the `event_type` list), so any extra or missing column,
-/// constraint, index, or trigger returns `unknown`. No whitespace-destroying
-/// normalization is applied: the only accepted `current_v014` table SQL
-/// variants are the fresh `CREATE TABLE ward_audit (...)` form and SQLite's
-/// quoted `CREATE TABLE "ward_audit" (...)` form produced by the exact legacy
-/// migration path, while the `legacy_v013` fingerprint intentionally includes
-/// the inline comments preserved from the shipped v0.1.3 DDL.
+/// constraint, index, or trigger returns `unknown`. When `ward_audit` itself is
+/// absent, any preexisting main-schema table/index/trigger/view whose name is
+/// reserved under the `ward_audit*` namespace also returns `unknown`, so
+/// initialization cannot silently skip append-only objects on another table. No
+/// whitespace-destroying normalization is applied: the only accepted
+/// `current_v014` table SQL variants are the fresh `CREATE TABLE ward_audit
+/// (...)` form and SQLite's quoted `CREATE TABLE "ward_audit" (...)` form
+/// produced by the exact legacy migration path, while the `legacy_v013`
+/// fingerprint intentionally includes the inline comments preserved from the
+/// shipped v0.1.3 DDL.
 pub const WARD_AUDIT_SCHEMA_STATE_SQL: &str = concat!(
     ward_audit_schema_state_ctes_sql!(),
     r#"
-SELECT CASE
-    WHEN table_exists = 0 THEN 'missing'
-    WHEN "#,
-    ward_audit_exact_legacy_predicate_sql!(),
-    r#" THEN 'legacy_v013'
-    WHEN "#,
-    ward_audit_exact_current_predicate_sql!(),
-    r#" THEN 'current_v014'
-    ELSE 'unknown'
-END AS schema_state
+SELECT "#,
+    ward_audit_schema_state_case_sql!(),
+    r#" AS schema_state
 FROM ward_audit_shape;
 "#,
 );
@@ -682,12 +715,11 @@ COMMIT;
 "#,
 );
 
-/// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
-///
-/// See module docs for the full schema-state contract. This DDL creates the
-/// exact `current_v014` fingerprint without mutating database-wide
-/// `PRAGMA user_version`.
-pub const WARD_AUDIT_SCHEMA_SQL: &str = r#"
+// Shared raw current-v0.1.4 DDL body used by the guarded init SQL and drift
+// tests.
+macro_rules! ward_audit_current_objects_sql {
+    () => {
+        r#"
 CREATE TABLE IF NOT EXISTS ward_audit (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type    TEXT    NOT NULL CHECK (event_type IN (
@@ -725,7 +757,65 @@ BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
-"#;
+"#
+    };
+}
+
+/// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
+///
+/// See module docs for the full schema-state contract. This transaction is
+/// safe to run unconditionally on every store open: it permits only exact
+/// `missing` or `current_v014` before any mutation, uses idempotent `IF NOT
+/// EXISTS` DDL for daemon compatibility, then requires exact `current_v014`
+/// before `COMMIT`. Exact `legacy_v013` and every `unknown` shape fail closed.
+/// If this SQL errors, callers must explicitly `ROLLBACK` before continuing so
+/// SQLite discards any uncommitted work. This DDL never mutates database-wide
+/// `PRAGMA user_version`.
+pub const WARD_AUDIT_SCHEMA_SQL: &str = concat!(
+    r#"
+BEGIN;
+
+CREATE TEMP TABLE ward_audit_schema_pre_guard (
+    ok INTEGER NOT NULL CHECK (ok = 1)
+);
+
+INSERT INTO ward_audit_schema_pre_guard (ok)
+"#,
+    ward_audit_schema_state_ctes_sql!(),
+    r#"
+SELECT CASE
+    WHEN ("#,
+    ward_audit_schema_state_case_sql!(),
+    r#") IN ('missing', 'current_v014') THEN 1
+    ELSE 0
+END
+FROM ward_audit_shape;
+
+DROP TABLE ward_audit_schema_pre_guard;
+"#,
+    ward_audit_current_objects_sql!(),
+    r#"
+CREATE TEMP TABLE ward_audit_schema_post_guard (
+    ok INTEGER NOT NULL CHECK (ok = 1)
+);
+
+INSERT INTO ward_audit_schema_post_guard (ok)
+"#,
+    ward_audit_schema_state_ctes_sql!(),
+    r#"
+SELECT CASE
+    WHEN ("#,
+    ward_audit_schema_state_case_sql!(),
+    r#") = 'current_v014' THEN 1
+    ELSE 0
+END
+FROM ward_audit_shape;
+
+DROP TABLE ward_audit_schema_post_guard;
+
+COMMIT;
+"#,
+);
 
 #[cfg(test)]
 mod tests {
@@ -897,7 +987,7 @@ END;
     }
 
     fn current_schema_with_extra_table_constraint(constraint_sql: &str) -> String {
-        schema_sql_with_extra_table_constraint(WARD_AUDIT_SCHEMA_SQL, constraint_sql)
+        schema_sql_with_extra_table_constraint(ward_audit_current_objects_sql!(), constraint_sql)
     }
 
     fn drift_event_type_literal(
@@ -957,6 +1047,16 @@ END;
         conn.query_row(
             "SELECT EXISTS(SELECT 1 FROM pragma_table_info('ward_audit') WHERE name = ?1);",
             params![name],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+            == 1
+    }
+
+    fn main_schema_object_exists(conn: &Connection, object_type: &str, name: &str) -> bool {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = ?1 AND name = ?2);",
+            params![object_type, name],
             |row| row.get::<_, i64>(0),
         )
         .unwrap()
@@ -1355,6 +1455,34 @@ END;
     }
 
     #[test]
+    fn fresh_schema_sql_initializes_current_schema_atomically_and_enforces_append_only() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 11);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_MISSING);
+
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_eq!(user_version(&conn), 11);
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+
+        let row_id = insert_current_apply_audit_row(&conn);
+        let update_err = conn
+            .execute(
+                "UPDATE ward_audit SET decision = 'changed' WHERE id = ?1;",
+                params![row_id],
+            )
+            .unwrap_err();
+        assert!(update_err.to_string().contains("append-only"));
+
+        let delete_err = conn
+            .execute("DELETE FROM ward_audit WHERE id = ?1;", params![row_id])
+            .unwrap_err();
+        assert!(delete_err.to_string().contains("append-only"));
+    }
+
+    #[test]
     fn exact_legacy_fixture_returns_legacy_v013() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
@@ -1390,6 +1518,27 @@ END;
             trigger_sql_fingerprint(&conn),
             sql_literal_value(&conn, ward_audit_exact_trigger_fp_sql!())
         );
+    }
+
+    #[test]
+    fn current_schema_sql_reruns_idempotently_and_preserves_rows_and_objects() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 29);
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let row_id = insert_current_apply_audit_row(&conn);
+        let before = load_audit_row(&conn, row_id);
+        let before_table_sql = stored_table_sql(&conn);
+        let before_indexes = explicit_index_names(&conn);
+        let before_triggers = trigger_names(&conn);
+
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        assert_eq!(load_audit_row(&conn, row_id), before);
+        assert_eq!(stored_table_sql(&conn), before_table_sql);
+        assert_eq!(explicit_index_names(&conn), before_indexes);
+        assert_eq!(trigger_names(&conn), before_triggers);
+        assert_eq!(user_version(&conn), 29);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
     }
 
     #[test]
@@ -1441,7 +1590,7 @@ END;
     fn current_schema_with_spaced_event_type_literal_is_unknown() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(&drift_event_type_literal(
-            WARD_AUDIT_SCHEMA_SQL,
+            ward_audit_current_objects_sql!(),
             "apply_audit",
             "apply_ audit",
         ))
@@ -1464,6 +1613,34 @@ END;
             assert!(stored_table_sql(conn).contains("'compaction_ ledger'"));
             assert!(!stored_table_sql(conn).contains("'compaction_ledger'"));
         });
+    }
+
+    #[test]
+    fn legacy_schema_sql_rejects_and_rollback_preserves_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let row_id = insert_legacy_ward_updated_row(&conn);
+        let before = load_legacy_audit_row(&conn, row_id);
+        let before_version = user_version(&conn);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+            .expect_err("exact legacy schema must fail closed at the schema-init guard");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected schema init error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_legacy_audit_row(&conn, row_id), before);
+        assert_eq!(user_version(&conn), before_version);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+        assert!(!has_column(&conn, "detail"));
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
     }
 
     #[test]
@@ -1686,6 +1863,124 @@ END;
             trigger_sql_fingerprint(&conn).contains("SELECT 1;"),
             "expected trigger-body drift in trigger SQL"
         );
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn absent_ward_audit_with_reserved_index_collision_is_unknown_and_schema_sql_preserves_other_objects(
+    ) {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 23);
+        conn.execute_batch(
+            "CREATE TABLE other (id INTEGER PRIMARY KEY, note TEXT NOT NULL);
+             INSERT INTO other (id, note) VALUES (1, 'sentinel');
+             CREATE INDEX ward_audit_event_idx ON other (note);",
+        )
+        .unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+            .expect_err("reserved index collision must fail closed before creating ward_audit");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected schema init error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        assert!(!main_schema_object_exists(&conn, "table", "ward_audit"));
+        assert!(main_schema_object_exists(&conn, "table", "other"));
+        assert!(main_schema_object_exists(
+            &conn,
+            "index",
+            "ward_audit_event_idx"
+        ));
+        assert_eq!(
+            conn.query_row("SELECT note FROM other WHERE id = 1;", [], |row| row
+                .get::<_, String>(0))
+                .unwrap(),
+            "sentinel"
+        );
+        assert_eq!(user_version(&conn), 23);
+    }
+
+    #[test]
+    fn absent_ward_audit_with_reserved_trigger_collision_is_unknown_and_schema_sql_preserves_other_objects(
+    ) {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 31);
+        conn.execute_batch(
+            "CREATE TABLE other (id INTEGER PRIMARY KEY, note TEXT NOT NULL);
+             INSERT INTO other (id, note) VALUES (1, 'sentinel');
+             CREATE TRIGGER ward_audit_append_only_update
+             BEFORE UPDATE ON other
+             BEGIN
+                 SELECT RAISE(ABORT, 'other is append-only');
+             END;",
+        )
+        .unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+            .expect_err("reserved trigger collision must fail closed before creating ward_audit");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected schema init error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        assert!(!main_schema_object_exists(&conn, "table", "ward_audit"));
+        assert!(main_schema_object_exists(&conn, "table", "other"));
+        assert!(main_schema_object_exists(
+            &conn,
+            "trigger",
+            "ward_audit_append_only_update"
+        ));
+        let trigger_err = conn
+            .execute("UPDATE other SET note = 'changed' WHERE id = 1;", [])
+            .unwrap_err();
+        assert!(trigger_err.to_string().contains("other is append-only"));
+        assert_eq!(
+            conn.query_row("SELECT note FROM other WHERE id = 1;", [], |row| row
+                .get::<_, String>(0))
+                .unwrap(),
+            "sentinel"
+        );
+        assert_eq!(user_version(&conn), 31);
+    }
+
+    #[test]
+    fn unknown_partial_current_schema_rejects_schema_sql_and_preserves_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let row_id = insert_current_apply_audit_row(&conn);
+        let before = load_audit_row(&conn, row_id);
+
+        conn.execute_batch("DROP TRIGGER ward_audit_append_only_update;")
+            .unwrap();
+        let before_triggers = trigger_names(&conn);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+            .expect_err("partial current schema must fail closed at the schema-init guard");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected schema init error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_audit_row(&conn, row_id), before);
+        assert_eq!(trigger_names(&conn), before_triggers);
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(user_version(&conn), 37);
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
     }
 
