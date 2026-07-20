@@ -1,20 +1,24 @@
 # ApplyAudit Migration Repair Implementation Plan
 
 **Goal:** Replace the old two-boolean `ward_audit` migration gate with a full
-schema fingerprint/state contract built around exact stored
-`sqlite_master.sql` fingerprints for the table/indexes/triggers plus ordered
-column metadata, reserve the `ward_audit*` namespace on fresh installs, make
-schema initialization fail closed and atomic, preserve evidence and unrelated
-`user_version`, and prove rollback behavior with executable rusqlite tests.
+schema fingerprint/state contract built around exact durable
+`main.sqlite_master.sql` fingerprints for the table/indexes/triggers plus
+ordered column metadata, reserve the durable `ward_audit` /
+`ward_audit_*` namespace, fail closed on any TEMP shadow/reserved temp object,
+make schema initialization fail closed and atomic, preserve evidence and
+unrelated `user_version`, and prove rollback behavior with executable rusqlite
+tests.
 
 **Architecture:** Keep ownership in `crates/coven-threads-core/src/audit.rs`.
 Expose `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable tags so callers can branch on
 `missing` / `legacy_v013` / `current_v014` / `unknown`, reserve `missing` for
-an absent table with no preexisting main-schema `ward_audit*` objects, wrap
-`WARD_AUDIT_SCHEMA_SQL` in atomic pre/post guards that allow only
-`missing`/`current_v014`, and embed the same exact `legacy_v013` predicate
-inside `WARD_AUDIT_MIGRATION_V014_SQL` before any `ALTER TABLE`. The init and
-migration paths remain table-local and never write database-wide `user_version`.
+an absent `main.ward_audit` with no preexisting durable reserved object and no
+temp shadow/reserved temp object, wrap `WARD_AUDIT_SCHEMA_SQL` in atomic
+pre/post guards that allow only `missing`/`current_v014`, and embed the same
+exact `legacy_v013` + no-temp-shadow predicate inside
+`WARD_AUDIT_MIGRATION_V014_SQL` before any `ALTER TABLE`. Durable DDL/DML stays
+explicitly qualified to `main` wherever SQLite permits it, and the init/
+migration paths never write database-wide `user_version`.
 
 **Tech Stack:** Rust 2021, SQLite, Cargo, bundled `rusqlite` for in-memory
 tests.
@@ -40,7 +44,13 @@ files:
   - exact legacy fixture → `legacy_v013`;
   - exact current schema → `current_v014`;
   - absent-table reserved-name collisions (`ward_audit_event_idx`,
-    `ward_audit_append_only_update`) → `unknown`.
+    `ward_audit_append_only_update`) → `unknown`;
+  - current/legacy/missing durable states plus a TEMP `ward_audit` shadow or
+    reserved temp object → `unknown`.
+- Add syntax-verification tests for bundled SQLite:
+  - `pragma_table_info('ward_audit', 'main')` sees durable columns even when a
+    TEMP `ward_audit` exists; and
+  - `pragma_index_list('ward_audit', 'main')` sees durable explicit indexes.
 - Add init-safety tests for:
   - clean empty DB → `WARD_AUDIT_SCHEMA_SQL` succeeds atomically, lands on
     `current_v014`, and append-only UPDATE/DELETE still abort;
@@ -48,6 +58,11 @@ files:
     preserves rows/objects;
   - exact legacy schema → `WARD_AUDIT_SCHEMA_SQL` rejects, requires explicit
     `ROLLBACK`, and preserves state/data;
+  - exact current `main.ward_audit` + TEMP shadow clone → init rejects,
+    explicit rollback preserves both main and temp rows, and dropping the TEMP
+    shadow restores `current_v014`;
+  - missing main + TEMP `ward_audit` / reserved `ward_audit_*` temp object →
+    init rejects and never creates `main.ward_audit`;
   - unknown partial current schema → `WARD_AUDIT_SCHEMA_SQL` rejects and
     preserves the drifted state.
 - Add drift tests for:
@@ -70,6 +85,10 @@ files:
   - current with altered append-only trigger error literal/body → `unknown`.
 - Update existing migration failure tests so exact current/rerun cases fail at
   the new guard and always `ROLLBACK` with `unwrap()`.
+- Add legacy TEMP-shadow migration coverage proving the guard rejects before any
+  main/temp mutation and rollback preserves the exact legacy durable table.
+- Add reason-demo coverage proving an unqualified `INSERT INTO ward_audit ...`
+  lands in TEMP while the durable contract remains `unknown`.
 - Add post-`ALTER` rollback coverage by precreating conflicting
   `ward_audit_new`, forcing `CREATE TABLE ward_audit_new` to fail after the
   guard and `ALTER TABLE` succeed, then rolling back and asserting the legacy
@@ -83,13 +102,18 @@ files:
 
 - Add stable state tag constants.
 - Add public `WARD_AUDIT_SCHEMA_STATE_SQL` that fingerprints:
-  - exact stored `sqlite_master.sql` for `ward_audit`, covering all table-level
-    constraints;
-  - ordered column metadata (including `recorded_at` default and PK metadata);
-  - exact explicit index SQL (ordered by name, excluding SQLite autoindexes);
-  - exact append-only trigger SQL (ordered by name);
+  - exact stored `main.sqlite_master.sql` for `ward_audit`, covering all
+    table-level constraints;
+  - ordered durable column metadata from `pragma_table_info('ward_audit',
+    'main')` (including `recorded_at` default and PK metadata);
+  - explicit durable index discovery from `pragma_index_list('ward_audit',
+    'main')`, with exact index SQL then read from `main.sqlite_master`;
+  - exact append-only trigger SQL from `main.sqlite_master`;
   - when `ward_audit` is absent, an empty reserved main-schema
-    `ward_audit*` namespace across tables/indexes/triggers/views; and
+    `ward_audit` / `ward_audit_*` namespace across tables/indexes/triggers/
+    views;
+  - at every durable state, rejection when any temp-schema table/view/index/
+    trigger is named `ward_audit` or begins with `ward_audit_`; and
   - only the controlled fresh/migrated current table-SQL variants plus the
     shipped legacy table-SQL variant, including the presence of `apply_audit`
     and any preserved inline comments.
@@ -97,33 +121,36 @@ files:
   for root-API callers.
 - Update `WARD_AUDIT_SCHEMA_SQL` so it:
   - starts a transaction;
-  - creates a TEMP pre-install guard with `CHECK (ok = 1)`;
+  - creates a uniquely named TEMP pre-install guard with `CHECK (ok = 1)`;
   - inserts `1` only when the shared schema-state expression returns
     `missing` or `current_v014`, otherwise inserts `0` and aborts before any
     mutation;
   - keeps `CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS` for current daemon
-    compatibility;
-  - creates a TEMP post-install guard that requires exact `current_v014`,
-    aborting on any silent no-op/collision or malformed result;
+    compatibility while targeting `main` unambiguously wherever SQLite syntax
+    allows it;
+  - creates a uniquely named TEMP post-install guard that requires exact
+    `current_v014`, aborting on any silent no-op/collision or malformed result;
   - commits on success; and
   - requires callers to `ROLLBACK` after any init error.
 - Update `WARD_AUDIT_MIGRATION_V014_SQL` so it:
   - starts a transaction;
-  - creates a TEMP guard table with `CHECK (ok = 1)`;
-  - inserts `1` only when the full exact legacy predicate holds, otherwise
-    inserts `0` and aborts;
+  - creates a uniquely named TEMP guard table with `CHECK (ok = 1)`;
+  - inserts `1` only when the full exact legacy durable predicate holds and no
+    temp shadow/reserved temp object exists, otherwise inserts `0` and aborts;
   - drops the guard on the success path;
   - keeps `ALTER ADD detail`, strict replacement-table creation, detail copy,
-    and explicit index/trigger recreation;
+    and explicit main index/trigger recreation, all qualified to `main`
+    wherever SQLite syntax permits;
   - never writes `PRAGMA user_version`.
 
 ## Task 3: Update the written contract and validate
 
 - Update `audit.rs` docs, the design doc, the plan doc, and `CHANGELOG.md` to
-  say that exact stored `sqlite_master.sql` equality covers every declared
-  table-level constraint, alongside column/index/trigger fingerprints, that the
-  main-schema `ward_audit*` namespace is reserved on fresh installs, and that
-  no whitespace-destroying normalization is allowed.
+  say that the durable audit contract is `main.ward_audit`, exact stored
+  `main.sqlite_master.sql` equality covers every declared table-level
+  constraint, schema-qualified PRAGMAs are required for durable column/index
+  inspection, temp shadows/reserved temp objects fail closed, and no
+  whitespace-destroying normalization is allowed.
 - Document the caller contract explicitly:
   - query `WARD_AUDIT_SCHEMA_STATE_SQL`;
   - initialize on `missing` only;
@@ -144,7 +171,7 @@ files:
 Create a new commit (no amend) with:
 
 ```text
-fix(audit): make schema initialization fail closed
+fix(audit): reject temporary schema shadows
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```

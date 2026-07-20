@@ -21,38 +21,44 @@
 //! ## Schema shape and migration gating
 //!
 //! `WARD_AUDIT_SCHEMA_SQL` initializes or verifies the exact v0.1.4
-//! `ward_audit` shape in one transaction, without mutating database-wide
+//! `main.ward_audit` shape in one transaction, without mutating database-wide
 //! `PRAGMA user_version`. It is safe for the daemon to execute unconditionally
 //! on every store open: a pre-install guard permits only `missing` or exact
-//! `current_v014`, the DDL runs with `IF NOT EXISTS` compatibility, and a
-//! post-install guard requires exact `current_v014` before `COMMIT`. If either
-//! guard fails, callers must explicitly `ROLLBACK` before continuing.
+//! `current_v014`, the durable DDL runs explicitly in `main` with `IF NOT
+//! EXISTS` compatibility, and a post-install guard requires exact
+//! `current_v014` before `COMMIT`. If either guard fails, callers must
+//! explicitly `ROLLBACK` before continuing.
 //! `WARD_AUDIT_SCHEMA_STATE_SQL` is the reusable, table-local fingerprint query
 //! that returns one of four stable tags:
-//! - `missing` — `ward_audit` does not exist **and** no reserved main-schema
-//!   `ward_audit*` table/index/trigger/view names already exist; initialize with
+//! - `missing` — `main.ward_audit` does not exist, the reserved durable
+//!   `ward_audit` / `ward_audit_*` namespace is otherwise empty in `main`, and
+//!   no temp-schema shadow/reserved object exists; initialize with
 //!   `WARD_AUDIT_SCHEMA_SQL`;
-//! - `legacy_v013` — the table exactly matches the v0.1.3 legacy fingerprint;
-//!   run `WARD_AUDIT_MIGRATION_V014_SQL`;
-//! - `current_v014` — the table exactly matches the v0.1.4 current
-//!   fingerprint; continue without schema work;
+//! - `legacy_v013` — `main.ward_audit` exactly matches the v0.1.3 legacy
+//!   fingerprint and no temp shadow exists; run `WARD_AUDIT_MIGRATION_V014_SQL`;
+//! - `current_v014` — `main.ward_audit` exactly matches the v0.1.4 current
+//!   fingerprint and no temp shadow exists; continue without schema work;
 //! - `unknown` — every other shape, including any extra or missing declared
-//!   table constraint, column, index, or trigger, plus absent-table collisions
-//!   anywhere else in the reserved `ward_audit*` namespace; fail closed.
-//! The fingerprint uses exact `sqlite_master.sql` text for the table, explicit
-//! indexes, and append-only triggers, plus ordered `pragma_table_info`
-//! metadata. It does **not** normalize whitespace: the only accepted
-//! `current_v014` table-SQL variants are the fresh `CREATE TABLE ward_audit`
-//! form and the quoted `CREATE TABLE "ward_audit"` form SQLite stores after
-//! the exact legacy migration path, and the `legacy_v013` fingerprint includes
-//! the inline comments preserved from the shipped v0.1.3 DDL.
+//!   table constraint, column, index, or trigger, any reserved durable-name
+//!   collision, and any temp-schema table/view/index/trigger named
+//!   `ward_audit` or `ward_audit_*`; fail closed.
+//! The fingerprint uses exact `main.sqlite_master.sql` text for the durable
+//! table, explicit durable indexes, and append-only durable triggers, plus
+//! ordered `pragma_table_info('ward_audit', 'main')` metadata and
+//! `pragma_index_list('ward_audit', 'main')` for explicit index discovery. It
+//! does **not** normalize whitespace: the only accepted `current_v014`
+//! table-SQL variants are the fresh `CREATE TABLE ward_audit` form and the
+//! quoted `CREATE TABLE "ward_audit"` form SQLite stores after the exact legacy
+//! migration path, and the `legacy_v013` fingerprint includes the inline
+//! comments preserved from the shipped v0.1.3 DDL.
 //! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact `legacy_v013`
-//! fingerprint. It independently re-checks that fingerprint inside the
-//! transaction before any `ALTER`, then adds `detail` and rebuilds `ward_audit`
-//! so the current CHECK set is installed and every existing row is preserved.
-//! If a later migration step fails after `ALTER TABLE ... ADD COLUMN detail`,
-//! callers must explicitly roll back the failed transaction before continuing
-//! so SQLite restores the untouched legacy table.
+//! fingerprint with no temp shadow. It independently re-checks that fingerprint
+//! inside the transaction before any `ALTER`, then adds `detail` and rebuilds
+//! `main.ward_audit` so the current CHECK set is installed and every existing
+//! row is preserved. If a later migration step fails after
+//! `ALTER TABLE main.ward_audit ADD COLUMN detail`, callers must explicitly roll
+//! back the failed transaction before continuing so SQLite restores the
+//! untouched legacy table.
 //!
 //! ## Where content hashes ride for applied writes
 //!
@@ -324,28 +330,36 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
     }
 }
 
-/// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] when `ward_audit` is
-/// absent and the reserved main-schema `ward_audit*` namespace is otherwise
-/// empty.
+/// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] when `main.ward_audit`
+/// is absent, the reserved main-schema `ward_audit` / `ward_audit_*` namespace
+/// is otherwise empty, and no temp shadow/reserved object blocks the durable
+/// contract.
 pub const WARD_AUDIT_SCHEMA_STATE_MISSING: &str = "missing";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for the exact
-/// v0.1.3 legacy schema fingerprint.
+/// `main.ward_audit` v0.1.3 legacy schema fingerprint, with no temp shadow.
 pub const WARD_AUDIT_SCHEMA_STATE_LEGACY_V013: &str = "legacy_v013";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for the exact
-/// v0.1.4 current schema fingerprint.
+/// `main.ward_audit` v0.1.4 current schema fingerprint, with no temp shadow.
 pub const WARD_AUDIT_SCHEMA_STATE_CURRENT_V014: &str = "current_v014";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for every other
-/// `ward_audit` shape, plus absent-table reserved-name collisions elsewhere in
-/// the main-schema `ward_audit*` namespace.
+/// `main.ward_audit` shape, plus reserved-name collisions in the durable
+/// namespace or any temp-schema `ward_audit` / `ward_audit_*` shadow object.
 pub const WARD_AUDIT_SCHEMA_STATE_UNKNOWN: &str = "unknown";
+
+macro_rules! ward_audit_reserved_name_predicate_sql {
+    () => {
+        r#"(lower(name) = 'ward_audit' OR lower(name) GLOB 'ward_audit_*')"#
+    };
+}
 
 macro_rules! ward_audit_schema_state_ctes_sql {
     () => {
-        r#"
+        concat!(
+            r#"
 WITH
     ward_audit_table AS (
         SELECT sql
-        FROM sqlite_master
+        FROM main.sqlite_master
         WHERE type = 'table' AND name = 'ward_audit'
     ),
     ward_audit_exists AS (
@@ -369,34 +383,46 @@ WITH
         ) AS fp
         FROM (
             SELECT cid, name, type, "notnull", dflt_value, pk
-            FROM pragma_table_info('ward_audit')
+            FROM pragma_table_info('ward_audit', 'main')
             ORDER BY cid
         )
     ),
     ward_audit_index_fingerprint AS (
         SELECT COALESCE(group_concat(item, '||'), '') AS fp
         FROM (
-            SELECT printf('%s|%s', name, COALESCE(sql, '<null>')) AS item
-            FROM sqlite_master
-            WHERE type = 'index' AND tbl_name = 'ward_audit' AND sql IS NOT NULL
-            ORDER BY name
+            SELECT printf('%s|%s', il.name, sm.sql) AS item
+            FROM pragma_index_list('ward_audit', 'main') AS il
+            JOIN main.sqlite_master AS sm
+              ON sm.type = 'index' AND sm.name = il.name
+            WHERE il.origin = 'c' AND sm.sql IS NOT NULL
+            ORDER BY il.name
         )
     ),
     ward_audit_trigger_fingerprint AS (
         SELECT COALESCE(group_concat(item, '||'), '') AS fp
         FROM (
             SELECT printf('%s|%s', name, COALESCE(sql, '<null>')) AS item
-            FROM sqlite_master
+            FROM main.sqlite_master
             WHERE type = 'trigger' AND tbl_name = 'ward_audit'
             ORDER BY name
         )
     ),
     ward_audit_reserved_namespace_object_count AS (
         SELECT COUNT(*) AS count
-        FROM sqlite_master
+        FROM main.sqlite_master
         WHERE type IN ('table', 'index', 'trigger', 'view')
-          AND lower(name) GLOB 'ward_audit*'
+          AND "#,
+            ward_audit_reserved_name_predicate_sql!(),
+            r#"
           AND NOT (type = 'table' AND name = 'ward_audit')
+    ),
+    ward_audit_temp_shadow_object_count AS (
+        SELECT COUNT(*) AS count
+        FROM temp.sqlite_master
+        WHERE type IN ('table', 'index', 'trigger', 'view')
+          AND "#,
+            ward_audit_reserved_name_predicate_sql!(),
+            r#"
     ),
     ward_audit_shape AS (
         SELECT
@@ -405,9 +431,11 @@ WITH
             (SELECT fp FROM ward_audit_column_fingerprint) AS column_fp,
             (SELECT fp FROM ward_audit_index_fingerprint) AS index_fp,
             (SELECT fp FROM ward_audit_trigger_fingerprint) AS trigger_fp,
-            (SELECT count FROM ward_audit_reserved_namespace_object_count) AS reserved_namespace_count
+            (SELECT count FROM ward_audit_reserved_namespace_object_count) AS reserved_namespace_count,
+            (SELECT count FROM ward_audit_temp_shadow_object_count) AS temp_shadow_count
     )
 "#
+        )
     };
 }
 
@@ -516,6 +544,7 @@ macro_rules! ward_audit_exact_legacy_predicate_sql {
         concat!(
             r#"
 table_exists = 1
+AND temp_shadow_count = 0
 AND table_sql = "#,
             ward_audit_exact_legacy_table_sql_sql!(),
             r#"
@@ -536,6 +565,7 @@ macro_rules! ward_audit_exact_current_predicate_sql {
         concat!(
             r#"
 table_exists = 1
+AND temp_shadow_count = 0
 AND table_sql IN ("#,
             ward_audit_exact_current_fresh_table_sql_sql!(),
             r#", "#,
@@ -557,6 +587,7 @@ macro_rules! ward_audit_schema_state_case_sql {
     () => {
         concat!(
             r#"CASE
+    WHEN temp_shadow_count > 0 THEN 'unknown'
     WHEN table_exists = 0 AND reserved_namespace_count = 0 THEN 'missing'
     WHEN "#,
             ward_audit_exact_legacy_predicate_sql!(),
@@ -570,13 +601,13 @@ END"#
     };
 }
 
-/// Table-local schema-state query for `ward.audit` inside `coven.sqlite3`
-/// (§3.4).
+/// Table-local schema-state query for the durable `main.ward_audit` contract
+/// inside `coven.sqlite3` (§3.4).
 ///
 /// Callers run this exact query and branch on the stable text result:
-/// - [`WARD_AUDIT_SCHEMA_STATE_MISSING`] — `ward_audit` is absent and the
-///   reserved main-schema `ward_audit*` namespace is otherwise empty; initialize
-///   with
+/// - [`WARD_AUDIT_SCHEMA_STATE_MISSING`] — `main.ward_audit` is absent, the
+///   reserved main-schema `ward_audit` / `ward_audit_*` namespace is otherwise
+///   empty, and no temp shadow/reserved object exists; initialize with
 ///   [`WARD_AUDIT_SCHEMA_SQL`];
 /// - [`WARD_AUDIT_SCHEMA_STATE_LEGACY_V013`] — run
 ///   [`WARD_AUDIT_MIGRATION_V014_SQL`];
@@ -584,17 +615,23 @@ END"#
 /// - [`WARD_AUDIT_SCHEMA_STATE_UNKNOWN`] — fail closed and investigate the
 ///   table manually.
 ///
-/// The fingerprint is strict: the exact `sqlite_master.sql` stored for
-/// `ward_audit`, ordered column metadata (including `recorded_at`'s default and
-/// primary-key flags), the exact explicit index SQL set, and the exact
-/// append-only trigger SQL set must all match. Full stored-table-SQL equality
-/// covers every declared table-level constraint (`CHECK`, `UNIQUE`, foreign-key
-/// clauses, and the `event_type` list), so any extra or missing column,
-/// constraint, index, or trigger returns `unknown`. When `ward_audit` itself is
-/// absent, any preexisting main-schema table/index/trigger/view whose name is
-/// reserved under the `ward_audit*` namespace also returns `unknown`, so
-/// initialization cannot silently skip append-only objects on another table. No
-/// whitespace-destroying normalization is applied: the only accepted
+/// The fingerprint is strict: the exact `main.sqlite_master.sql` stored for
+/// `main.ward_audit`, ordered column metadata from
+/// `pragma_table_info('ward_audit', 'main')`, the exact explicit main-index SQL
+/// set (discovered with `pragma_index_list('ward_audit', 'main')` and then read
+/// from `main.sqlite_master`), and the exact append-only main-trigger SQL set
+/// must all match. Full stored-table-SQL equality covers every declared
+/// table-level constraint (`CHECK`, `UNIQUE`, foreign-key clauses, and the
+/// `event_type` list), so any extra or missing column, constraint, index, or
+/// trigger returns `unknown`. Any temp-schema table/view/index/trigger whose
+/// name is exactly `ward_audit` or begins with `ward_audit_` also returns
+/// `unknown`, even when `main.ward_audit` itself is exact current or legacy, so
+/// callers cannot treat a temp shadow as healthy durable state. When
+/// `main.ward_audit` itself is absent, any preexisting main-schema
+/// table/index/trigger/view whose name is reserved under the same
+/// `ward_audit` / `ward_audit_*` namespace likewise returns `unknown`, so
+/// initialization cannot silently skip append-only objects on another durable
+/// table. No whitespace-destroying normalization is applied: the only accepted
 /// `current_v014` table SQL variants are the fresh `CREATE TABLE ward_audit
 /// (...)` form and SQLite's quoted `CREATE TABLE "ward_audit" (...)` form
 /// produced by the exact legacy migration path, while the `legacy_v013`
@@ -610,40 +647,41 @@ FROM ward_audit_shape;
 "#,
 );
 
-/// DDL migration for the exact `legacy_v013` `ward.audit` fingerprint inside
-/// `coven.sqlite3` (§3.4).
+/// DDL migration for the exact `main.ward_audit` `legacy_v013` fingerprint
+/// inside `coven.sqlite3` (§3.4).
 ///
 /// Append-only is enforced *in the store*: UPDATE and DELETE abort via
 /// triggers (RFC-0001 §5.6: entries MUST NOT be deleted or modified).
 /// SQLite cannot `ALTER` a CHECK constraint on an existing table, so this
 /// transaction:
 /// 1. re-checks the exact legacy fingerprint in SQL before any mutation,
-///    including exact stored `sqlite_master.sql` equality plus column/index/
-///    trigger fingerprints;
-/// 2. adds the legacy `detail` column so the old table matches the copy shape;
-/// 3. creates `ward_audit_new` with the updated CHECK;
+///    including exact stored `main.sqlite_master.sql` equality plus main
+///    column/index/trigger fingerprints and temp-shadow rejection;
+/// 2. adds the legacy `detail` column on `main.ward_audit` so the old table
+///    matches the copy shape;
+/// 3. creates `main.ward_audit_new` with the updated CHECK;
 /// 4. copies every existing row, preserving `detail`;
 /// 5. swaps the tables; and
-/// 6. re-creates the exact explicit indexes and append-only triggers.
+/// 6. re-creates the exact explicit main indexes and append-only main triggers.
 ///
 /// Callers should still branch on [`WARD_AUDIT_SCHEMA_STATE_SQL`] first:
 /// initialize when the state is `missing`, migrate only `legacy_v013`,
 /// continue on `current_v014`, and fail closed on `unknown`. This migration
-/// independently guards the same `legacy_v013` fingerprint so callers cannot
-/// mutate a partial or already-current schema by skipping classification. If a
-/// later step fails after `ALTER TABLE ... ADD COLUMN detail`, callers must
-/// `ROLLBACK` the failed transaction before continuing so SQLite restores the
-/// untouched legacy table. This SQL does not read or write database-wide
-/// `PRAGMA user_version`.
+/// independently guards the same `legacy_v013` fingerprint and temp-shadow
+/// rejection so callers cannot mutate a partial, already-current, or
+/// temp-shadowed schema by skipping classification. If a later step fails after
+/// `ALTER TABLE main.ward_audit ADD COLUMN detail`, callers must `ROLLBACK` the
+/// failed transaction before continuing so SQLite restores the untouched legacy
+/// table. This SQL does not read or write database-wide `PRAGMA user_version`.
 pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = concat!(
     r#"
 BEGIN;
 
-CREATE TEMP TABLE ward_audit_migration_guard (
+CREATE TEMP TABLE coven_threads_ward_audit_migration_guard (
     ok INTEGER NOT NULL CHECK (ok = 1)
 );
 
-INSERT INTO ward_audit_migration_guard (ok)
+INSERT INTO coven_threads_ward_audit_migration_guard (ok)
 "#,
     ward_audit_schema_state_ctes_sql!(),
     r#"
@@ -655,11 +693,11 @@ SELECT CASE
 END
 FROM ward_audit_shape;
 
-DROP TABLE ward_audit_migration_guard;
+DROP TABLE coven_threads_ward_audit_migration_guard;
 
-ALTER TABLE ward_audit ADD COLUMN detail TEXT;
+ALTER TABLE main.ward_audit ADD COLUMN detail TEXT;
 
-CREATE TABLE ward_audit_new (
+CREATE TABLE main.ward_audit_new (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type    TEXT    NOT NULL CHECK (event_type IN (
                       'proposal_submitted','proposal_approved','proposal_rejected',
@@ -682,7 +720,7 @@ CREATE TABLE ward_audit_new (
     recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-INSERT INTO ward_audit_new (
+INSERT INTO main.ward_audit_new (
     id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
     tier, decision, approver, diff_hash, detail, files_touched, channel,
     thread_id, submitted_at, decided_at, recorded_at
@@ -691,21 +729,21 @@ SELECT
     id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
     tier, decision, approver, diff_hash, detail, files_touched, channel,
     thread_id, submitted_at, decided_at, recorded_at
-FROM ward_audit;
+FROM main.ward_audit;
 
-DROP TABLE ward_audit;
-ALTER TABLE ward_audit_new RENAME TO ward_audit;
+DROP TABLE main.ward_audit;
+ALTER TABLE main.ward_audit_new RENAME TO ward_audit;
 
-CREATE INDEX IF NOT EXISTS ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
-CREATE INDEX IF NOT EXISTS ward_audit_event_idx    ON ward_audit (event_type, recorded_at);
+CREATE INDEX IF NOT EXISTS main.ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
+CREATE INDEX IF NOT EXISTS main.ward_audit_event_idx    ON ward_audit (event_type, recorded_at);
 
-CREATE TRIGGER IF NOT EXISTS ward_audit_append_only_update
+CREATE TRIGGER IF NOT EXISTS main.ward_audit_append_only_update
 BEFORE UPDATE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
 
-CREATE TRIGGER IF NOT EXISTS ward_audit_append_only_delete
+CREATE TRIGGER IF NOT EXISTS main.ward_audit_append_only_delete
 BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
@@ -715,12 +753,12 @@ COMMIT;
 "#,
 );
 
-// Shared raw current-v0.1.4 DDL body used by the guarded init SQL and drift
-// tests.
+// Shared durable-main current-v0.1.4 DDL body used by the guarded init SQL and
+// drift tests.
 macro_rules! ward_audit_current_objects_sql {
     () => {
         r#"
-CREATE TABLE IF NOT EXISTS ward_audit (
+CREATE TABLE IF NOT EXISTS main.ward_audit (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type    TEXT    NOT NULL CHECK (event_type IN (
                       'proposal_submitted','proposal_approved','proposal_rejected',
@@ -743,16 +781,16 @@ CREATE TABLE IF NOT EXISTS ward_audit (
     recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-CREATE INDEX IF NOT EXISTS ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
-CREATE INDEX IF NOT EXISTS ward_audit_event_idx    ON ward_audit (event_type, recorded_at);
+CREATE INDEX IF NOT EXISTS main.ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
+CREATE INDEX IF NOT EXISTS main.ward_audit_event_idx    ON ward_audit (event_type, recorded_at);
 
-CREATE TRIGGER IF NOT EXISTS ward_audit_append_only_update
+CREATE TRIGGER IF NOT EXISTS main.ward_audit_append_only_update
 BEFORE UPDATE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
 
-CREATE TRIGGER IF NOT EXISTS ward_audit_append_only_delete
+CREATE TRIGGER IF NOT EXISTS main.ward_audit_append_only_delete
 BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
@@ -761,25 +799,27 @@ END;
     };
 }
 
-/// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
+/// DDL for the durable `main.ward_audit` table inside `coven.sqlite3` (§3.4).
 ///
 /// See module docs for the full schema-state contract. This transaction is
 /// safe to run unconditionally on every store open: it permits only exact
 /// `missing` or `current_v014` before any mutation, uses idempotent `IF NOT
 /// EXISTS` DDL for daemon compatibility, then requires exact `current_v014`
-/// before `COMMIT`. Exact `legacy_v013` and every `unknown` shape fail closed.
-/// If this SQL errors, callers must explicitly `ROLLBACK` before continuing so
-/// SQLite discards any uncommitted work. This DDL never mutates database-wide
-/// `PRAGMA user_version`.
+/// before `COMMIT`. Exact `legacy_v013`, every drifted `unknown` shape, and
+/// every temp shadow/reserved temp object fail closed. Durable schema objects
+/// are explicitly created in `main`; the temp guard tables live in `temp`
+/// under unique non-reserved names. If this SQL errors, callers must
+/// explicitly `ROLLBACK` before continuing so SQLite discards any uncommitted
+/// work. This DDL never mutates database-wide `PRAGMA user_version`.
 pub const WARD_AUDIT_SCHEMA_SQL: &str = concat!(
     r#"
 BEGIN;
 
-CREATE TEMP TABLE ward_audit_schema_pre_guard (
+CREATE TEMP TABLE coven_threads_ward_audit_schema_pre_guard (
     ok INTEGER NOT NULL CHECK (ok = 1)
 );
 
-INSERT INTO ward_audit_schema_pre_guard (ok)
+INSERT INTO coven_threads_ward_audit_schema_pre_guard (ok)
 "#,
     ward_audit_schema_state_ctes_sql!(),
     r#"
@@ -791,15 +831,15 @@ SELECT CASE
 END
 FROM ward_audit_shape;
 
-DROP TABLE ward_audit_schema_pre_guard;
+DROP TABLE coven_threads_ward_audit_schema_pre_guard;
 "#,
     ward_audit_current_objects_sql!(),
     r#"
-CREATE TEMP TABLE ward_audit_schema_post_guard (
+CREATE TEMP TABLE coven_threads_ward_audit_schema_post_guard (
     ok INTEGER NOT NULL CHECK (ok = 1)
 );
 
-INSERT INTO ward_audit_schema_post_guard (ok)
+INSERT INTO coven_threads_ward_audit_schema_post_guard (ok)
 "#,
     ward_audit_schema_state_ctes_sql!(),
     r#"
@@ -811,7 +851,7 @@ SELECT CASE
 END
 FROM ward_audit_shape;
 
-DROP TABLE ward_audit_schema_post_guard;
+DROP TABLE coven_threads_ward_audit_schema_post_guard;
 
 COMMIT;
 "#,
@@ -925,13 +965,38 @@ END;
             .unwrap()
     }
 
-    fn stored_table_sql(conn: &Connection) -> String {
+    fn schema_master_table(schema: &str) -> &'static str {
+        match schema {
+            "main" => "main.sqlite_master",
+            "temp" => "temp.sqlite_master",
+            _ => panic!("unexpected schema: {schema}"),
+        }
+    }
+
+    fn ward_audit_column_names(conn: &Connection, schema: &str) -> Vec<String> {
+        let sql =
+            format!("SELECT name FROM pragma_table_info('ward_audit', '{schema}') ORDER BY cid;");
+        let mut stmt = conn.prepare(&sql).unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    fn stored_table_sql_in_schema(conn: &Connection, schema: &str) -> String {
         conn.query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'ward_audit';",
+            &format!(
+                "SELECT sql FROM {} WHERE type = 'table' AND name = 'ward_audit';",
+                schema_master_table(schema)
+            ),
             [],
             |row| row.get(0),
         )
         .unwrap()
+    }
+
+    fn stored_table_sql(conn: &Connection) -> String {
+        stored_table_sql_in_schema(conn, "main")
     }
 
     fn explicit_index_sql_fingerprint(conn: &Connection) -> String {
@@ -939,10 +1004,12 @@ END;
             r#"
             SELECT COALESCE(group_concat(item, '||'), '')
             FROM (
-                SELECT printf('%s|%s', name, sql) AS item
-                FROM sqlite_master
-                WHERE type = 'index' AND tbl_name = 'ward_audit' AND sql IS NOT NULL
-                ORDER BY name
+                SELECT printf('%s|%s', il.name, sm.sql) AS item
+                FROM pragma_index_list('ward_audit', 'main') AS il
+                JOIN main.sqlite_master AS sm
+                  ON sm.type = 'index' AND sm.name = il.name
+                WHERE il.origin = 'c' AND sm.sql IS NOT NULL
+                ORDER BY il.name
             );
             "#,
             [],
@@ -957,7 +1024,7 @@ END;
             SELECT COALESCE(group_concat(item, '||'), '')
             FROM (
                 SELECT printf('%s|%s', name, sql) AS item
-                FROM sqlite_master
+                FROM main.sqlite_master
                 WHERE type = 'trigger' AND tbl_name = 'ward_audit'
                 ORDER BY name
             );
@@ -980,6 +1047,39 @@ END;
             "expected to inject {constraint_sql}"
         );
         schema_sql
+    }
+
+    fn table_only_sql(base_schema_sql: &str) -> String {
+        let marker = "\n);\n\nCREATE INDEX";
+        let (table_sql, _) = base_schema_sql
+            .split_once(marker)
+            .expect("ward_audit schema SQL must contain the table/index boundary marker");
+        format!("{table_sql}\n);")
+    }
+
+    fn temp_shadow_table_sql(base_schema_sql: &str) -> String {
+        let table_sql = table_only_sql(base_schema_sql);
+        let shadow_sql = table_sql
+            .replacen(
+                "CREATE TABLE IF NOT EXISTS main.ward_audit (",
+                "CREATE TEMP TABLE ward_audit (",
+                1,
+            )
+            .replacen(
+                "CREATE TABLE IF NOT EXISTS ward_audit (",
+                "CREATE TEMP TABLE ward_audit (",
+                1,
+            );
+        assert_ne!(
+            shadow_sql, table_sql,
+            "expected to rewrite ward_audit to TEMP"
+        );
+        shadow_sql
+    }
+
+    fn create_temp_shadow_table(conn: &Connection, base_schema_sql: &str) {
+        conn.execute_batch(&temp_shadow_table_sql(base_schema_sql))
+            .unwrap();
     }
 
     fn legacy_schema_with_extra_table_constraint(constraint_sql: &str) -> String {
@@ -1019,11 +1119,27 @@ END;
             .collect()
     }
 
+    fn explicit_index_names_in_schema(conn: &Connection, schema: &str) -> BTreeSet<String> {
+        let sql = format!(
+            "SELECT name FROM pragma_index_list('ward_audit', '{schema}') WHERE origin = 'c' AND name NOT LIKE 'sqlite_autoindex_%' ORDER BY name;"
+        );
+        let mut stmt = conn.prepare(&sql).unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
     fn explicit_index_names(conn: &Connection) -> BTreeSet<String> {
+        explicit_index_names_in_schema(conn, "main")
+    }
+
+    fn trigger_names_in_schema(conn: &Connection, schema: &str) -> BTreeSet<String> {
         let mut stmt = conn
-            .prepare(
-                "SELECT name FROM pragma_index_list('ward_audit') WHERE origin = 'c' AND name NOT LIKE 'sqlite_autoindex_%' ORDER BY name;",
-            )
+            .prepare(&format!(
+                "SELECT name FROM {} WHERE type = 'trigger' AND tbl_name = 'ward_audit' ORDER BY name;",
+                schema_master_table(schema)
+            ))
             .unwrap();
         stmt.query_map([], |row| row.get::<_, String>(0))
             .unwrap()
@@ -1032,20 +1148,14 @@ END;
     }
 
     fn trigger_names(conn: &Connection) -> BTreeSet<String> {
-        let mut stmt = conn
-            .prepare(
-                "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'ward_audit' ORDER BY name;",
-            )
-            .unwrap();
-        stmt.query_map([], |row| row.get::<_, String>(0))
-            .unwrap()
-            .collect::<Result<_, _>>()
-            .unwrap()
+        trigger_names_in_schema(conn, "main")
     }
 
-    fn has_column(conn: &Connection, name: &str) -> bool {
+    fn has_column_in_schema(conn: &Connection, schema: &str, name: &str) -> bool {
         conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('ward_audit') WHERE name = ?1);",
+            &format!(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('ward_audit', '{schema}') WHERE name = ?1);"
+            ),
             params![name],
             |row| row.get::<_, i64>(0),
         )
@@ -1053,14 +1163,43 @@ END;
             == 1
     }
 
-    fn main_schema_object_exists(conn: &Connection, object_type: &str, name: &str) -> bool {
+    fn has_column(conn: &Connection, name: &str) -> bool {
+        has_column_in_schema(conn, "main", name)
+    }
+
+    fn schema_object_exists(
+        conn: &Connection,
+        schema: &str,
+        object_type: &str,
+        name: &str,
+    ) -> bool {
         conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = ?1 AND name = ?2);",
+            &format!(
+                "SELECT EXISTS(SELECT 1 FROM {} WHERE type = ?1 AND name = ?2);",
+                schema_master_table(schema)
+            ),
             params![object_type, name],
             |row| row.get::<_, i64>(0),
         )
         .unwrap()
             == 1
+    }
+
+    fn main_schema_object_exists(conn: &Connection, object_type: &str, name: &str) -> bool {
+        schema_object_exists(conn, "main", object_type, name)
+    }
+
+    fn temp_schema_object_exists(conn: &Connection, object_type: &str, name: &str) -> bool {
+        schema_object_exists(conn, "temp", object_type, name)
+    }
+
+    fn ward_audit_row_count(conn: &Connection, schema: &str) -> i64 {
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM {schema}.ward_audit;"),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
     }
 
     fn assert_fresh_schema_preserves_user_version(initial_version: i64) {
@@ -1117,15 +1256,17 @@ END;
         assert_legacy_schema_guard_rollback_preserves_state(&schema_sql, after_rollback);
     }
 
-    fn load_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
+    fn load_audit_row_from_schema(conn: &Connection, schema: &str, id: i64) -> StoredAuditRow {
         conn.query_row(
-            r#"
+            &format!(
+                r#"
             SELECT id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
                    tier, decision, approver, diff_hash, detail, files_touched,
                    channel, thread_id, submitted_at, decided_at, recorded_at
-            FROM ward_audit
+            FROM {schema}.ward_audit
             WHERE id = ?1
-            "#,
+            "#
+            ),
             params![id],
             |row| {
                 Ok(StoredAuditRow {
@@ -1152,15 +1293,25 @@ END;
         .unwrap()
     }
 
-    fn load_legacy_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
+    fn load_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
+        load_audit_row_from_schema(conn, "main", id)
+    }
+
+    fn load_legacy_audit_row_from_schema(
+        conn: &Connection,
+        schema: &str,
+        id: i64,
+    ) -> StoredAuditRow {
         conn.query_row(
-            r#"
+            &format!(
+                r#"
             SELECT id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
                    tier, decision, approver, diff_hash, files_touched, channel,
                    thread_id, submitted_at, decided_at, recorded_at
-            FROM ward_audit
+            FROM {schema}.ward_audit
             WHERE id = ?1
-            "#,
+            "#
+            ),
             params![id],
             |row| {
                 Ok(StoredAuditRow {
@@ -1187,9 +1338,13 @@ END;
         .unwrap()
     }
 
+    fn load_legacy_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
+        load_legacy_audit_row_from_schema(conn, "main", id)
+    }
+
     fn load_legacy_extra_value(conn: &Connection, id: i64) -> Option<String> {
         conn.query_row(
-            "SELECT legacy_extra FROM ward_audit WHERE id = ?1;",
+            "SELECT legacy_extra FROM main.ward_audit WHERE id = ?1;",
             params![id],
             |row| row.get(0),
         )
@@ -1205,7 +1360,49 @@ END;
         .unwrap()
     }
 
+    fn insert_current_apply_audit_row_into_schema(conn: &Connection, schema: &str) -> i64 {
+        conn.execute(
+            &format!(
+                r#"
+            INSERT INTO {schema}.ward_audit (
+                event_type, proposal_id, familiar_id, ward_version, ward_hash,
+                tier, decision, approver, diff_hash, detail, files_touched,
+                channel, thread_id, submitted_at, decided_at, recorded_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5,
+                ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, ?13, ?14, ?15, ?16
+            )
+            "#
+            ),
+            params![
+                "apply_audit",
+                Some("proposal-current"),
+                "familiar-current",
+                Some("0.1.4"),
+                FIXED_WARD_HASH.as_ref(),
+                Some("tier_2"),
+                "applied",
+                Option::<String>::None,
+                Some(FIXED_DIFF_HASH.as_ref()),
+                FIXED_PREV_DETAIL,
+                FIXED_FILES_TOUCHED,
+                Some("mutation"),
+                Option::<String>::None,
+                FIXED_SUBMITTED_AT,
+                FIXED_DECIDED_AT,
+                FIXED_RECORDED_AT,
+            ],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
     fn insert_current_apply_audit_row(conn: &Connection) -> i64 {
+        insert_current_apply_audit_row_into_schema(conn, "main")
+    }
+
+    fn insert_current_apply_audit_row_unqualified(conn: &Connection) -> i64 {
         conn.execute(
             r#"
             INSERT INTO ward_audit (
@@ -1241,14 +1438,16 @@ END;
         conn.last_insert_rowid()
     }
 
-    fn try_insert_legacy_ward_updated_row(
+    fn try_insert_legacy_ward_updated_row_into_schema(
         conn: &Connection,
+        schema: &str,
         decision: &str,
         recorded_at: &str,
     ) -> rusqlite::Result<i64> {
         conn.execute(
-            r#"
-            INSERT INTO ward_audit (
+            &format!(
+                r#"
+            INSERT INTO {schema}.ward_audit (
                 event_type, proposal_id, familiar_id, ward_version, ward_hash,
                 tier, decision, approver, diff_hash, files_touched, channel,
                 thread_id, submitted_at, decided_at, recorded_at
@@ -1257,7 +1456,8 @@ END;
                 ?6, ?7, ?8, ?9, ?10, ?11,
                 ?12, ?13, ?14, ?15
             )
-            "#,
+            "#
+            ),
             params![
                 "ward_updated",
                 Some("proposal-legacy"),
@@ -1279,6 +1479,14 @@ END;
         Ok(conn.last_insert_rowid())
     }
 
+    fn try_insert_legacy_ward_updated_row(
+        conn: &Connection,
+        decision: &str,
+        recorded_at: &str,
+    ) -> rusqlite::Result<i64> {
+        try_insert_legacy_ward_updated_row_into_schema(conn, "main", decision, recorded_at)
+    }
+
     fn insert_legacy_ward_updated_row(conn: &Connection) -> i64 {
         try_insert_legacy_ward_updated_row(conn, "updated", FIXED_RECORDED_AT).unwrap()
     }
@@ -1286,7 +1494,7 @@ END;
     fn insert_legacy_ward_updated_row_with_extra(conn: &Connection, extra: &str) -> i64 {
         conn.execute(
             r#"
-            INSERT INTO ward_audit (
+            INSERT INTO main.ward_audit (
                 event_type, proposal_id, familiar_id, ward_version, ward_hash,
                 tier, decision, approver, diff_hash, files_touched, channel,
                 thread_id, submitted_at, decided_at, recorded_at, legacy_extra
@@ -1455,6 +1663,204 @@ END;
     }
 
     #[test]
+    fn schema_qualified_table_valued_pragmas_resolve_main_and_temp_separately() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        conn.execute_batch(
+            "CREATE TEMP TABLE ward_audit (
+                 id INTEGER PRIMARY KEY,
+                 shadow TEXT NOT NULL
+             );
+             CREATE INDEX temp.temp_shadow_idx ON ward_audit (shadow);",
+        )
+        .unwrap();
+
+        assert_eq!(
+            ward_audit_column_names(&conn, "main"),
+            vec![
+                "id".to_string(),
+                "event_type".to_string(),
+                "proposal_id".to_string(),
+                "familiar_id".to_string(),
+                "ward_version".to_string(),
+                "ward_hash".to_string(),
+                "tier".to_string(),
+                "decision".to_string(),
+                "approver".to_string(),
+                "diff_hash".to_string(),
+                "detail".to_string(),
+                "files_touched".to_string(),
+                "channel".to_string(),
+                "thread_id".to_string(),
+                "submitted_at".to_string(),
+                "decided_at".to_string(),
+                "recorded_at".to_string(),
+            ]
+        );
+        assert_eq!(
+            ward_audit_column_names(&conn, "temp"),
+            vec!["id".to_string(), "shadow".to_string()]
+        );
+        assert_eq!(
+            explicit_index_names_in_schema(&conn, "main"),
+            expected_explicit_index_names()
+        );
+        assert_eq!(
+            explicit_index_names_in_schema(&conn, "temp"),
+            BTreeSet::from(["temp_shadow_idx".to_string()])
+        );
+    }
+
+    #[test]
+    fn current_main_with_temp_shadow_is_unknown_and_guards_preserve_main_and_temp_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let main_row_id = insert_current_apply_audit_row(&conn);
+        let main_before = load_audit_row(&conn, main_row_id);
+
+        create_temp_shadow_table(&conn, ward_audit_current_objects_sql!());
+        let temp_row_id = insert_current_apply_audit_row_into_schema(&conn, "temp");
+        let temp_before = load_audit_row_from_schema(&conn, "temp", temp_row_id);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let init_err = conn
+            .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+            .expect_err("temp shadow must make schema init fail closed");
+        assert!(
+            init_err.to_string().contains("CHECK constraint failed"),
+            "unexpected schema init error: {init_err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_audit_row(&conn, main_row_id), main_before);
+        assert_eq!(
+            load_audit_row_from_schema(&conn, "temp", temp_row_id),
+            temp_before
+        );
+        assert_eq!(ward_audit_row_count(&conn, "main"), 1);
+        assert_eq!(ward_audit_row_count(&conn, "temp"), 1);
+        assert!(temp_schema_object_exists(&conn, "table", "ward_audit"));
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let migration_err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("temp shadow must make migration fail closed");
+        assert!(
+            migration_err
+                .to_string()
+                .contains("CHECK constraint failed"),
+            "unexpected migration error: {migration_err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_audit_row(&conn, main_row_id), main_before);
+        assert_eq!(
+            load_audit_row_from_schema(&conn, "temp", temp_row_id),
+            temp_before
+        );
+        assert_eq!(ward_audit_row_count(&conn, "main"), 1);
+        assert_eq!(ward_audit_row_count(&conn, "temp"), 1);
+        assert!(temp_schema_object_exists(&conn, "table", "ward_audit"));
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        conn.execute_batch("DROP TABLE temp.ward_audit;").unwrap();
+        assert!(!temp_schema_object_exists(&conn, "table", "ward_audit"));
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_eq!(load_audit_row(&conn, main_row_id), main_before);
+    }
+
+    #[test]
+    fn missing_main_with_temp_ward_audit_shadow_is_unknown_and_schema_sql_rejects_without_creating_main(
+    ) {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 23);
+        create_temp_shadow_table(&conn, ward_audit_current_objects_sql!());
+        let temp_row_id = insert_current_apply_audit_row_into_schema(&conn, "temp");
+        let temp_before = load_audit_row_from_schema(&conn, "temp", temp_row_id);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+            .expect_err("temp ward_audit shadow must block schema init before main creation");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected schema init error: {err}"
+        );
+        assert!(!main_schema_object_exists(&conn, "table", "ward_audit"));
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert!(!main_schema_object_exists(&conn, "table", "ward_audit"));
+        assert_eq!(
+            load_audit_row_from_schema(&conn, "temp", temp_row_id),
+            temp_before
+        );
+        assert_eq!(ward_audit_row_count(&conn, "temp"), 1);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        assert_eq!(user_version(&conn), 23);
+
+        conn.execute_batch("DROP TABLE temp.ward_audit;").unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_MISSING);
+    }
+
+    #[test]
+    fn missing_main_with_reserved_temp_objects_is_unknown_and_schema_sql_preserves_temp_objects() {
+        for (label, setup_sql, object_type, object_name) in [
+            (
+                "view",
+                "CREATE TEMP VIEW ward_audit_shadow_view AS SELECT 1 AS sentinel;",
+                "view",
+                "ward_audit_shadow_view",
+            ),
+            (
+                "index",
+                "CREATE TEMP TABLE other (id INTEGER PRIMARY KEY, note TEXT NOT NULL);
+                 CREATE INDEX temp.ward_audit_shadow_idx ON other (note);",
+                "index",
+                "ward_audit_shadow_idx",
+            ),
+            (
+                "trigger",
+                "CREATE TEMP TABLE other (id INTEGER PRIMARY KEY, note TEXT NOT NULL);
+                 CREATE TRIGGER temp.ward_audit_shadow_trigger
+                 BEFORE UPDATE ON other
+                 BEGIN
+                     SELECT RAISE(ABORT, 'other is append-only');
+                 END;",
+                "trigger",
+                "ward_audit_shadow_trigger",
+            ),
+        ] {
+            let conn = Connection::open_in_memory().unwrap();
+            conn.execute_batch(setup_sql).unwrap();
+
+            assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+            let err = conn
+                .execute_batch(WARD_AUDIT_SCHEMA_SQL)
+                .expect_err("reserved temp object must block schema init");
+            assert!(
+                err.to_string().contains("CHECK constraint failed"),
+                "unexpected schema init error for {label}: {err}"
+            );
+            assert!(
+                !main_schema_object_exists(&conn, "table", "ward_audit"),
+                "schema init for {label} must not create main.ward_audit before rollback"
+            );
+            conn.execute_batch("ROLLBACK;").unwrap();
+
+            assert!(
+                temp_schema_object_exists(&conn, object_type, object_name),
+                "{label} temp object should survive rollback"
+            );
+            assert!(!main_schema_object_exists(&conn, "table", "ward_audit"));
+            assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        }
+    }
+
+    #[test]
     fn fresh_schema_sql_initializes_current_schema_atomically_and_enforces_append_only() {
         let conn = Connection::open_in_memory().unwrap();
         set_user_version(&conn, 11);
@@ -1600,6 +2006,53 @@ END;
         assert_eq!(trigger_names(&conn), expected_trigger_names());
         assert!(stored_table_sql(&conn).contains("'apply_ audit'"));
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn legacy_main_with_temp_shadow_is_unknown_and_migration_rejects_before_mutating_either_schema()
+    {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let main_row_id = insert_legacy_ward_updated_row(&conn);
+        let main_before = load_legacy_audit_row(&conn, main_row_id);
+
+        create_temp_shadow_table(&conn, LEGACY_WARD_AUDIT_SCHEMA_SQL);
+        let temp_row_id = try_insert_legacy_ward_updated_row_into_schema(
+            &conn,
+            "temp",
+            "updated",
+            FIXED_RECORDED_AT,
+        )
+        .unwrap();
+        let temp_before = load_legacy_audit_row_from_schema(&conn, "temp", temp_row_id);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("temp shadow must make legacy migration fail before mutation");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected migration error: {err}"
+        );
+        assert!(!has_column_in_schema(&conn, "main", "detail"));
+        assert!(!has_column_in_schema(&conn, "temp", "detail"));
+        assert!(!main_schema_object_exists(&conn, "table", "ward_audit_new"));
+        assert!(temp_schema_object_exists(&conn, "table", "ward_audit"));
+
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_legacy_audit_row(&conn, main_row_id), main_before);
+        assert_eq!(
+            load_legacy_audit_row_from_schema(&conn, "temp", temp_row_id),
+            temp_before
+        );
+        assert_eq!(user_version(&conn), 37);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        conn.execute_batch("DROP TABLE temp.ward_audit;").unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
     }
 
     #[test]
@@ -2092,6 +2545,31 @@ END;
         assert_eq!(load_audit_row(&conn, apply_row_id), apply_before);
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(user_version(&conn), 37);
+    }
+
+    #[test]
+    fn unqualified_insert_targets_temp_shadow_while_schema_state_stays_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let main_row_id = insert_current_apply_audit_row(&conn);
+        let main_before = load_audit_row(&conn, main_row_id);
+
+        create_temp_shadow_table(&conn, ward_audit_current_objects_sql!());
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        assert_eq!(ward_audit_row_count(&conn, "main"), 1);
+        assert_eq!(ward_audit_row_count(&conn, "temp"), 0);
+
+        let temp_row_id = insert_current_apply_audit_row_unqualified(&conn);
+
+        assert_eq!(load_audit_row(&conn, main_row_id), main_before);
+        assert_eq!(ward_audit_row_count(&conn, "main"), 1);
+        assert_eq!(ward_audit_row_count(&conn, "temp"), 1);
+        assert_eq!(
+            load_audit_row_from_schema(&conn, "temp", temp_row_id).event_type,
+            "apply_audit"
+        );
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
     }
 
     #[test]
