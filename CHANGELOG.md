@@ -32,22 +32,31 @@ All notable changes to `coven-threads-core` are documented here.
   variants and the shipped v0.1.3 table SQL are accepted; no
   whitespace-destroying normalization is applied.
 - `WARD_AUDIT_SCHEMA_SQL` — atomic, self-guarding schema initialization for the
-  exact `current_v014` fingerprint. It begins a transaction, permits only
-  `missing` or exact `current_v014` before any mutation, uses idempotent `IF NOT
-  EXISTS` DDL for daemon compatibility, targets durable schema objects in
-  `main` wherever SQLite syntax permits, then requires exact `current_v014`
-  before `COMMIT`. Exact `legacy_v013`, every drifted `unknown` shape, any
-  unexpected durable reserved object, and any temp shadow/reserved temp object
-  fail closed; callers must `ROLLBACK` after any init error.
+  exact `current_v014` fingerprint. It now begins with `BEGIN IMMEDIATE`, so
+  the main-database write reservation is acquired before any guard read or
+  classification. That makes concurrent initializers serialize cleanly: the
+  second caller waits, re-runs the guard against the winner's committed schema,
+  and idempotently sees exact `current_v014` instead of racing into
+  `sqlite_master` lock errors. The SQL still permits only `missing` or exact
+  `current_v014` before any mutation, uses idempotent `IF NOT EXISTS` DDL for
+  daemon compatibility, targets durable schema objects in `main` wherever
+  SQLite syntax permits, then requires exact `current_v014` before `COMMIT`.
+  Exact `legacy_v013`, every drifted `unknown` shape, any unexpected durable
+  reserved object, and any temp shadow/reserved temp object fail closed;
+  callers must `ROLLBACK` after any init error.
 - `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL for a detail-preserving
   rebuild of `main.ward_audit` guarded by the exact `legacy_v013` fingerprint
   plus durable-whitelist and temp-shadow rejection. The daemon should query
   `WARD_AUDIT_SCHEMA_STATE_SQL`, initialize when missing, migrate only
   `legacy_v013`, continue on `current_v014`, and fail closed on `unknown`. The
-  migration independently re-checks `legacy_v013` before any `ALTER`, using the
-  same exact stored-table + column/index/trigger predicate plus durable
-  namespace whitelist and temp-shadow rejection, then copies rows into the
-  replacement table without discarding evidence.
+  migration independently re-checks `legacy_v013` before any `ALTER`, now
+  inside `BEGIN IMMEDIATE` so concurrent migrators serialize before the guard
+  read. After the first caller upgrades, a second caller waits, re-runs the
+  guard against exact current, and fails only at the legacy guard instead of
+  racing into `sqlite_master` lock errors. The SQL otherwise uses the same
+  exact stored-table + column/index/trigger predicate plus durable namespace
+  whitelist and temp-shadow rejection, then copies rows into the replacement
+  table without discarding evidence.
 - Exhaustiveness test `schema_names_all_event_tags` extended to cover `ApplyAudit`.
 - New tests: `for_apply_produces_correct_shape`,
   `for_apply_roundtrips_json`,
@@ -74,6 +83,7 @@ All notable changes to `coven-threads-core` are documented here.
   `current_schema_with_extra_reserved_main_view_or_table_is_unknown_and_schema_sql_preserves_state`,
   `current_schema_with_altered_trigger_error_literal_is_unknown`,
   `current_schema_with_altered_trigger_body_is_unknown`,
+  `schema_and_migration_sql_use_begin_immediate`,
   `absent_ward_audit_with_reserved_index_collision_is_unknown_and_schema_sql_preserves_other_objects`,
   `absent_ward_audit_with_reserved_trigger_collision_is_unknown_and_schema_sql_preserves_other_objects`,
   `unknown_partial_current_schema_rejects_schema_sql_and_preserves_state`,
@@ -81,6 +91,8 @@ All notable changes to `coven-threads-core` are documented here.
   `legacy_schema_with_preexisting_main_ward_audit_new_is_unknown_and_guard_rejects_before_alter`,
   `legacy_schema_upgrades_and_preserves_append_only_behavior`,
   `rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows`,
+  `concurrent_schema_initialization_serializes_without_locked_errors`,
+  `concurrent_legacy_migration_waits_then_rejects_current_at_guard`,
   `sqlite_post_alter_failure_rollback_restores_legacy_schema_for_production_migration_contract`,
   `schema_qualified_table_valued_pragmas_resolve_main_and_temp_separately`,
   `current_main_with_temp_shadow_is_unknown_and_guards_preserve_main_and_temp_rows`,

@@ -14,27 +14,29 @@ Expose `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable tags so callers can branch on
 `missing` / `legacy_v013` / `current_v014` / `unknown`, reserve `missing` for
 an absent `main.ward_audit` with no unexpected durable reserved-name object and
 no temp shadow/reserved temp object, require the same exact durable whitelist
-for `legacy_v013` and `current_v014`, wrap `WARD_AUDIT_SCHEMA_SQL` in atomic
-pre/post guards that allow only `missing`/`current_v014`, and embed the same
-exact `legacy_v013` + no-unexpected-durable-object + no-temp-shadow predicate
-inside `WARD_AUDIT_MIGRATION_V014_SQL` before any `ALTER TABLE`. Durable
-DDL/DML stays explicitly qualified to `main` wherever SQLite permits it, and
-the init/migration paths never write database-wide `user_version`.
+for `legacy_v013` and `current_v014`, wrap both `WARD_AUDIT_SCHEMA_SQL` and
+`WARD_AUDIT_MIGRATION_V014_SQL` in `BEGIN IMMEDIATE` transactions so guard
+reads happen under the main-database write reservation, let concurrent init
+serialize cleanly to `current_v014`, and make a concurrent second migration
+wait, then reclassify current when the legacy guard re-runs. Durable DDL/DML
+stays explicitly qualified to `main` wherever SQLite permits it, and the
+init/migration paths never write database-wide `user_version`.
 
-**Tech Stack:** Rust 2021, SQLite, Cargo, bundled `rusqlite` for in-memory
-tests.
+**Tech Stack:** Rust 2021, SQLite, Cargo, bundled `rusqlite` (hooks-enabled in
+dev-dependencies) for in-memory and file-backed concurrency tests.
 
 ---
 
 ## Final File Map
 
-For this follow-up fingerprint repair, the diff stays scoped to these four
+For this follow-up fingerprint repair, the diff stays scoped to these five
 files:
 
 1. `CHANGELOG.md`
-2. `crates/coven-threads-core/src/audit.rs`
-3. `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`
-4. `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`
+2. `crates/coven-threads-core/Cargo.toml`
+3. `crates/coven-threads-core/src/audit.rs`
+4. `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`
+5. `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`
 
 ---
 
@@ -61,6 +63,10 @@ files:
     `current_v014`, and append-only UPDATE/DELETE still abort;
   - exact current schema → rerunning `WARD_AUDIT_SCHEMA_SQL` is idempotent and
     preserves rows/objects;
+  - file-backed two-connection concurrent init with `busy_timeout` and repeated
+    synchronized starts → both callers complete successfully because
+    `BEGIN IMMEDIATE` serializes before guard reads, with no locked/schema-locked
+    errors and exact final `current_v014`;
   - exact legacy schema → `WARD_AUDIT_SCHEMA_SQL` rejects, requires explicit
     `ROLLBACK`, and preserves state/data;
   - exact current `main.ward_audit` + TEMP shadow clone → init rejects,
@@ -92,6 +98,10 @@ files:
   the new guard and always `ROLLBACK` with `unwrap()`.
 - Add legacy TEMP-shadow migration coverage proving the guard rejects before any
   main/temp mutation and rollback preserves the exact legacy durable table.
+- Add file-backed two-connection concurrent legacy migration coverage with
+  `busy_timeout` and repeated synchronized starts proving one caller upgrades,
+  the other waits, then fails only at the legacy guard after seeing exact
+  current (never with a lock error), while preserving the legacy row.
 - Add reason-demo coverage proving an unqualified `INSERT INTO ward_audit ...`
   lands in TEMP while the durable contract remains `unknown`.
 - Add a controlled post-`ALTER` rollback coverage path that starts from exact
@@ -128,7 +138,8 @@ files:
 - Re-export the state query and tags from `crates/coven-threads-core/src/lib.rs`
   for root-API callers.
 - Update `WARD_AUDIT_SCHEMA_SQL` so it:
-  - starts a transaction;
+  - starts with `BEGIN IMMEDIATE` so the main-database write reservation is
+    acquired before any guard read/classification;
   - creates a uniquely named TEMP pre-install guard with `CHECK (ok = 1)`;
   - inserts `1` only when the shared schema-state expression returns
     `missing` or `current_v014`, otherwise inserts `0` and aborts before any
@@ -141,7 +152,8 @@ files:
   - commits on success; and
   - requires callers to `ROLLBACK` after any init error.
 - Update `WARD_AUDIT_MIGRATION_V014_SQL` so it:
-  - starts a transaction;
+  - starts with `BEGIN IMMEDIATE` so concurrent migrators serialize before the
+    legacy guard read;
   - creates a uniquely named TEMP guard table with `CHECK (ok = 1)`;
   - inserts `1` only when the full exact legacy durable predicate holds and no
     unexpected durable reserved-name object or temp shadow/reserved temp object
@@ -159,8 +171,10 @@ files:
   `main.sqlite_master.sql` equality covers every declared table-level
   constraint, schema-qualified PRAGMAs are required for durable column/index
   inspection, the exact durable namespace whitelist applies in every state,
-  temp shadows/reserved temp objects fail closed, and no whitespace-destroying
-  normalization is allowed.
+  temp shadows/reserved temp objects fail closed, guard reads happen under an
+  IMMEDIATE transaction, concurrent init serializes, concurrent second
+  migration callers must reclassify after the legacy guard rejects current, and
+  no whitespace-destroying normalization is allowed.
 - Document the caller contract explicitly:
   - query `WARD_AUDIT_SCHEMA_STATE_SQL`;
   - initialize on `missing` only;
@@ -181,7 +195,7 @@ files:
 Create a new commit (no amend) with:
 
 ```text
-fix(audit): reject durable namespace drift
+fix(audit): serialize schema guard transactions
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```

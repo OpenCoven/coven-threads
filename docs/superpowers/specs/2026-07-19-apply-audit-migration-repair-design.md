@@ -65,7 +65,8 @@ includes the inline comments preserved from the shipped v0.1.3 DDL.
 the daemon executes it unconditionally on every store open. The safe contract is
 therefore:
 
-1. `BEGIN;`
+1. `BEGIN IMMEDIATE;` to reserve the main-database write slot before any guard
+   read/classification;
 2. run a uniquely named TEMP pre-install guard that reuses the exact
    schema-state CTEs and permits only `missing` or exact `current_v014`;
 3. create the durable `main.ward_audit` table, explicit main indexes, and
@@ -75,12 +76,15 @@ therefore:
 5. `COMMIT;`
 
 This makes fresh installs atomic, makes exact current reruns idempotent, and
-fails closed for `legacy_v013`, `unknown`, any unexpected durable reserved-name
-object, any temp shadow/reserved temp object, or any malformed/silently skipped
-install result. If either guard errors, callers must explicitly `ROLLBACK`
-before continuing so SQLite removes any uncommitted `main.ward_audit` table
-created on the failed path while preserving unrelated durable/temp objects that
-caused the collision.
+serializes concurrent initializers before they read `main.sqlite_master`: the
+winner reserves the main-database write slot first, and the second caller waits
+until commit, re-runs the guard against the committed schema, and then
+idempotently sees exact `current_v014`. The path still fails closed for
+`legacy_v013`, `unknown`, any unexpected durable reserved-name object, any temp
+shadow/reserved temp object, or any malformed/silently skipped install result.
+If either guard errors, callers must explicitly `ROLLBACK` before continuing so
+SQLite removes any uncommitted `main.ward_audit` table created on the failed
+path while preserving unrelated durable/temp objects that caused the collision.
 
 ## Migration design
 
@@ -92,14 +96,18 @@ The v0.1.4 repair remains a table-local migration. The SQL still:
 4. swaps tables; and
 5. re-creates the required explicit main indexes and append-only main triggers.
 
-The change is the guardrail: immediately after `BEGIN;`, the migration creates
-a uniquely named TEMP guard table with `CHECK (ok = 1)` and inserts `1` only if
-the exact `legacy_v013` durable fingerprint holds **and** no unexpected durable
-reserved-name object or temp shadow/reserved temp object exists. Any
-missing/current/partial/shadowed schema inserts `0` instead, aborting before
-`ALTER TABLE`. This makes the migration fail closed even if a caller skips the
-classification query, and keeps initialization and migration aligned on the
-same exact state contract.
+The change is the guardrail: immediately after `BEGIN IMMEDIATE;`, the
+migration creates a uniquely named TEMP guard table with `CHECK (ok = 1)` and
+inserts `1` only if the exact `legacy_v013` durable fingerprint holds **and**
+no unexpected durable reserved-name object or temp shadow/reserved temp object
+exists. Any missing/current/partial/shadowed schema inserts `0` instead,
+aborting before `ALTER TABLE`. That IMMEDIATE reservation also serializes
+concurrent migrators before the guard read: the winner upgrades first, and a
+second caller waits, re-runs the guard against the now-current durable table,
+and fails closed there instead of racing into a `sqlite_master` lock. This
+makes the migration fail closed even if a caller skips the classification query,
+and keeps initialization and migration aligned on the same exact state
+contract.
 
 If a later step fails after `ALTER TABLE`, callers must explicitly `ROLLBACK`
 the failed transaction before continuing so SQLite restores the untouched
@@ -150,6 +158,15 @@ Executable rusqlite tests cover:
 12. schema-qualified PRAGMA syntax on bundled SQLite plus the reason for the
    fail-closed contract: unqualified inserts hit TEMP first while the contract
    remains `unknown`.
+13. file-backed multi-connection initialization with two simultaneous callers,
+   `busy_timeout`, and repeated runs proving both `WARD_AUDIT_SCHEMA_SQL`
+   executions complete without locked/schema-locked errors because
+   `BEGIN IMMEDIATE` serializes them before guard reads; and
+14. file-backed multi-connection legacy migration with two simultaneous callers,
+   `busy_timeout`, and repeated runs proving one migration succeeds while the
+   second waits, re-runs the guard against exact `current_v014`, and fails only
+   at the legacy guard (never with a lock error), while preserving the legacy
+   row data.
 
 ## Scope
 
@@ -160,4 +177,6 @@ migration, treating `main.ward_audit` as the only durable audit contract,
 accepting only the exact durable whitelist of `main.ward_audit` plus its two
 indexes and two append-only triggers, running `WARD_AUDIT_SCHEMA_SQL` only
 through the allowed `missing`/`current_v014` contract, and failing closed on
-`unknown`.
+`unknown`. Concurrent callers must also treat a migration guard rejection after
+waiting as a signal to reclassify: another writer may already have serialized
+the schema to exact `current_v014`.

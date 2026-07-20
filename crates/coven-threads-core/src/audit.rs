@@ -21,13 +21,16 @@
 //! ## Schema shape and migration gating
 //!
 //! `WARD_AUDIT_SCHEMA_SQL` initializes or verifies the exact v0.1.4
-//! `main.ward_audit` shape in one transaction, without mutating database-wide
-//! `PRAGMA user_version`. It is safe for the daemon to execute unconditionally
-//! on every store open: a pre-install guard permits only `missing` or exact
-//! `current_v014`, the durable DDL runs explicitly in `main` with `IF NOT
-//! EXISTS` compatibility, and a post-install guard requires exact
-//! `current_v014` before `COMMIT`. If either guard fails, callers must
-//! explicitly `ROLLBACK` before continuing.
+//! `main.ward_audit` shape in one `BEGIN IMMEDIATE` transaction, without
+//! mutating database-wide `PRAGMA user_version`. It is safe for the daemon to
+//! execute unconditionally on every store open: a pre-install guard permits
+//! only `missing` or exact `current_v014`, the durable DDL runs explicitly in
+//! `main` with `IF NOT EXISTS` compatibility, and a post-install guard requires
+//! exact `current_v014` before `COMMIT`. The IMMEDIATE reservation means
+//! concurrent initializers serialize before any guard/classification read, so a
+//! second caller waits, re-runs the guard against the winner's committed
+//! schema, and then idempotently sees `current_v014`. If either guard fails,
+//! callers must explicitly `ROLLBACK` before continuing.
 //! `WARD_AUDIT_SCHEMA_STATE_SQL` is the reusable, table-local fingerprint query
 //! that returns one of four stable tags:
 //! - `missing` — `main.ward_audit` does not exist, no unexpected durable
@@ -59,10 +62,14 @@
 //! comments preserved from the shipped v0.1.3 DDL.
 //! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact `legacy_v013`
 //! fingerprint with no unexpected durable reserved-namespace object and no temp
-//! shadow. It independently re-checks that fingerprint inside the transaction
-//! before any `ALTER`, then adds `detail` and rebuilds `main.ward_audit` so the
-//! current CHECK set is installed and every existing row is preserved. If a
-//! later migration step fails after
+//! shadow. It independently re-checks that fingerprint inside one
+//! `BEGIN IMMEDIATE` transaction before any `ALTER`, then adds `detail` and
+//! rebuilds `main.ward_audit` so the current CHECK set is installed and every
+//! existing row is preserved. The IMMEDIATE reservation means concurrent
+//! migrators serialize before any legacy-guard read: the winner upgrades first,
+//! and a second caller waits, reclassifies the durable table as current when
+//! the guard re-runs, then fails closed at the legacy guard without a
+//! `sqlite_master` lock race. If a later migration step fails after
 //! `ALTER TABLE main.ward_audit ADD COLUMN detail`, callers must explicitly roll
 //! back the failed transaction before continuing so SQLite restores the
 //! untouched legacy table.
@@ -683,7 +690,8 @@ FROM ward_audit_shape;
 /// triggers (RFC-0001 §5.6: entries MUST NOT be deleted or modified).
 /// SQLite cannot `ALTER` a CHECK constraint on an existing table, so this
 /// transaction:
-/// 1. re-checks the exact legacy fingerprint in SQL before any mutation,
+/// 1. reserves the main database up front with `BEGIN IMMEDIATE`, then
+///    re-checks the exact legacy fingerprint in SQL before any mutation,
 ///    including exact stored `main.sqlite_master.sql` equality plus main
 ///    column/index/trigger fingerprints, the durable reserved-namespace
 ///    whitelist, and temp-shadow rejection;
@@ -700,13 +708,17 @@ FROM ward_audit_shape;
 /// independently guards the same `legacy_v013` fingerprint, durable
 /// reserved-namespace whitelist, and temp-shadow rejection so callers cannot
 /// mutate a partial, already-current, or shadowed schema by skipping
-/// classification. If a later step fails after `ALTER TABLE main.ward_audit ADD
-/// COLUMN detail`, callers must `ROLLBACK` the failed transaction before
-/// continuing so SQLite restores the untouched legacy table. This SQL does not
-/// read or write database-wide `PRAGMA user_version`.
+/// classification. Because the transaction begins IMMEDIATELY, concurrent
+/// migrators serialize before the guard read; after the winner commits, a
+/// second caller re-runs the guard against the now-current schema and fails
+/// closed there rather than racing into a `sqlite_master` lock. If a later step
+/// fails after `ALTER TABLE main.ward_audit ADD COLUMN detail`, callers must
+/// `ROLLBACK` the failed transaction before continuing so SQLite restores the
+/// untouched legacy table. This SQL does not read or write database-wide
+/// `PRAGMA user_version`.
 pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = concat!(
     r#"
-BEGIN;
+BEGIN IMMEDIATE;
 
 CREATE TEMP TABLE coven_threads_ward_audit_migration_guard (
     ok INTEGER NOT NULL CHECK (ok = 1)
@@ -832,20 +844,23 @@ END;
 
 /// DDL for the durable `main.ward_audit` table inside `coven.sqlite3` (§3.4).
 ///
-/// See module docs for the full schema-state contract. This transaction is
-/// safe to run unconditionally on every store open: it permits only exact
-/// `missing` or `current_v014` before any mutation, uses idempotent `IF NOT
-/// EXISTS` DDL for daemon compatibility, then requires exact `current_v014`
-/// before `COMMIT`. Exact `legacy_v013`, every drifted `unknown` shape, every
-/// unexpected durable reserved-namespace object, and every temp
-/// shadow/reserved temp object fail closed. Durable schema objects are
-/// explicitly created in `main`; the temp guard tables live in `temp` under
-/// unique non-reserved names. If this SQL errors, callers must explicitly
-/// `ROLLBACK` before continuing so SQLite discards any uncommitted work. This
-/// DDL never mutates database-wide `PRAGMA user_version`.
+/// See module docs for the full schema-state contract. This `BEGIN IMMEDIATE`
+/// transaction is safe to run unconditionally on every store open: it permits
+/// only exact `missing` or `current_v014` before any mutation, uses idempotent
+/// `IF NOT EXISTS` DDL for daemon compatibility, then requires exact
+/// `current_v014` before `COMMIT`. Exact `legacy_v013`, every drifted
+/// `unknown` shape, every unexpected durable reserved-namespace object, and
+/// every temp shadow/reserved temp object fail closed. The IMMEDIATE
+/// reservation serializes concurrent initializers before any guard read so the
+/// loser waits, re-runs the guard against committed state, and sees exact
+/// `current_v014` rather than racing into `sqlite_master` lock errors. Durable
+/// schema objects are explicitly created in `main`; the temp guard tables live
+/// in `temp` under unique non-reserved names. If this SQL errors, callers must
+/// explicitly `ROLLBACK` before continuing so SQLite discards any uncommitted
+/// work. This DDL never mutates database-wide `PRAGMA user_version`.
 pub const WARD_AUDIT_SCHEMA_SQL: &str = concat!(
     r#"
-BEGIN;
+BEGIN IMMEDIATE;
 
 CREATE TEMP TABLE coven_threads_ward_audit_schema_pre_guard (
     ok INTEGER NOT NULL CHECK (ok = 1)
@@ -894,7 +909,16 @@ mod tests {
     use super::*;
     use crate::ids::{SurfaceId, WriterId};
     use rusqlite::{params, Connection};
-    use std::collections::BTreeSet;
+    use std::{
+        collections::BTreeSet,
+        fs,
+        io::ErrorKind,
+        path::{Path, PathBuf},
+        sync::{Arc, Barrier},
+        thread,
+        time::Duration,
+    };
+    use uuid::Uuid;
 
     const FIXED_SUBMITTED_AT: &str = "2026-07-19T00:00:00.000Z";
     const FIXED_DECIDED_AT: &str = "2026-07-19T00:01:00.000Z";
@@ -903,6 +927,7 @@ mod tests {
     const FIXED_DIFF_HASH: [u8; 32] = *b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const FIXED_PREV_DETAIL: &str = r#"{"prev_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","bytes_written":42}"#;
     const FIXED_FILES_TOUCHED: &str = r#"["SOUL.md"]"#;
+    const CONCURRENT_DB_RUNS: usize = 3;
 
     /// Exact shipped v0.1.3 `ward_audit` DDL from `origin/main` / the PR base.
     /// Keep the inline comments: SQLite preserves them in `sqlite_master.sql`,
@@ -981,6 +1006,97 @@ END;
 
     fn set_user_version(conn: &Connection, version: i64) {
         conn.pragma_update(None, "user_version", version).unwrap();
+    }
+
+    fn concurrent_db_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/ward-audit-concurrency")
+    }
+
+    fn sqlite_artifact_paths(path: &Path) -> Vec<PathBuf> {
+        ["", "-journal", "-wal", "-shm"]
+            .into_iter()
+            .map(|suffix| {
+                let mut candidate = path.as_os_str().to_os_string();
+                candidate.push(suffix);
+                PathBuf::from(candidate)
+            })
+            .collect()
+    }
+
+    fn cleanup_sqlite_artifacts(path: &Path) {
+        for candidate in sqlite_artifact_paths(path) {
+            match fs::remove_file(&candidate) {
+                Ok(()) => {}
+                Err(err) if err.kind() == ErrorKind::NotFound => {}
+                Err(err) => panic!("failed to remove {}: {err}", candidate.display()),
+            }
+        }
+    }
+
+    fn assert_sqlite_artifacts_absent(path: &Path) {
+        for candidate in sqlite_artifact_paths(path) {
+            assert!(
+                !candidate.exists(),
+                "expected {} to be cleaned up",
+                candidate.display()
+            );
+        }
+    }
+
+    struct ScratchDbPath {
+        path: PathBuf,
+    }
+
+    impl ScratchDbPath {
+        fn new(prefix: &str) -> Self {
+            let dir = concurrent_db_dir();
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(format!("{prefix}-{}.sqlite3", Uuid::new_v4()));
+            cleanup_sqlite_artifacts(&path);
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for ScratchDbPath {
+        fn drop(&mut self) {
+            for candidate in sqlite_artifact_paths(&self.path) {
+                let _ = fs::remove_file(candidate);
+            }
+        }
+    }
+
+    fn open_file_backed_connection(path: &Path) -> Connection {
+        let conn = Connection::open(path).unwrap();
+        conn.busy_timeout(Duration::from_secs(5)).unwrap();
+        conn
+    }
+
+    fn run_concurrent_sql(path: &Path, sql: &'static str) -> Vec<Result<(), String>> {
+        let barrier = Arc::new(Barrier::new(2));
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let barrier = Arc::clone(&barrier);
+                let path = path.to_path_buf();
+                thread::spawn(move || {
+                    let conn = open_file_backed_connection(&path);
+                    conn.commit_hook(Some(|| {
+                        thread::sleep(Duration::from_millis(150));
+                        false
+                    }));
+                    barrier.wait();
+                    conn.execute_batch(sql).map_err(|err| err.to_string())
+                })
+            })
+            .collect();
+
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect()
     }
 
     fn ward_audit_schema_state(conn: &Connection) -> String {
@@ -1676,6 +1792,19 @@ END;
         assert!(WARD_AUDIT_SCHEMA_SQL.contains("ward_audit_append_only_update"));
         assert!(WARD_AUDIT_SCHEMA_SQL.contains("ward_audit_append_only_delete"));
         assert!(WARD_AUDIT_SCHEMA_SQL.contains("append-only (RFC-0001 §5.6)"));
+    }
+
+    #[test]
+    fn schema_and_migration_sql_use_begin_immediate() {
+        for (label, sql) in [
+            ("schema", WARD_AUDIT_SCHEMA_SQL),
+            ("migration", WARD_AUDIT_MIGRATION_V014_SQL),
+        ] {
+            assert!(
+                sql.trim_start().starts_with("BEGIN IMMEDIATE;"),
+                "{label} SQL must reserve the main database before guard reads"
+            );
+        }
     }
 
     #[test]
@@ -2745,6 +2874,105 @@ END;
         assert_eq!(load_audit_row(&conn, apply_row_id), apply_before);
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(user_version(&conn), 37);
+    }
+
+    #[test]
+    fn concurrent_schema_initialization_serializes_without_locked_errors() {
+        for attempt in 0..CONCURRENT_DB_RUNS {
+            let path = {
+                let db = ScratchDbPath::new("concurrent-schema-init");
+                let path = db.path().to_path_buf();
+
+                {
+                    let setup = open_file_backed_connection(db.path());
+                    set_user_version(&setup, 41);
+                }
+
+                let outcomes = run_concurrent_sql(db.path(), WARD_AUDIT_SCHEMA_SQL);
+                assert!(
+                    outcomes.iter().all(|result| result.is_ok()),
+                    "attempt {attempt} concurrent init outcomes: {outcomes:?}"
+                );
+
+                {
+                    let final_conn = open_file_backed_connection(db.path());
+                    assert_eq!(user_version(&final_conn), 41);
+                    assert_schema_state(&final_conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+                    assert_eq!(
+                        explicit_index_names(&final_conn),
+                        expected_explicit_index_names()
+                    );
+                    assert_eq!(trigger_names(&final_conn), expected_trigger_names());
+                }
+
+                path
+            };
+
+            assert_sqlite_artifacts_absent(&path);
+        }
+    }
+
+    #[test]
+    fn concurrent_legacy_migration_waits_then_rejects_current_at_guard() {
+        for attempt in 0..CONCURRENT_DB_RUNS {
+            let path = {
+                let db = ScratchDbPath::new("concurrent-legacy-migration");
+                let path = db.path().to_path_buf();
+
+                let (row_id, before) = {
+                    let setup = open_file_backed_connection(db.path());
+                    set_user_version(&setup, 37);
+                    setup.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+                    let row_id = insert_legacy_ward_updated_row(&setup);
+                    let before = load_legacy_audit_row(&setup, row_id);
+                    (row_id, before)
+                };
+
+                let outcomes = run_concurrent_sql(db.path(), WARD_AUDIT_MIGRATION_V014_SQL);
+                let success_count = outcomes.iter().filter(|result| result.is_ok()).count();
+                let errors: Vec<_> = outcomes
+                    .iter()
+                    .filter_map(|result| result.as_ref().err())
+                    .collect();
+                assert_eq!(
+                    success_count, 1,
+                    "attempt {attempt} concurrent migration outcomes: {outcomes:?}"
+                );
+                assert_eq!(
+                    errors.len(),
+                    1,
+                    "attempt {attempt} concurrent migration outcomes: {outcomes:?}"
+                );
+                let error = errors[0].to_lowercase();
+                assert!(
+                    error.contains("check constraint failed"),
+                    "attempt {attempt} unexpected migration error: {}",
+                    errors[0]
+                );
+                assert!(
+                    !error.contains("locked"),
+                    "attempt {attempt} migration must wait then fail at the guard, not lock: {}",
+                    errors[0]
+                );
+
+                {
+                    let final_conn = open_file_backed_connection(db.path());
+                    assert_eq!(user_version(&final_conn), 37);
+                    assert_schema_state(&final_conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+                    assert_eq!(ward_audit_row_count(&final_conn, "main"), 1);
+                    assert_eq!(load_audit_row(&final_conn, row_id), before);
+                    assert_eq!(
+                        explicit_index_names(&final_conn),
+                        expected_explicit_index_names()
+                    );
+                    assert_eq!(trigger_names(&final_conn), expected_trigger_names());
+                }
+
+                path
+            };
+
+            assert_sqlite_artifacts_absent(&path);
+        }
     }
 
     #[test]
