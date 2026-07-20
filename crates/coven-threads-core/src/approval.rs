@@ -148,10 +148,26 @@ impl ApprovalPath {
 
     /// Returns the higher-ceremony path of `self` and `other`.
     pub fn highest(self, other: ApprovalPath) -> ApprovalPath {
-        if other.ceremony_ordinal() > self.ceremony_ordinal() {
-            other
-        } else {
-            self
+        match (self, other) {
+            (
+                ApprovalPath::AutoRegression { veto: left },
+                ApprovalPath::AutoRegression { veto: right },
+            ) => ApprovalPath::AutoRegression {
+                veto: Self::strongest_optional_window(left, right),
+            },
+            (
+                ApprovalPath::FamiliarCoherence { veto: left },
+                ApprovalPath::FamiliarCoherence { veto: right },
+            ) => ApprovalPath::FamiliarCoherence {
+                veto: left.strongest(right),
+            },
+            (left, right) => {
+                if right.ceremony_ordinal() > left.ceremony_ordinal() {
+                    right
+                } else {
+                    left
+                }
+            }
         }
     }
 
@@ -161,6 +177,17 @@ impl ApprovalPath {
             ApprovalPath::AutoRegression { veto } => veto.is_some(),
             ApprovalPath::FamiliarCoherence { .. } => true,
             ApprovalPath::HumanApproval | ApprovalPath::HumanApprovalWithRationale => false,
+        }
+    }
+
+    fn strongest_optional_window(
+        left: Option<VetoWindow>,
+        right: Option<VetoWindow>,
+    ) -> Option<VetoWindow> {
+        match (left, right) {
+            (Some(left), Some(right)) => Some(left.strongest(right)),
+            (Some(window), None) | (None, Some(window)) => Some(window),
+            (None, None) => None,
         }
     }
 
@@ -178,9 +205,13 @@ impl ApprovalPath {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApprovalPathKind {
+    /// Deterministic regression path with an optional veto window.
     AutoRegression,
+    /// Familiar-coherence review followed by a veto window.
     FamiliarCoherence,
+    /// Explicit human approval.
     HumanApproval,
+    /// Explicit human approval with a recorded rationale.
     HumanApprovalWithRationale,
 }
 
@@ -222,53 +253,103 @@ impl ApprovalPathKind {
 ///
 /// [`min_visible`]: VetoWindow::min_visible
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "VetoWindowWire")]
 pub struct VetoWindow {
     /// How long the window stays open from the moment the proposal is staged.
-    pub duration: Duration,
+    duration: Duration,
     /// Minimum time the proposal must be *visibly pending* before the window
     /// may close. Prevents proposals that are technically pending but
     /// unreachable in practice (same shape as the two-compaction contract's
     /// minimum-visibility requirement).
     ///
     /// MUST be ≤ `duration`.
-    pub min_visible: Duration,
+    min_visible: Duration,
 }
 
 impl VetoWindow {
     /// Construct a veto window, panicking if `min_visible > duration`.
     pub fn new(duration: Duration, min_visible: Duration) -> Self {
-        assert!(
-            min_visible <= duration,
-            "VetoWindow: min_visible ({min_visible:?}) must be ≤ duration ({duration:?})"
-        );
-        Self {
+        Self::try_new(duration, min_visible).expect("invalid VetoWindow")
+    }
+
+    /// Construct a validated veto window.
+    pub fn try_new(duration: Duration, min_visible: Duration) -> Result<Self, String> {
+        if min_visible > duration {
+            return Err(format!(
+                "VetoWindow: min_visible ({min_visible:?}) must be ≤ duration ({duration:?})"
+            ));
+        }
+        time::Duration::try_from(duration)
+            .map_err(|_| format!("VetoWindow duration {duration:?} is not representable"))?;
+        time::Duration::try_from(min_visible)
+            .map_err(|_| format!("VetoWindow min_visible {min_visible:?} is not representable"))?;
+        Ok(Self {
             duration,
             min_visible,
-        }
+        })
+    }
+
+    /// Total time the veto window stays open.
+    pub fn duration(&self) -> Duration {
+        self.duration
+    }
+
+    /// Minimum time the proposal must remain visibly pending.
+    pub fn min_visible(&self) -> Duration {
+        self.min_visible
+    }
+
+    fn strongest(self, other: Self) -> Self {
+        Self::new(
+            self.duration.max(other.duration),
+            self.min_visible.max(other.min_visible),
+        )
     }
 
     /// Calculate the absolute deadline given a staged-at timestamp.
-    pub fn deadline(&self, staged_at: OffsetDateTime) -> OffsetDateTime {
-        staged_at
-            + time::Duration::try_from(self.duration)
-                .expect("VetoWindow duration too large for time::Duration")
+    pub fn deadline(&self, staged_at: OffsetDateTime) -> Result<OffsetDateTime, String> {
+        let duration = time::Duration::try_from(self.duration)
+            .map_err(|_| "VetoWindow duration is not representable".to_string())?;
+        staged_at.checked_add(duration).ok_or_else(|| {
+            "VetoWindow deadline is outside the representable timestamp range".into()
+        })
     }
 
     /// The earliest time at which the window may close (staged_at + min_visible).
-    pub fn earliest_close(&self, staged_at: OffsetDateTime) -> OffsetDateTime {
-        staged_at
-            + time::Duration::try_from(self.min_visible)
-                .expect("VetoWindow min_visible too large for time::Duration")
+    pub fn earliest_close(&self, staged_at: OffsetDateTime) -> Result<OffsetDateTime, String> {
+        let min_visible = time::Duration::try_from(self.min_visible)
+            .map_err(|_| "VetoWindow min_visible is not representable".to_string())?;
+        staged_at.checked_add(min_visible).ok_or_else(|| {
+            "VetoWindow earliest close is outside the representable timestamp range".into()
+        })
     }
 
     /// Whether the window may now be closed given the current time and when it
     /// was staged.
     ///
-    /// Returns `true` iff `now >= earliest_close(staged_at)`.  The scheduler
+    /// Returns `Ok(true)` iff `now >= earliest_close(staged_at)`. The scheduler
     /// should additionally check that `now >= deadline(staged_at)` before
     /// auto-applying; this method only answers the min-visible gate.
-    pub fn is_min_visible_elapsed(&self, staged_at: OffsetDateTime, now: OffsetDateTime) -> bool {
-        now >= self.earliest_close(staged_at)
+    pub fn is_min_visible_elapsed(
+        &self,
+        staged_at: OffsetDateTime,
+        now: OffsetDateTime,
+    ) -> Result<bool, String> {
+        Ok(now >= self.earliest_close(staged_at)?)
+    }
+}
+
+#[derive(Deserialize)]
+struct VetoWindowWire {
+    duration: Duration,
+    min_visible: Duration,
+}
+
+impl TryFrom<VetoWindowWire> for VetoWindow {
+    type Error = String;
+
+    fn try_from(value: VetoWindowWire) -> Result<Self, Self::Error> {
+        Self::try_new(value.duration, value.min_visible)
     }
 }
 
@@ -291,6 +372,8 @@ pub struct ProposalClassification {
     pub familiar_id: FamiliarId,
     /// The channel the mutation arrived on (load axis — not the approval path).
     pub channel: Channel,
+    /// Materialized surfaces affected by the proposal.
+    pub affected_surfaces: Vec<SurfaceId>,
     /// Surface regions the diff touches (populated by region-extractor
     /// predicates, `threads-uqx.5`). May be empty while uqx.5 is unshipped.
     pub affected_regions: Vec<SurfaceRegionId>,
@@ -354,8 +437,11 @@ pub enum WindowCloseReason {
     Applied,
     /// A principal vetoed the proposal before the deadline.
     Vetoed,
-    /// The window expired and revalidation failed; proposal was rejected.
-    Expired,
+    /// Deadline replay produced different evidence; proposal was rejected.
+    EvidenceDiverged,
+    /// Deadline replay could not produce authoritative evidence; proposal was
+    /// rejected fail-closed.
+    RevalidationFailed,
     /// A superseding proposal was submitted for the same surface before this
     /// window closed; this proposal is no longer pending.
     Superseded,
@@ -367,7 +453,8 @@ impl WindowCloseReason {
         match self {
             WindowCloseReason::Applied => "applied",
             WindowCloseReason::Vetoed => "vetoed",
-            WindowCloseReason::Expired => "expired",
+            WindowCloseReason::EvidenceDiverged => "evidence_diverged",
+            WindowCloseReason::RevalidationFailed => "revalidation_failed",
             WindowCloseReason::Superseded => "superseded",
         }
     }
@@ -394,8 +481,10 @@ pub struct ProposalWindowAuditDetail {
     /// The approval path that opened this window.
     pub approval_path_label: String,
     /// Absolute deadline (RFC 3339).
+    #[serde(with = "time::serde::rfc3339")]
     pub deadline: OffsetDateTime,
     /// Earliest moment the window may close (RFC 3339).
+    #[serde(with = "time::serde::rfc3339")]
     pub earliest_close: OffsetDateTime,
     /// Hex-encoded `evidence_replay_hash` from `ProposalClassification`.
     pub evidence_replay_hash_hex: String,
@@ -411,13 +500,26 @@ pub struct ProposalWindowAuditDetail {
 pub struct ProposalWindowCloseAuditDetail {
     /// Why the window closed.
     pub reason: WindowCloseReason,
-    /// Whether the evidence replay hash matched at deadline (for `Applied` and
-    /// `Expired` paths — `None` for `Vetoed` / `Superseded` where replay is not
-    /// attempted).
+    /// Whether the evidence replay hash matched at deadline. This is `None` for
+    /// `Vetoed` and `Superseded`, where replay is not attempted.
     pub replay_hash_matched: Option<bool>,
     /// Rationale text (required for `HumanApprovalWithRationale` path; `None`
     /// for other paths unless the approver voluntarily adds one).
     pub rationale: Option<String>,
+}
+
+/// Audit detail for every successful proposal approval.
+///
+/// Human-required approvals carry their mandatory rationale here. Delayed
+/// approval paths additionally carry the window-close evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposalApprovalAuditDetail {
+    /// Canonical [`ApprovalPath::display_label`] value.
+    pub approval_path_label: String,
+    /// Required and non-empty for `human_required`; optional otherwise.
+    pub rationale: Option<String>,
+    /// Delayed-apply close evidence, when this approval closed a veto window.
+    pub window_close: Option<ProposalWindowCloseAuditDetail>,
 }
 
 // ---------------------------------------------------------------------------
@@ -429,7 +531,7 @@ pub struct ProposalWindowCloseAuditDetail {
 ///
 /// Cave and other clients receive this and render it as-is. They MUST NOT
 /// infer policy from the variant or label.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ApprovalPathWireEnvelope {
     /// Stable enum variant name (snake_case, for machine use).
     pub variant: ApprovalPathKind,
@@ -437,9 +539,39 @@ pub struct ApprovalPathWireEnvelope {
     /// by clients).
     pub label: String,
     /// Absolute veto deadline, if this path has a veto window.
+    #[serde(with = "time::serde::rfc3339::option")]
     pub veto_deadline: Option<OffsetDateTime>,
     /// The surfaces affected by this proposal (for display).
     pub affected_surfaces: Vec<SurfaceId>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UncheckedApprovalPathWireEnvelope {
+    variant: ApprovalPathKind,
+    label: String,
+    #[serde(with = "time::serde::rfc3339::option")]
+    veto_deadline: Option<OffsetDateTime>,
+    affected_surfaces: Vec<SurfaceId>,
+}
+
+impl<'de> Deserialize<'de> for ApprovalPathWireEnvelope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let unchecked = UncheckedApprovalPathWireEnvelope::deserialize(deserializer)?;
+        let envelope = Self {
+            variant: unchecked.variant,
+            label: unchecked.label,
+            veto_deadline: unchecked.veto_deadline,
+            affected_surfaces: unchecked.affected_surfaces,
+        };
+        envelope
+            .validate_label_round_trip()
+            .map_err(serde::de::Error::custom)?;
+        Ok(envelope)
+    }
 }
 
 impl ApprovalPathWireEnvelope {
@@ -447,26 +579,33 @@ impl ApprovalPathWireEnvelope {
     pub fn from_classification(
         classification: &ProposalClassification,
         staged_at: Option<OffsetDateTime>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let variant = match &classification.approval_path {
             ApprovalPath::AutoRegression { .. } => ApprovalPathKind::AutoRegression,
             ApprovalPath::FamiliarCoherence { .. } => ApprovalPathKind::FamiliarCoherence,
             ApprovalPath::HumanApproval => ApprovalPathKind::HumanApproval,
-            ApprovalPath::HumanApprovalWithRationale => ApprovalPathKind::HumanApprovalWithRationale,
+            ApprovalPath::HumanApprovalWithRationale => {
+                ApprovalPathKind::HumanApprovalWithRationale
+            }
         };
         let label = classification.approval_path.display_label().to_string();
-        let veto_deadline = staged_at.and_then(|at| {
-            classification
-                .approval_path
-                .veto_window()
-                .map(|w| w.deadline(at))
-        });
-        Self {
+        let veto_deadline = match classification.approval_path.veto_window() {
+            Some(window) => {
+                let staged_at = staged_at.ok_or_else(|| {
+                    "veto-bearing approval path requires a staged_at timestamp".to_string()
+                })?;
+                Some(window.deadline(staged_at)?)
+            }
+            None => None,
+        };
+        let envelope = Self {
             variant,
             label,
             veto_deadline,
-            affected_surfaces: vec![],
-        }
+            affected_surfaces: classification.affected_surfaces.clone(),
+        };
+        envelope.validate_label_round_trip()?;
+        Ok(envelope)
     }
 
     /// Validate that the label round-trips back to the variant (daemon load-time
@@ -483,6 +622,17 @@ impl ApprovalPathWireEnvelope {
                 "label {:?} maps to {:?} but envelope carries {:?}",
                 self.label, parsed, self.variant
             ));
+        }
+        match self.variant {
+            ApprovalPathKind::FamiliarCoherence if self.veto_deadline.is_none() => {
+                return Err("familiar_review requires a veto deadline".into())
+            }
+            ApprovalPathKind::HumanApproval | ApprovalPathKind::HumanApprovalWithRationale
+                if self.veto_deadline.is_some() =>
+            {
+                return Err("human approval paths must not carry a veto deadline".into())
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -560,13 +710,42 @@ mod tests {
         assert_eq!(auto.clone().highest(rationale.clone()), rationale.clone());
     }
 
+    #[test]
+    fn equal_auto_paths_preserve_the_strongest_veto_window() {
+        let without_veto = ApprovalPath::AutoRegression { veto: None };
+        let with_veto = ApprovalPath::AutoRegression {
+            veto: Some(VetoWindow::new(
+                Duration::from_secs(3600),
+                Duration::from_secs(900),
+            )),
+        };
+
+        assert_eq!(
+            without_veto.highest(with_veto.clone()),
+            with_veto,
+            "aggregation must not drop a required veto window"
+        );
+    }
+
+    #[test]
+    fn equal_familiar_paths_merge_to_the_strongest_window() {
+        let shorter = ApprovalPath::FamiliarCoherence {
+            veto: VetoWindow::new(Duration::from_secs(1800), Duration::from_secs(300)),
+        };
+        let stronger = ApprovalPath::FamiliarCoherence {
+            veto: VetoWindow::new(Duration::from_secs(7200), Duration::from_secs(900)),
+        };
+
+        assert_eq!(shorter.highest(stronger.clone()), stronger);
+    }
+
     // ---- VetoWindow ----
 
     #[test]
     fn veto_window_deadline_is_staged_at_plus_duration() {
         let w = VetoWindow::new(Duration::from_secs(3600), Duration::from_secs(300));
         let staged = OffsetDateTime::UNIX_EPOCH;
-        let dl = w.deadline(staged);
+        let dl = w.deadline(staged).unwrap();
         assert_eq!(
             dl,
             staged + time::Duration::hours(1),
@@ -578,7 +757,7 @@ mod tests {
     fn veto_window_earliest_close_is_staged_at_plus_min_visible() {
         let w = VetoWindow::new(Duration::from_secs(3600), Duration::from_secs(600));
         let staged = OffsetDateTime::UNIX_EPOCH;
-        let ec = w.earliest_close(staged);
+        let ec = w.earliest_close(staged).unwrap();
         assert_eq!(ec, staged + time::Duration::minutes(10));
     }
 
@@ -588,10 +767,19 @@ mod tests {
         let staged = OffsetDateTime::UNIX_EPOCH;
         // Before min_visible elapses → not eligible to close.
         let too_early = staged + time::Duration::seconds(599);
-        assert!(!w.is_min_visible_elapsed(staged, too_early));
+        assert!(!w.is_min_visible_elapsed(staged, too_early).unwrap());
         // After min_visible → eligible.
         let after = staged + time::Duration::seconds(600);
-        assert!(w.is_min_visible_elapsed(staged, after));
+        assert!(w.is_min_visible_elapsed(staged, after).unwrap());
+    }
+
+    #[test]
+    fn veto_window_timestamp_overflow_fails_closed() {
+        let window = VetoWindow::new(Duration::from_secs(1), Duration::from_secs(1));
+        let max = time::macros::datetime!(9999-12-31 23:59:59 UTC);
+        assert!(window.deadline(max).is_err());
+        assert!(window.earliest_close(max).is_err());
+        assert!(window.is_min_visible_elapsed(max, max).is_err());
     }
 
     #[test]
@@ -601,6 +789,24 @@ mod tests {
         let _ = VetoWindow::new(Duration::from_secs(300), Duration::from_secs(600));
     }
 
+    #[test]
+    fn veto_window_deserialization_rejects_invalid_visibility() {
+        let json = r#"{
+            "duration":{"secs":300,"nanos":0},
+            "min_visible":{"secs":600,"nanos":0}
+        }"#;
+        assert!(serde_json::from_str::<VetoWindow>(json).is_err());
+    }
+
+    #[test]
+    fn veto_window_deserialization_rejects_unrepresentable_duration() {
+        let json = r#"{
+            "duration":{"secs":18446744073709551615,"nanos":999999999},
+            "min_visible":{"secs":0,"nanos":0}
+        }"#;
+        assert!(serde_json::from_str::<VetoWindow>(json).is_err());
+    }
+
     // ---- WindowCloseReason ----
 
     #[test]
@@ -608,7 +814,8 @@ mod tests {
         let pairs = [
             (WindowCloseReason::Applied, "applied"),
             (WindowCloseReason::Vetoed, "vetoed"),
-            (WindowCloseReason::Expired, "expired"),
+            (WindowCloseReason::EvidenceDiverged, "evidence_diverged"),
+            (WindowCloseReason::RevalidationFailed, "revalidation_failed"),
             (WindowCloseReason::Superseded, "superseded"),
         ];
         for (reason, expected_tag) in pairs {
@@ -641,6 +848,7 @@ mod tests {
             proposal_id: ProposalId::new(),
             familiar_id: FamiliarId::new(),
             channel: Channel::Mutation,
+            affected_surfaces: vec![SurfaceId::new("SOUL.md")],
             affected_regions: vec![SurfaceRegionId::new("output_formats")],
             path_tier_floor: 1,
             approval_path: ApprovalPath::FamiliarCoherence {
@@ -664,16 +872,45 @@ mod tests {
             proposal_id: ProposalId::new(),
             familiar_id: FamiliarId::new(),
             channel: Channel::Mutation,
+            affected_surfaces: vec![SurfaceId::new("SOUL.md")],
             affected_regions: vec![],
             path_tier_floor: 0,
             approval_path: ApprovalPath::HumanApprovalWithRationale,
             evidence_replay_hash: [0xaa; 32],
             classified_at: OffsetDateTime::UNIX_EPOCH,
         };
-        let env = ApprovalPathWireEnvelope::from_classification(&classification, None);
+        let env = ApprovalPathWireEnvelope::from_classification(
+            &classification,
+            Some(OffsetDateTime::UNIX_EPOCH),
+        )
+        .unwrap();
         assert_eq!(env.label, "human_required");
         assert_eq!(env.variant, ApprovalPathKind::HumanApprovalWithRationale);
+        assert_eq!(env.affected_surfaces, vec![SurfaceId::new("SOUL.md")]);
         assert!(env.validate_label_round_trip().is_ok());
+    }
+
+    #[test]
+    fn wire_envelope_refuses_invalid_veto_staging_time() {
+        use crate::ids::{FamiliarId, ProposalId};
+
+        let classification = ProposalClassification {
+            proposal_id: ProposalId::new(),
+            familiar_id: FamiliarId::new(),
+            channel: Channel::Mutation,
+            affected_surfaces: vec![SurfaceId::new("SOUL.md")],
+            affected_regions: vec![],
+            path_tier_floor: 1,
+            approval_path: ApprovalPath::FamiliarCoherence {
+                veto: VetoWindow::new(Duration::from_secs(3600), Duration::from_secs(300)),
+            },
+            evidence_replay_hash: [0xaa; 32],
+            classified_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        assert!(ApprovalPathWireEnvelope::from_classification(&classification, None).is_err());
+        let max = time::macros::datetime!(9999-12-31 23:59:59 UTC);
+        assert!(ApprovalPathWireEnvelope::from_classification(&classification, Some(max)).is_err());
     }
 
     #[test]
@@ -698,6 +935,45 @@ mod tests {
             affected_surfaces: vec![],
         };
         assert!(env.validate_label_round_trip().is_err());
+    }
+
+    #[test]
+    fn wire_envelope_deserialization_rejects_invalid_contract() {
+        let json = r#"{
+            "variant":"familiar_coherence",
+            "label":"auto",
+            "veto_deadline":null,
+            "affected_surfaces":[]
+        }"#;
+        assert!(serde_json::from_str::<ApprovalPathWireEnvelope>(json).is_err());
+    }
+
+    #[test]
+    fn window_timestamps_use_rfc3339_on_the_wire() {
+        let deadline = time::macros::datetime!(2026-07-21 12:00:00 UTC);
+        let envelope = ApprovalPathWireEnvelope {
+            variant: ApprovalPathKind::FamiliarCoherence,
+            label: "familiar_review".into(),
+            veto_deadline: Some(deadline),
+            affected_surfaces: vec![],
+        };
+        let envelope_json = serde_json::to_value(&envelope).unwrap();
+        assert!(envelope_json["veto_deadline"].is_string());
+        let decoded: ApprovalPathWireEnvelope = serde_json::from_value(envelope_json).unwrap();
+        assert_eq!(decoded, envelope);
+
+        let detail = ProposalWindowAuditDetail {
+            approval_path_label: "familiar_review".into(),
+            deadline,
+            earliest_close: deadline - time::Duration::minutes(5),
+            evidence_replay_hash_hex: "ab".repeat(32),
+            affected_regions: vec![],
+        };
+        let detail_json = serde_json::to_value(&detail).unwrap();
+        assert!(detail_json["deadline"].is_string());
+        assert!(detail_json["earliest_close"].is_string());
+        let decoded: ProposalWindowAuditDetail = serde_json::from_value(detail_json).unwrap();
+        assert_eq!(decoded, detail);
     }
 
     #[test]

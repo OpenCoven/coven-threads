@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::channel::Channel;
 use crate::fray::{FrayOrSnap, SnapReason};
+use crate::identity_invariants::CandidateIdentityContext;
 use crate::ids::{SurfaceId, ThreadId, WriterId};
 use crate::pattern::WeaveCoherence;
 use crate::weave::Weave;
@@ -40,6 +41,11 @@ pub struct MutationRequest {
     pub writer: WriterId,
     /// The channel the mutation arrives on (§2.4).
     pub channel: Channel,
+    /// Complete-candidate identity evidence for identity-aware patterns.
+    ///
+    /// Structural-only patterns ignore this. Identity-aware patterns reject
+    /// when it is absent, stale, or semantically inconsistent.
+    pub identity_context: Option<CandidateIdentityContext>,
 }
 
 /// The validator's verdict (§5). The daemon acts on this and audits it.
@@ -183,7 +189,7 @@ pub fn validate(weave: &Weave, request: &MutationRequest) -> Verdict {
     }
 
     // 4. The weave-level gate: predicate authoritative (§2.2).
-    match weave.coherence() {
+    match weave.coherence_with_context(request.identity_context.as_ref()) {
         WeaveCoherence::Broken { reason } => Verdict::Reject {
             reason: RejectReason::WeaveBroken { reason },
         },
@@ -245,6 +251,10 @@ impl Verdict {
 mod tests {
     use super::*;
     use crate::fray::FrayReason;
+    use crate::identity_invariants::{
+        CandidateIdentityFact, CandidateIdentityFacts, IdentityAwarePattern, IdentityFact,
+        IdentityInvariantSet,
+    };
     use crate::ids::{FamiliarId, ManifestId, StrandId, WeaveId};
     use crate::pattern::{AllSurfacesHoldOnChannels, PatternDescriptor, PatternPredicate};
     use crate::strand::{HashAlgo, Strand};
@@ -302,6 +312,7 @@ mod tests {
             surface: SurfaceId::new(surface),
             writer: WriterId::new(writer),
             channel,
+            identity_context: None,
         }
     }
 
@@ -310,6 +321,66 @@ mod tests {
         let w = floor_weave();
         let v = validate(&w, &request("SOUL.md", "principal:val", Channel::Mutation));
         assert!(v.permits_write(), "expected Permit, got {v:?}");
+    }
+
+    #[test]
+    fn identity_aware_pattern_gates_authoritative_validation() {
+        let invariants =
+            IdentityInvariantSet::compile(["familiar.name == 'Nova'", "familiar.person == 'Val'"])
+                .unwrap();
+        let weave = Weave::new(
+            WeaveId::new(),
+            FamiliarId::new(),
+            ["SOUL.md", "IDENTITY.md", "MEMORY.md", "ward.toml"]
+                .into_iter()
+                .map(|surface| floor_thread(surface, "principal:val"))
+                .collect(),
+            Box::new(IdentityAwarePattern {
+                structural: Box::new(AllSurfacesHoldOnChannels::rfc0001_floor()),
+                invariants,
+            }),
+            None,
+        )
+        .unwrap();
+        let mut mutation = request("SOUL.md", "principal:val", Channel::Mutation);
+
+        assert!(matches!(
+            validate(&weave, &mutation),
+            Verdict::Reject {
+                reason: RejectReason::WeaveBroken { .. }
+            }
+        ));
+
+        mutation.identity_context = Some(CandidateIdentityContext {
+            candidate_commitment: [0x42; 32],
+            facts: CandidateIdentityFacts::try_new(
+                [0x42; 32],
+                vec![
+                    CandidateIdentityFact {
+                        fact: IdentityFact::Name,
+                        value: "Nova".into(),
+                    },
+                    CandidateIdentityFact {
+                        fact: IdentityFact::Person,
+                        value: "Val".into(),
+                    },
+                ],
+            )
+            .unwrap(),
+        });
+        assert!(validate(&weave, &mutation).permits_write());
+
+        mutation
+            .identity_context
+            .as_mut()
+            .unwrap()
+            .candidate_commitment = [0x99; 32];
+        assert!(matches!(
+            validate(&weave, &mutation),
+            Verdict::Reject {
+                reason: RejectReason::WeaveBroken { .. }
+            }
+        ));
     }
 
     #[test]

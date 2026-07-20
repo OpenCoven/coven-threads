@@ -1,8 +1,9 @@
-//! Identity invariant `PatternPredicate` implementations (`threads-uqx.4`).
+//! Identity invariant compilation and predicate implementations (`threads-uqx.4`).
 //!
-//! This module carries forward the Phase-0/RFC-0001 identity invariants as
-//! **predicate implementations**, not strings. The v0.1 textual invariant
-//! syntax is dead; these are its typed successors.
+//! [`IdentityInvariantSet`] compiles the retired Ward declaration strings into
+//! typed, deterministic checks over candidate-harness identity facts. The
+//! lower-level surface commitment predicates remain available as supporting
+//! evidence, but they are not substitutes for semantic identity evaluation.
 //!
 //! ## Design principle (spec §2.3, §3.2, decision 4)
 //!
@@ -39,31 +40,400 @@
 //! fallback to probe judgment is forbidden for gates; probes are supplementary
 //! evidence, not fallback authorities.
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::channel::Channel;
 use crate::ids::SurfaceId;
 use crate::pattern::{PatternDescriptor, PatternPredicate, StrandRequirement, WeaveCoherence};
-use crate::strand::{HashAlgo, Strand, StrandKind};
+use crate::strand::{Strand, StrandKind};
 use crate::thread::Thread;
+
+// ---------------------------------------------------------------------------
+// Retired declaration compiler and candidate identity facts
+// ---------------------------------------------------------------------------
+
+/// Identity fact named by the retired Ward v0.1 invariant declarations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentityFact {
+    /// `familiar.name`.
+    Name,
+    /// `familiar.person`.
+    Person,
+    /// `familiar.pronouns`.
+    Pronouns,
+    /// `familiar.purpose`.
+    Purpose,
+    /// `familiar.coven`.
+    Coven,
+}
+
+impl IdentityFact {
+    fn from_declaration_name(value: &str) -> Option<Self> {
+        match value {
+            "familiar.name" => Some(Self::Name),
+            "familiar.person" => Some(Self::Person),
+            "familiar.pronouns" => Some(Self::Pronouns),
+            "familiar.purpose" => Some(Self::Purpose),
+            "familiar.coven" => Some(Self::Coven),
+            _ => None,
+        }
+    }
+}
+
+/// Comparison operator supported by retired Ward v0.1 declarations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentityInvariantOperator {
+    /// Candidate value must equal the declared value byte-for-byte.
+    Equals,
+    /// Candidate value must contain the declared value byte-for-byte.
+    Includes,
+}
+
+/// One compiled identity invariant.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IdentityInvariantDeclaration {
+    /// Identity fact being constrained.
+    pub fact: IdentityFact,
+    /// Deterministic comparison operation.
+    pub operator: IdentityInvariantOperator,
+    /// Principal-declared expected value.
+    pub expected: String,
+}
+
+/// One identity fact deterministically extracted from the complete candidate
+/// familiar harness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CandidateIdentityFact {
+    /// Extracted fact.
+    pub fact: IdentityFact,
+    /// Extracted candidate value.
+    pub value: String,
+}
+
+/// Deterministic identity facts for a complete candidate familiar harness.
+///
+/// The daemon must derive these facts from the materialized candidate, not
+/// infer them from the path that changed. Missing or ambiguous extraction must
+/// be represented by omitting the fact; evaluation then fails closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CandidateIdentityFacts {
+    /// Commitment tying this extraction to the complete materialized candidate.
+    pub candidate_commitment: [u8; 32],
+    values: Vec<CandidateIdentityFact>,
+}
+
+/// Gate-4 identity evidence bound to the daemon's complete candidate harness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CandidateIdentityContext {
+    /// Daemon-computed commitment over the complete materialized harness.
+    pub candidate_commitment: [u8; 32],
+    /// Deterministically extracted facts carrying their own source commitment.
+    pub facts: CandidateIdentityFacts,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CandidateIdentityFactsWire {
+    candidate_commitment: [u8; 32],
+    values: Vec<CandidateIdentityFact>,
+}
+
+impl CandidateIdentityFacts {
+    /// Construct a validated candidate fact set.
+    pub fn try_new(
+        candidate_commitment: [u8; 32],
+        mut values: Vec<CandidateIdentityFact>,
+    ) -> Result<Self, String> {
+        values.sort_by_key(|entry| entry.fact);
+        let mut seen = BTreeSet::new();
+        for entry in &values {
+            if entry.value.trim().is_empty() {
+                return Err(format!("{:?} identity fact must not be empty", entry.fact));
+            }
+            if !seen.insert(entry.fact) {
+                return Err(format!("duplicate {:?} identity fact", entry.fact));
+            }
+        }
+        Ok(Self {
+            candidate_commitment,
+            values,
+        })
+    }
+
+    /// Return the extracted value for a fact.
+    pub fn get(&self, fact: IdentityFact) -> Option<&str> {
+        self.values
+            .iter()
+            .find(|entry| entry.fact == fact)
+            .map(|entry| entry.value.as_str())
+    }
+
+    /// Borrow the canonical fact list.
+    pub fn values(&self) -> &[CandidateIdentityFact] {
+        &self.values
+    }
+}
+
+impl<'de> Deserialize<'de> for CandidateIdentityFacts {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = CandidateIdentityFactsWire::deserialize(deserializer)?;
+        Self::try_new(wire.candidate_commitment, wire.values).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Validated set of compiled identity invariants.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct IdentityInvariantSet {
+    declarations: Vec<IdentityInvariantDeclaration>,
+}
+
+impl IdentityInvariantSet {
+    /// Compile retired Ward declaration strings such as
+    /// `familiar.name == 'Example'` and `familiar.purpose includes 'review'`.
+    ///
+    /// `familiar.name` and `familiar.person` are mandatory. Unknown fields,
+    /// unknown operators, duplicate declarations, and empty values fail closed.
+    pub fn compile<I, S>(declarations: I) -> Result<Self, Vec<String>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut compiled = Vec::new();
+        let mut errors = Vec::new();
+        for (index, declaration) in declarations.into_iter().enumerate() {
+            match parse_identity_declaration(declaration.as_ref()) {
+                Ok(declaration) => compiled.push(declaration),
+                Err(error) => errors.push(format!("invariant[{index}]: {error}")),
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        Self::try_new(compiled).map_err(|error| vec![error])
+    }
+
+    /// Construct from already-parsed declarations and validate the complete set.
+    pub fn try_new(mut declarations: Vec<IdentityInvariantDeclaration>) -> Result<Self, String> {
+        declarations.sort_by_key(|declaration| declaration.fact);
+        let mut seen = BTreeSet::new();
+        for declaration in &declarations {
+            if declaration.expected.is_empty() {
+                return Err(format!(
+                    "{:?} identity invariant expected value must not be empty",
+                    declaration.fact
+                ));
+            }
+            if !seen.insert(declaration.fact) {
+                return Err(format!(
+                    "duplicate {:?} identity invariant declaration",
+                    declaration.fact
+                ));
+            }
+        }
+        for mandatory in [IdentityFact::Name, IdentityFact::Person] {
+            if !seen.contains(&mandatory) {
+                return Err(format!(
+                    "missing mandatory {:?} identity invariant declaration",
+                    mandatory
+                ));
+            }
+        }
+        Ok(Self { declarations })
+    }
+
+    /// Evaluate candidate-harness facts without consulting the changed path.
+    ///
+    /// Callers must run this for every candidate capable of changing familiar
+    /// behaviour. A missing extraction, including an omitted optional declared
+    /// fact, is a deterministic failure rather than an advisory result.
+    pub fn evaluate(
+        &self,
+        expected_candidate_commitment: [u8; 32],
+        candidate: Option<&CandidateIdentityFacts>,
+    ) -> WeaveCoherence {
+        let Some(candidate) = candidate else {
+            return WeaveCoherence::Broken {
+                reason: "candidate identity facts unavailable — fail closed".into(),
+            };
+        };
+        if candidate.candidate_commitment != expected_candidate_commitment {
+            return WeaveCoherence::Broken {
+                reason: "candidate identity facts do not match the materialized harness".into(),
+            };
+        }
+
+        let mut failures = Vec::new();
+        for declaration in &self.declarations {
+            let Some(actual) = candidate.get(declaration.fact) else {
+                failures.push(format!(
+                    "{:?} identity fact unavailable or ambiguous",
+                    declaration.fact
+                ));
+                continue;
+            };
+            let holds = match declaration.operator {
+                IdentityInvariantOperator::Equals => actual == declaration.expected,
+                IdentityInvariantOperator::Includes => actual.contains(&declaration.expected),
+            };
+            if !holds {
+                failures.push(format!(
+                    "{:?} identity invariant did not hold",
+                    declaration.fact
+                ));
+            }
+        }
+
+        if failures.is_empty() {
+            WeaveCoherence::Coherent
+        } else {
+            WeaveCoherence::Broken {
+                reason: failures.join("; "),
+            }
+        }
+    }
+
+    /// Borrow the canonical declaration list.
+    pub fn declarations(&self) -> &[IdentityInvariantDeclaration] {
+        &self.declarations
+    }
+}
+
+impl<'de> Deserialize<'de> for IdentityInvariantSet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let declarations = Vec::<IdentityInvariantDeclaration>::deserialize(deserializer)?;
+        Self::try_new(declarations).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Authoritative pattern wrapper that joins structural thread coherence with
+/// complete-candidate semantic identity invariants.
+pub struct IdentityAwarePattern {
+    /// Structural authority predicate evaluated first.
+    pub structural: Box<dyn PatternPredicate + Send + Sync>,
+    /// Semantic identity declarations evaluated for every Gate-4 candidate.
+    pub invariants: IdentityInvariantSet,
+}
+
+impl std::fmt::Debug for IdentityAwarePattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IdentityAwarePattern")
+            .field("structural", &self.structural)
+            .field("invariants", &self.invariants)
+            .finish()
+    }
+}
+
+impl PatternPredicate for IdentityAwarePattern {
+    fn coherent(&self, _threads: &[Thread]) -> WeaveCoherence {
+        WeaveCoherence::Broken {
+            reason: "identity-aware pattern requires complete candidate evidence".into(),
+        }
+    }
+
+    fn coherent_with_context(
+        &self,
+        threads: &[Thread],
+        identity: Option<&CandidateIdentityContext>,
+    ) -> WeaveCoherence {
+        let structural = self.structural.coherent_with_context(threads, identity);
+        if matches!(structural, WeaveCoherence::Broken { .. }) {
+            return structural;
+        }
+        let identity = self.invariants.evaluate(
+            identity.map_or([0; 32], |context| context.candidate_commitment),
+            identity.map(|context| &context.facts),
+        );
+        match identity {
+            WeaveCoherence::Coherent => structural,
+            broken => broken,
+        }
+    }
+
+    fn describe(&self) -> PatternDescriptor {
+        let mut descriptor = self.structural.describe();
+        descriptor.name = format!("identity-aware({})", descriptor.name);
+        descriptor
+    }
+}
+
+fn parse_identity_declaration(value: &str) -> Result<IdentityInvariantDeclaration, String> {
+    let value = value.trim();
+    let equals = value.find(" == ");
+    let includes = value.find(" includes ");
+    let (left, operator, right) = match (equals, includes) {
+        (Some(equals), Some(includes)) if equals < includes => (
+            &value[..equals],
+            IdentityInvariantOperator::Equals,
+            &value[equals + 4..],
+        ),
+        (Some(_), Some(includes)) | (None, Some(includes)) => (
+            &value[..includes],
+            IdentityInvariantOperator::Includes,
+            &value[includes + 10..],
+        ),
+        (Some(equals), None) => (
+            &value[..equals],
+            IdentityInvariantOperator::Equals,
+            &value[equals + 4..],
+        ),
+        (None, None) => return Err("expected `==` or `includes` operator".into()),
+    };
+    let fact = IdentityFact::from_declaration_name(left.trim())
+        .ok_or_else(|| format!("unsupported identity fact {:?}", left.trim()))?;
+    let right = right.trim();
+    if right.is_empty() {
+        return Err("expected value must not be empty".into());
+    }
+    let expected = if right.starts_with('"') {
+        serde_json::from_str::<String>(right)
+            .map_err(|error| format!("invalid quoted expected value: {error}"))?
+    } else if right.starts_with('\'') {
+        if right.len() < 2 || !right.ends_with('\'') {
+            return Err("invalid single-quoted expected value".into());
+        }
+        right[1..right.len() - 1].to_string()
+    } else {
+        right.to_string()
+    };
+    if expected.is_empty() {
+        return Err("expected value must not be empty".into());
+    }
+    Ok(IdentityInvariantDeclaration {
+        fact,
+        operator,
+        expected,
+    })
+}
 
 // ---------------------------------------------------------------------------
 // FamiliarNameInvariant
 // ---------------------------------------------------------------------------
 
-/// Invariant: the familiar's declared name has not changed from the pinned
-/// value, as proven by the content hash of its primary identity surface.
+/// Coarse commitment to an identity surface's complete content.
 ///
 /// ## How it works
 ///
 /// At weave construction time, the principal records the `expected_hash` of the
-/// identity surface (e.g. `IDENTITY.md`) using [`HashAlgo::Blake3`]. At gate
+/// identity surface (e.g. `IDENTITY.md`) using
+/// [`crate::strand::HashAlgo::Blake3`]. At gate
 /// time the daemon extracts the `ContentHash` strand from the thread on that
 /// surface and compares byte-for-byte. Mismatch → fail closed.
 ///
-/// This is not a string comparison of the familiar name. It is a commitment to
-/// the entire identity surface. If the name changes, so does the hash; the
-/// invariant fails and the proposal must clear human review.
+/// This is not a semantic implementation of `familiar.name`: edits to other
+/// execution surfaces can alter identity behaviour while this hash remains
+/// unchanged. Use [`IdentityInvariantSet`] over complete candidate-harness facts
+/// for RFC-0001 identity enforcement; this predicate is supporting evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FamiliarNameInvariant {
     /// The identity surface that carries the name (typically `IDENTITY.md`).
@@ -93,52 +463,64 @@ impl PatternPredicate for FamiliarNameInvariant {
             };
         }
 
-        // Check each thread for a ContentHash strand that matches the expected
-        // hash. Any single matching, intact thread is sufficient.
-        for thread in &surface_threads {
-            if thread.holds_under(Channel::Mutation).is_err() {
-                // This thread is frayed/snapped; skip it.
-                continue;
-            }
-            for strand in &thread.strands {
-                if let Strand::ContentHash { value, .. } = strand {
-                    if value.as_slice() == self.expected_hash.as_slice() {
-                        // Hash matches on an intact thread — invariant holds.
-                        return WeaveCoherence::Coherent;
-                    } else {
-                        // Hash mismatch → fail closed; the identity surface has
-                        // been mutated without this invariant's knowledge.
-                        return WeaveCoherence::Broken {
-                            reason: format!(
-                                "FamiliarNameInvariant: content hash mismatch on {:?} — \
-                                 expected {:?}, found {:?}. Identity surface mutation \
-                                 requires human review.",
-                                self.surface,
-                                &self.expected_hash[..4],
-                                &value[..4.min(value.len())],
-                            ),
-                        };
-                    }
-                }
+        if surface_threads.len() != 1 {
+            return WeaveCoherence::Broken {
+                reason: format!(
+                    "FamiliarNameInvariant: expected exactly one authority thread for {:?}, \
+                     found {} — fail closed",
+                    self.surface,
+                    surface_threads.len()
+                ),
+            };
+        }
+        let thread = surface_threads[0];
+        for channel in [Channel::Mutation, Channel::Serialization] {
+            if let Err(error) = thread.holds_under(channel) {
+                return WeaveCoherence::Broken {
+                    reason: format!(
+                        "FamiliarNameInvariant: thread for {:?} does not hold under \
+                         {channel:?}: {error:?}",
+                        self.surface
+                    ),
+                };
             }
         }
-
-        // Surface thread exists but carries no ContentHash strand — fail closed.
-        WeaveCoherence::Broken {
-            reason: format!(
-                "FamiliarNameInvariant: thread for {:?} carries no ContentHash strand — \
-                 fail closed (decision 4: ambiguity → reject, not fallback to probe)",
-                self.surface
-            ),
+        let hashes: Vec<&[u8]> = thread
+            .strands
+            .iter()
+            .filter_map(|strand| match strand {
+                Strand::ContentHash { value, .. } => Some(value.as_slice()),
+                _ => None,
+            })
+            .collect();
+        if hashes.len() != 1 {
+            return WeaveCoherence::Broken {
+                reason: format!(
+                    "FamiliarNameInvariant: expected exactly one ContentHash strand for {:?}, \
+                     found {} — fail closed",
+                    self.surface,
+                    hashes.len()
+                ),
+            };
         }
+        if hashes[0] != self.expected_hash {
+            return WeaveCoherence::Broken {
+                reason: format!(
+                    "FamiliarNameInvariant: content hash mismatch on {:?} — \
+                     expected {:?}, found {:?}. Identity surface mutation \
+                     requires human review.",
+                    self.surface,
+                    &self.expected_hash[..4],
+                    &hashes[0][..4.min(hashes[0].len())],
+                ),
+            };
+        }
+        WeaveCoherence::Coherent
     }
 
     fn describe(&self) -> PatternDescriptor {
         PatternDescriptor {
-            name: format!(
-                "familiar-name-invariant({})",
-                self.surface.as_str()
-            ),
+            name: format!("familiar-name-invariant({})", self.surface.as_str()),
             protected_surfaces: vec![self.surface.clone()],
             channels_required: vec![Channel::Mutation, Channel::Serialization],
             strand_requirements: vec![StrandRequirement {
@@ -188,46 +570,63 @@ impl PatternPredicate for ManifestAnchoredInvariant {
             };
         }
 
-        for thread in &surface_threads {
-            // Forced channel is the strictest; if the thread doesn't hold
-            // under Forced, it cannot prove survival across compaction.
-            if thread.holds_under(Channel::Forced).is_err() {
-                continue;
-            }
-            for strand in &thread.strands {
-                if let Strand::ManifestEntry { entry_hash, .. } = strand {
-                    if entry_hash.as_slice() == self.expected_entry_hash.as_slice() {
-                        return WeaveCoherence::Coherent;
-                    } else {
-                        return WeaveCoherence::Broken {
-                            reason: format!(
-                                "ManifestAnchoredInvariant: manifest entry hash mismatch \
-                                 on {:?} — pinned {:?}, found {:?}. Requires principal review.",
-                                self.surface,
-                                &self.expected_entry_hash[..4],
-                                &entry_hash[..4.min(entry_hash.len())],
-                            ),
-                        };
-                    }
-                }
+        if surface_threads.len() != 1 {
+            return WeaveCoherence::Broken {
+                reason: format!(
+                    "ManifestAnchoredInvariant: expected exactly one authority thread for {:?}, \
+                     found {} — fail closed",
+                    self.surface,
+                    surface_threads.len()
+                ),
+            };
+        }
+        let thread = surface_threads[0];
+        for channel in [Channel::Forced, Channel::Serialization] {
+            if let Err(error) = thread.holds_under(channel) {
+                return WeaveCoherence::Broken {
+                    reason: format!(
+                        "ManifestAnchoredInvariant: thread for {:?} does not hold under \
+                         {channel:?}: {error:?}",
+                        self.surface
+                    ),
+                };
             }
         }
-
-        WeaveCoherence::Broken {
-            reason: format!(
-                "ManifestAnchoredInvariant: no Forced-intact ManifestEntry strand for \
-                 {:?} — fail closed (WARD-C1..C6: must survive compaction)",
-                self.surface
-            ),
+        let entries: Vec<&[u8]> = thread
+            .strands
+            .iter()
+            .filter_map(|strand| match strand {
+                Strand::ManifestEntry { entry_hash, .. } => Some(entry_hash.as_slice()),
+                _ => None,
+            })
+            .collect();
+        if entries.len() != 1 {
+            return WeaveCoherence::Broken {
+                reason: format!(
+                    "ManifestAnchoredInvariant: expected exactly one ManifestEntry strand for \
+                     {:?}, found {} — fail closed",
+                    self.surface,
+                    entries.len()
+                ),
+            };
         }
+        if entries[0] != self.expected_entry_hash {
+            return WeaveCoherence::Broken {
+                reason: format!(
+                    "ManifestAnchoredInvariant: manifest entry hash mismatch on {:?} — \
+                     pinned {:?}, found {:?}. Requires principal review.",
+                    self.surface,
+                    &self.expected_entry_hash[..4],
+                    &entries[0][..4.min(entries[0].len())],
+                ),
+            };
+        }
+        WeaveCoherence::Coherent
     }
 
     fn describe(&self) -> PatternDescriptor {
         PatternDescriptor {
-            name: format!(
-                "manifest-anchored-invariant({})",
-                self.surface.as_str()
-            ),
+            name: format!("manifest-anchored-invariant({})", self.surface.as_str()),
             protected_surfaces: vec![self.surface.clone()],
             channels_required: vec![Channel::Forced, Channel::Serialization],
             strand_requirements: vec![
@@ -278,6 +677,7 @@ impl PatternPredicate for CompositeIdentityInvariant {
         let mut degraded_surfaces: Vec<SurfaceId> = Vec::new();
         let mut broken_reasons: Vec<String> = Vec::new();
         let mut degraded_reasons: Vec<String> = Vec::new();
+        let mut saw_degraded = false;
 
         for component in &self.components {
             match component.coherent(threads) {
@@ -286,6 +686,7 @@ impl PatternPredicate for CompositeIdentityInvariant {
                     degraded_surfaces: mut s,
                     reason,
                 } => {
+                    saw_degraded = true;
                     degraded_surfaces.append(&mut s);
                     degraded_reasons.push(reason);
                 }
@@ -299,7 +700,7 @@ impl PatternPredicate for CompositeIdentityInvariant {
             WeaveCoherence::Broken {
                 reason: broken_reasons.join("; "),
             }
-        } else if !degraded_surfaces.is_empty() {
+        } else if saw_degraded {
             WeaveCoherence::Degraded {
                 degraded_surfaces,
                 reason: degraded_reasons.join("; "),
@@ -418,11 +819,9 @@ impl AdvisoryProbeResult {
     ///   wire-received values)
     pub fn validate(&self) -> Result<(), String> {
         if self.is_authoritative {
-            return Err(
-                "AdvisoryProbeResult.is_authoritative must be false — \
+            return Err("AdvisoryProbeResult.is_authoritative must be false — \
                  advisory probes are never authoritative (decision 4)"
-                    .into(),
-            );
+                .into());
         }
         if let Some(c) = self.confidence {
             if !(0.0..=1.0).contains(&c) {
@@ -507,14 +906,174 @@ mod tests {
                     contract_hash: vec![0xcc; 32],
                 },
             ],
-            holds_under: vec![
-                Channel::Forced,
-                Channel::Serialization,
-                Channel::Mutation,
-            ],
+            holds_under: vec![Channel::Forced, Channel::Serialization, Channel::Mutation],
             created_at: OffsetDateTime::UNIX_EPOCH,
             tension: TensionState::Holds,
         }
+    }
+
+    fn full_invariant_set() -> IdentityInvariantSet {
+        IdentityInvariantSet::compile([
+            r#"familiar.name == "Nova""#,
+            r#"familiar.person == "Val""#,
+            r#"familiar.pronouns == "she/her""#,
+            r#"familiar.purpose includes "authority""#,
+            r#"familiar.coven == "OpenCoven""#,
+        ])
+        .unwrap()
+    }
+
+    fn full_candidate_facts() -> CandidateIdentityFacts {
+        CandidateIdentityFacts::try_new(
+            [0x42; 32],
+            vec![
+                CandidateIdentityFact {
+                    fact: IdentityFact::Name,
+                    value: "Nova".into(),
+                },
+                CandidateIdentityFact {
+                    fact: IdentityFact::Person,
+                    value: "Val".into(),
+                },
+                CandidateIdentityFact {
+                    fact: IdentityFact::Pronouns,
+                    value: "she/her".into(),
+                },
+                CandidateIdentityFact {
+                    fact: IdentityFact::Purpose,
+                    value: "protect the authority boundary".into(),
+                },
+                CandidateIdentityFact {
+                    fact: IdentityFact::Coven,
+                    value: "OpenCoven".into(),
+                },
+            ],
+        )
+        .unwrap()
+    }
+
+    #[derive(Debug)]
+    struct EmptyDegradedPredicate;
+
+    impl PatternPredicate for EmptyDegradedPredicate {
+        fn coherent(&self, _threads: &[Thread]) -> WeaveCoherence {
+            WeaveCoherence::Degraded {
+                degraded_surfaces: vec![],
+                reason: "ambiguous degradation".into(),
+            }
+        }
+
+        fn describe(&self) -> PatternDescriptor {
+            PatternDescriptor {
+                name: "empty-degraded".into(),
+                protected_surfaces: vec![],
+                channels_required: vec![],
+                strand_requirements: vec![],
+            }
+        }
+    }
+
+    #[test]
+    fn retired_invariant_declarations_compile_with_full_fidelity() {
+        let invariants = full_invariant_set();
+        assert_eq!(invariants.declarations().len(), 5);
+        assert_eq!(
+            invariants.declarations()[0].fact,
+            IdentityFact::Name,
+            "declarations are canonicalized"
+        );
+        assert!(matches!(
+            invariants.evaluate([0x42; 32], Some(&full_candidate_facts())),
+            WeaveCoherence::Coherent
+        ));
+
+        let encoded = serde_json::to_string(&invariants).unwrap();
+        let decoded: IdentityInvariantSet = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, invariants);
+    }
+
+    #[test]
+    fn normative_single_quoted_declarations_compile_and_evaluate() {
+        let invariants = IdentityInvariantSet::compile([
+            "familiar.name == 'Nova'",
+            "familiar.person == 'Val'",
+            "familiar.pronouns == 'she/her'",
+            "familiar.purpose includes 'authority'",
+            "familiar.coven == 'OpenCoven'",
+        ])
+        .unwrap();
+        assert!(matches!(
+            invariants.evaluate([0x42; 32], Some(&full_candidate_facts())),
+            WeaveCoherence::Coherent
+        ));
+    }
+
+    #[test]
+    fn compiler_requires_name_and_person() {
+        let errors = IdentityInvariantSet::compile([
+            r#"familiar.pronouns == "she/her""#,
+            r#"familiar.purpose includes "authority""#,
+        ])
+        .unwrap_err();
+        assert!(errors.iter().any(|error| error.contains("Name")));
+    }
+
+    #[test]
+    fn compiler_uses_the_first_declared_operator_not_rhs_text() {
+        let invariants = IdentityInvariantSet::compile([
+            r#"familiar.name == "Nova includes review""#,
+            r#"familiar.person == "Val""#,
+        ])
+        .unwrap();
+        assert_eq!(
+            invariants.declarations()[0].expected,
+            "Nova includes review"
+        );
+    }
+
+    #[test]
+    fn candidate_fact_drift_fails_even_without_a_path_specific_check() {
+        let invariants = full_invariant_set();
+        let mut facts = full_candidate_facts();
+        facts
+            .values
+            .iter_mut()
+            .find(|entry| entry.fact == IdentityFact::Person)
+            .unwrap()
+            .value = "someone else".into();
+
+        assert!(matches!(
+            invariants.evaluate([0x42; 32], Some(&facts)),
+            WeaveCoherence::Broken { .. }
+        ));
+    }
+
+    #[test]
+    fn missing_candidate_extraction_fails_closed() {
+        assert!(matches!(
+            full_invariant_set().evaluate([0x42; 32], None),
+            WeaveCoherence::Broken { .. }
+        ));
+    }
+
+    #[test]
+    fn stale_candidate_fact_extraction_fails_closed() {
+        assert!(matches!(
+            full_invariant_set().evaluate([0x99; 32], Some(&full_candidate_facts())),
+            WeaveCoherence::Broken { .. }
+        ));
+    }
+
+    #[test]
+    fn candidate_fact_deserialization_rejects_duplicates() {
+        let json = format!(
+            r#"{{"candidate_commitment":[{}],"values":[
+                {{"fact":"name","value":"Nova"}},
+                {{"fact":"name","value":"Other"}}
+            ]}}"#,
+            vec!["0"; 32].join(",")
+        );
+        assert!(serde_json::from_str::<CandidateIdentityFacts>(&json).is_err());
     }
 
     // ---- FamiliarNameInvariant ----
@@ -574,13 +1133,53 @@ mod tests {
             description: "name must not change".into(),
         };
         let mut thread = hash_thread("IDENTITY.md", expected);
-        thread.snap(Channel::Mutation, SnapReason::Revoked, OffsetDateTime::now_utc());
+        thread.snap(
+            Channel::Mutation,
+            SnapReason::Revoked,
+            OffsetDateTime::now_utc(),
+        );
         // After snap, holds_under(Mutation) fails → thread is skipped → no
         // valid evidence → Broken.
         match inv.coherent(&[thread]) {
             WeaveCoherence::Broken { .. } => {}
             other => panic!("expected Broken with snapped thread, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn familiar_name_invariant_requires_serialization_survival() {
+        let expected = [0xab; 32];
+        let inv = FamiliarNameInvariant {
+            surface: SurfaceId::new("IDENTITY.md"),
+            expected_hash: expected,
+            description: "name must survive serialization".into(),
+        };
+        let mut thread = hash_thread("IDENTITY.md", expected);
+        thread
+            .strands
+            .retain(|strand| !matches!(strand, Strand::SerializationMarker { .. }));
+
+        assert!(matches!(
+            inv.coherent(&[thread]),
+            WeaveCoherence::Broken { .. }
+        ));
+    }
+
+    #[test]
+    fn familiar_name_invariant_rejects_conflicting_threads() {
+        let expected = [0xab; 32];
+        let inv = FamiliarNameInvariant {
+            surface: SurfaceId::new("IDENTITY.md"),
+            expected_hash: expected,
+            description: "name must not conflict".into(),
+        };
+        let mut conflicting = hash_thread("IDENTITY.md", [0xcd; 32]);
+        conflicting.writer = WriterId::new("principal:other");
+
+        assert!(matches!(
+            inv.coherent(&[hash_thread("IDENTITY.md", expected), conflicting]),
+            WeaveCoherence::Broken { .. }
+        ));
     }
 
     #[test]
@@ -591,7 +1190,9 @@ mod tests {
             description: "test".into(),
         };
         let d = inv.describe();
-        assert!(d.protected_surfaces.contains(&SurfaceId::new("IDENTITY.md")));
+        assert!(d
+            .protected_surfaces
+            .contains(&SurfaceId::new("IDENTITY.md")));
         assert!(d.channels_required.contains(&Channel::Mutation));
         assert!(d
             .strand_requirements
@@ -633,6 +1234,42 @@ mod tests {
         }
     }
 
+    #[test]
+    fn manifest_anchored_invariant_requires_serialization_survival() {
+        let expected = [0x11; 32];
+        let inv = ManifestAnchoredInvariant {
+            surface: SurfaceId::new("SOUL.md"),
+            expected_entry_hash: expected,
+            description: "manifest must survive serialization".into(),
+        };
+        let mut thread = hash_thread("SOUL.md", expected);
+        thread
+            .strands
+            .retain(|strand| !matches!(strand, Strand::SerializationMarker { .. }));
+
+        assert!(matches!(
+            inv.coherent(&[thread]),
+            WeaveCoherence::Broken { .. }
+        ));
+    }
+
+    #[test]
+    fn manifest_anchored_invariant_rejects_conflicting_threads() {
+        let expected = [0x11; 32];
+        let inv = ManifestAnchoredInvariant {
+            surface: SurfaceId::new("SOUL.md"),
+            expected_entry_hash: expected,
+            description: "manifest must not conflict".into(),
+        };
+        let mut conflicting = hash_thread("SOUL.md", [0x22; 32]);
+        conflicting.writer = WriterId::new("principal:other");
+
+        assert!(matches!(
+            inv.coherent(&[hash_thread("SOUL.md", expected), conflicting]),
+            WeaveCoherence::Broken { .. }
+        ));
+    }
+
     // ---- CompositeIdentityInvariant ----
 
     #[test]
@@ -658,6 +1295,18 @@ mod tests {
             hash_thread("SOUL.md", hash),
         ];
         assert_eq!(composite.coherent(&threads), WeaveCoherence::Coherent);
+    }
+
+    #[test]
+    fn composite_preserves_degraded_result_with_no_surfaces() {
+        let composite = CompositeIdentityInvariant {
+            name: "degraded".into(),
+            components: vec![Box::new(EmptyDegradedPredicate)],
+        };
+        assert!(matches!(
+            composite.coherent(&[]),
+            WeaveCoherence::Degraded { .. }
+        ));
     }
 
     #[test]
@@ -705,7 +1354,9 @@ mod tests {
             ],
         };
         let d = composite.describe();
-        assert!(d.protected_surfaces.contains(&SurfaceId::new("IDENTITY.md")));
+        assert!(d
+            .protected_surfaces
+            .contains(&SurfaceId::new("IDENTITY.md")));
         assert!(d.protected_surfaces.contains(&SurfaceId::new("SOUL.md")));
         assert!(d.channels_required.contains(&Channel::Mutation));
         assert!(d.channels_required.contains(&Channel::Forced));
@@ -723,7 +1374,10 @@ mod tests {
             Some("name field appears changed".into()),
             true,
         );
-        assert!(!probe.is_authoritative, "advisory probes must never be authoritative");
+        assert!(
+            !probe.is_authoritative,
+            "advisory probes must never be authoritative"
+        );
         assert!(probe.validate().is_ok());
     }
 
@@ -778,7 +1432,13 @@ mod tests {
     fn advisory_probes_roundtrips_json() {
         let block = AdvisoryProbes {
             results: vec![
-                AdvisoryProbeResult::new("semantic_drift", "Drift", Some(0.75), Some("shifted".into()), false),
+                AdvisoryProbeResult::new(
+                    "semantic_drift",
+                    "Drift",
+                    Some(0.75),
+                    Some("shifted".into()),
+                    false,
+                ),
                 AdvisoryProbeResult::new("pattern_match", "Pattern", None, None, true),
             ],
         };

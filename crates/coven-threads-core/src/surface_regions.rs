@@ -66,9 +66,10 @@ use crate::ids::SurfaceId;
 /// no network calls, no agent self-report, no stale metadata. The daemon must
 /// be able to replay the same computation at Gate-4 deadline.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "MaterializedDiffWire")]
 pub struct MaterializedDiff {
     /// The per-surface before/after pairs.
-    pub surfaces: Vec<SurfaceDiff>,
+    surfaces: Vec<SurfaceDiff>,
 }
 
 /// Before/after for a single surface.
@@ -100,6 +101,25 @@ impl SurfaceDiff {
 }
 
 impl MaterializedDiff {
+    /// Construct a materialized diff, rejecting duplicate surface entries.
+    pub fn try_new(surfaces: Vec<SurfaceDiff>) -> Result<Self, String> {
+        let mut seen = std::collections::BTreeSet::new();
+        for surface in &surfaces {
+            if !seen.insert(surface.surface.as_str()) {
+                return Err(format!(
+                    "materialized diff contains duplicate surface {:?}",
+                    surface.surface.as_str()
+                ));
+            }
+        }
+        Ok(Self { surfaces })
+    }
+
+    /// All surface entries in this materialized diff.
+    pub fn surfaces(&self) -> &[SurfaceDiff] {
+        &self.surfaces
+    }
+
     /// Look up the diff for a specific surface.
     pub fn for_surface(&self, surface: &SurfaceId) -> Option<&SurfaceDiff> {
         self.surfaces.iter().find(|s| &s.surface == surface)
@@ -108,6 +128,19 @@ impl MaterializedDiff {
     /// All surfaces that are modified (added, changed, or deleted).
     pub fn modified_surfaces(&self) -> impl Iterator<Item = &SurfaceDiff> {
         self.surfaces.iter().filter(|s| s.is_modified())
+    }
+}
+
+#[derive(Deserialize)]
+struct MaterializedDiffWire {
+    surfaces: Vec<SurfaceDiff>,
+}
+
+impl TryFrom<MaterializedDiffWire> for MaterializedDiff {
+    type Error = String;
+
+    fn try_from(value: MaterializedDiffWire) -> Result<Self, Self::Error> {
+        Self::try_new(value.surfaces)
     }
 }
 
@@ -135,6 +168,101 @@ pub struct RegionEvidence {
     pub replay_bytes: Vec<u8>,
     /// Human-readable explanation of why this region was triggered.
     pub rationale: String,
+}
+
+/// Canonical Blake3 commitment over the materialized diff and region evidence.
+///
+/// Diff, evidence, and affected-surface ordering do not affect the result.
+/// Human rationale is deliberately excluded because it is derived display
+/// text, not authority. Every committed field is length-prefixed to prevent
+/// boundary ambiguity.
+pub fn evidence_replay_hash(diff: &MaterializedDiff, evidence: &[RegionEvidence]) -> [u8; 32] {
+    let mut entries: Vec<Vec<u8>> = evidence
+        .iter()
+        .map(|item| {
+            let mut encoded = Vec::new();
+            push_len_prefixed(&mut encoded, item.region_id.as_str().as_bytes());
+            encoded.push(item.min_path_tier);
+
+            let mut surfaces: Vec<&str> = item
+                .affected_surfaces
+                .iter()
+                .map(SurfaceId::as_str)
+                .collect();
+            surfaces.sort_unstable();
+            encoded.extend_from_slice(&(surfaces.len() as u64).to_le_bytes());
+            for surface in surfaces {
+                push_len_prefixed(&mut encoded, surface.as_bytes());
+            }
+            push_len_prefixed(&mut encoded, &item.replay_bytes);
+            encoded
+        })
+        .collect();
+    entries.sort();
+
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"coven-threads:proposal-evidence:v2");
+    let diff_commitment = materialized_diff_commitment(diff);
+    hasher.update(&(diff_commitment.len() as u64).to_le_bytes());
+    hasher.update(&diff_commitment);
+    hasher.update(&(entries.len() as u64).to_le_bytes());
+    for entry in entries {
+        hasher.update(&(entry.len() as u64).to_le_bytes());
+        hasher.update(&entry);
+    }
+    *hasher.finalize().as_bytes()
+}
+
+fn materialized_diff_commitment(diff: &MaterializedDiff) -> Vec<u8> {
+    let mut surfaces: Vec<_> = diff.surfaces().iter().collect();
+    surfaces.sort_by(|left, right| left.surface.as_str().cmp(right.surface.as_str()));
+
+    let mut commitment = Vec::new();
+    push_len_prefixed(
+        &mut commitment,
+        b"coven-threads:materialized-diff-commitment:v1",
+    );
+    commitment.extend_from_slice(&(surfaces.len() as u64).to_le_bytes());
+    for surface in surfaces {
+        push_len_prefixed(&mut commitment, surface.surface.as_str().as_bytes());
+        push_optional_content_commitment(&mut commitment, surface.before.as_deref());
+        push_optional_content_commitment(&mut commitment, surface.after.as_deref());
+    }
+    commitment
+}
+
+fn push_len_prefixed(output: &mut Vec<u8>, bytes: &[u8]) {
+    output.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+    output.extend_from_slice(bytes);
+}
+
+fn materialized_surface_replay(proposal: &MaterializedDiff, affected: &[SurfaceId]) -> Vec<u8> {
+    let mut surfaces = affected.to_vec();
+    surfaces.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+
+    let mut replay = Vec::new();
+    push_len_prefixed(&mut replay, b"coven-threads:surface-region-replay:v1");
+    replay.extend_from_slice(&(surfaces.len() as u64).to_le_bytes());
+    for surface in surfaces {
+        push_len_prefixed(&mut replay, surface.as_str().as_bytes());
+        let diff = proposal
+            .for_surface(&surface)
+            .expect("affected surfaces are selected from the materialized diff");
+        push_optional_content_commitment(&mut replay, diff.before.as_deref());
+        push_optional_content_commitment(&mut replay, diff.after.as_deref());
+    }
+    replay
+}
+
+fn push_optional_content_commitment(output: &mut Vec<u8>, content: Option<&[u8]>) {
+    match content {
+        Some(bytes) => {
+            output.push(1);
+            output.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+            output.extend_from_slice(blake3::hash(bytes).as_bytes());
+        }
+        None => output.push(0),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -224,20 +352,7 @@ impl SurfaceRegionPredicate for ExecutionPromptRegion {
             return None;
         }
 
-        // Deterministic replay bytes: sorted surface ids + content hashes.
-        let mut replay_bytes = Vec::new();
-        let mut sorted = affected.clone();
-        sorted.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for surface in &sorted {
-            replay_bytes.extend_from_slice(surface.as_str().as_bytes());
-            replay_bytes.push(b':');
-            if let Some(diff) = proposal.for_surface(surface) {
-                if let Some(after) = &diff.after {
-                    replay_bytes.extend_from_slice(after);
-                }
-            }
-            replay_bytes.push(b'\n');
-        }
+        let replay_bytes = materialized_surface_replay(proposal, &affected);
 
         Some(RegionEvidence {
             region_id: SurfaceRegionId::new("execution_prompt"),
@@ -296,19 +411,7 @@ impl SurfaceRegionPredicate for ToolDefaultsRegion {
             return None;
         }
 
-        let mut replay_bytes = Vec::new();
-        let mut sorted = affected.clone();
-        sorted.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for surface in &sorted {
-            replay_bytes.extend_from_slice(surface.as_str().as_bytes());
-            replay_bytes.push(b':');
-            if let Some(diff) = proposal.for_surface(surface) {
-                if let Some(after) = &diff.after {
-                    replay_bytes.extend_from_slice(after);
-                }
-            }
-            replay_bytes.push(b'\n');
-        }
+        let replay_bytes = materialized_surface_replay(proposal, &affected);
 
         Some(RegionEvidence {
             region_id: SurfaceRegionId::new("tool_defaults"),
@@ -336,10 +439,12 @@ impl SurfaceRegionPredicate for ToolDefaultsRegion {
 /// Requires at least familiar review (tier floor 1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeartbeatBehaviorRegion {
+    /// Surfaces that define heartbeat behavior.
     pub heartbeat_surfaces: Vec<SurfaceId>,
 }
 
 impl HeartbeatBehaviorRegion {
+    /// Default heartbeat behavior surface.
     pub fn default_protected() -> Self {
         Self {
             heartbeat_surfaces: vec![SurfaceId::new("HEARTBEAT.md")],
@@ -365,15 +470,7 @@ impl SurfaceRegionPredicate for HeartbeatBehaviorRegion {
             return None;
         }
 
-        let mut replay_bytes = Vec::new();
-        for surface in &affected {
-            replay_bytes.extend_from_slice(surface.as_str().as_bytes());
-            if let Some(diff) = proposal.for_surface(surface) {
-                if let Some(after) = &diff.after {
-                    replay_bytes.extend_from_slice(after);
-                }
-            }
-        }
+        let replay_bytes = materialized_surface_replay(proposal, &affected);
 
         Some(RegionEvidence {
             region_id: SurfaceRegionId::new("heartbeat_behavior"),
@@ -461,13 +558,12 @@ mod tests {
     use super::*;
 
     fn diff_with(surface: &str, before: Option<&[u8]>, after: Option<&[u8]>) -> MaterializedDiff {
-        MaterializedDiff {
-            surfaces: vec![SurfaceDiff {
-                surface: SurfaceId::new(surface),
-                before: before.map(|b| b.to_vec()),
-                after: after.map(|b| b.to_vec()),
-            }],
-        }
+        MaterializedDiff::try_new(vec![SurfaceDiff {
+            surface: SurfaceId::new(surface),
+            before: before.map(|b| b.to_vec()),
+            after: after.map(|b| b.to_vec()),
+        }])
+        .unwrap()
     }
 
     // ---- SurfaceDiff helpers ----
@@ -498,6 +594,33 @@ mod tests {
         assert!(deleted.is_deletion());
     }
 
+    #[test]
+    fn materialized_diff_rejects_duplicate_surfaces() {
+        let duplicate = vec![
+            SurfaceDiff {
+                surface: SurfaceId::new("SOUL.md"),
+                before: Some(b"old".to_vec()),
+                after: Some(b"unchanged".to_vec()),
+            },
+            SurfaceDiff {
+                surface: SurfaceId::new("SOUL.md"),
+                before: Some(b"old".to_vec()),
+                after: Some(b"changed".to_vec()),
+            },
+        ];
+
+        assert!(MaterializedDiff::try_new(duplicate).is_err());
+    }
+
+    #[test]
+    fn materialized_diff_deserialization_rejects_duplicate_surfaces() {
+        let json = r#"{"surfaces":[
+            {"surface":"SOUL.md","before":null,"after":[97]},
+            {"surface":"SOUL.md","before":[97],"after":[98]}
+        ]}"#;
+        assert!(serde_json::from_str::<MaterializedDiff>(json).is_err());
+    }
+
     // ---- ExecutionPromptRegion ----
 
     #[test]
@@ -524,23 +647,50 @@ mod tests {
     fn execution_prompt_region_replay_bytes_are_deterministic() {
         // Gate-4 replay: same diff → same replay_bytes.
         let region = ExecutionPromptRegion::default_protected();
-        let diff = MaterializedDiff {
-            surfaces: vec![
-                SurfaceDiff {
-                    surface: SurfaceId::new("SOUL.md"),
-                    before: Some(b"A".to_vec()),
-                    after: Some(b"B".to_vec()),
-                },
-                SurfaceDiff {
-                    surface: SurfaceId::new("AGENTS.md"),
-                    before: Some(b"X".to_vec()),
-                    after: Some(b"Y".to_vec()),
-                },
-            ],
-        };
+        let diff = MaterializedDiff::try_new(vec![
+            SurfaceDiff {
+                surface: SurfaceId::new("SOUL.md"),
+                before: Some(b"A".to_vec()),
+                after: Some(b"B".to_vec()),
+            },
+            SurfaceDiff {
+                surface: SurfaceId::new("AGENTS.md"),
+                before: Some(b"X".to_vec()),
+                after: Some(b"Y".to_vec()),
+            },
+        ])
+        .unwrap();
         let ev1 = region.materialize(&diff).unwrap();
         let ev2 = region.materialize(&diff).unwrap();
-        assert_eq!(ev1.replay_bytes, ev2.replay_bytes, "replay must be deterministic");
+        assert_eq!(
+            ev1.replay_bytes, ev2.replay_bytes,
+            "replay must be deterministic"
+        );
+    }
+
+    #[test]
+    fn execution_prompt_replay_commits_the_before_state() {
+        let region = ExecutionPromptRegion::default_protected();
+        let first = diff_with("SOUL.md", Some(b"old-a"), Some(b"same-result"));
+        let second = diff_with("SOUL.md", Some(b"old-b"), Some(b"same-result"));
+
+        assert_ne!(
+            region.materialize(&first).unwrap().replay_bytes,
+            region.materialize(&second).unwrap().replay_bytes,
+            "intervening live-state drift must change replay evidence"
+        );
+    }
+
+    #[test]
+    fn execution_prompt_replay_distinguishes_delete_from_empty_replace() {
+        let region = ExecutionPromptRegion::default_protected();
+        let deleted = diff_with("SOUL.md", Some(b"old"), None);
+        let emptied = diff_with("SOUL.md", Some(b"old"), Some(b""));
+
+        assert_ne!(
+            region.materialize(&deleted).unwrap().replay_bytes,
+            region.materialize(&emptied).unwrap().replay_bytes
+        );
     }
 
     #[test]
@@ -581,20 +731,19 @@ mod tests {
     #[test]
     fn registry_classify_all_multiple_regions() {
         let registry = SurfaceRegionRegistry::default_registry();
-        let diff = MaterializedDiff {
-            surfaces: vec![
-                SurfaceDiff {
-                    surface: SurfaceId::new("SOUL.md"),
-                    before: Some(b"old".to_vec()),
-                    after: Some(b"new".to_vec()),
-                },
-                SurfaceDiff {
-                    surface: SurfaceId::new("TOOLS.md"),
-                    before: Some(b"old".to_vec()),
-                    after: Some(b"new".to_vec()),
-                },
-            ],
-        };
+        let diff = MaterializedDiff::try_new(vec![
+            SurfaceDiff {
+                surface: SurfaceId::new("SOUL.md"),
+                before: Some(b"old".to_vec()),
+                after: Some(b"new".to_vec()),
+            },
+            SurfaceDiff {
+                surface: SurfaceId::new("TOOLS.md"),
+                before: Some(b"old".to_vec()),
+                after: Some(b"new".to_vec()),
+            },
+        ])
+        .unwrap();
         let evidence = registry.classify_all(&diff);
         assert_eq!(evidence.len(), 2);
     }
@@ -647,5 +796,95 @@ mod tests {
         let registry = SurfaceRegionRegistry::default_registry();
         let diff = diff_with("CHANGELOG.md", Some(b"old"), Some(b"new"));
         assert!(registry.classify_all(&diff).is_empty());
+    }
+
+    #[test]
+    fn evidence_replay_hash_is_independent_of_evidence_order() {
+        let first = RegionEvidence {
+            region_id: SurfaceRegionId::new("execution_prompt"),
+            affected_surfaces: vec![SurfaceId::new("SOUL.md")],
+            min_path_tier: 0,
+            replay_bytes: b"alpha".to_vec(),
+            rationale: "display only".into(),
+        };
+        let second = RegionEvidence {
+            region_id: SurfaceRegionId::new("tool_defaults"),
+            affected_surfaces: vec![SurfaceId::new("TOOLS.md")],
+            min_path_tier: 1,
+            replay_bytes: b"beta".to_vec(),
+            rationale: "display only".into(),
+        };
+
+        assert_eq!(
+            evidence_replay_hash(
+                &diff_with("README.md", Some(b"a"), Some(b"b")),
+                &[first.clone(), second.clone()]
+            ),
+            evidence_replay_hash(
+                &diff_with("README.md", Some(b"a"), Some(b"b")),
+                &[second, first]
+            )
+        );
+    }
+
+    #[test]
+    fn evidence_replay_hash_commits_field_boundaries() {
+        let split = RegionEvidence {
+            region_id: SurfaceRegionId::new("ab"),
+            affected_surfaces: vec![SurfaceId::new("c")],
+            min_path_tier: 1,
+            replay_bytes: b"d".to_vec(),
+            rationale: String::new(),
+        };
+        let joined = RegionEvidence {
+            region_id: SurfaceRegionId::new("a"),
+            affected_surfaces: vec![SurfaceId::new("bc")],
+            min_path_tier: 1,
+            replay_bytes: b"d".to_vec(),
+            rationale: String::new(),
+        };
+
+        assert_ne!(
+            evidence_replay_hash(&diff_with("README.md", Some(b"a"), Some(b"b")), &[split]),
+            evidence_replay_hash(&diff_with("README.md", Some(b"a"), Some(b"b")), &[joined])
+        );
+    }
+
+    #[test]
+    fn evidence_replay_hash_commits_unclassified_surfaces() {
+        let first = MaterializedDiff::try_new(vec![
+            SurfaceDiff {
+                surface: SurfaceId::new("SOUL.md"),
+                before: Some(b"old".to_vec()),
+                after: Some(b"new".to_vec()),
+            },
+            SurfaceDiff {
+                surface: SurfaceId::new("README.md"),
+                before: Some(b"a".to_vec()),
+                after: Some(b"b".to_vec()),
+            },
+        ])
+        .unwrap();
+        let second = MaterializedDiff::try_new(vec![
+            SurfaceDiff {
+                surface: SurfaceId::new("SOUL.md"),
+                before: Some(b"old".to_vec()),
+                after: Some(b"new".to_vec()),
+            },
+            SurfaceDiff {
+                surface: SurfaceId::new("README.md"),
+                before: Some(b"a".to_vec()),
+                after: Some(b"c".to_vec()),
+            },
+        ])
+        .unwrap();
+        let region = ExecutionPromptRegion::default_protected();
+        let first_evidence = vec![region.materialize(&first).unwrap()];
+        let second_evidence = vec![region.materialize(&second).unwrap()];
+
+        assert_ne!(
+            evidence_replay_hash(&first, &first_evidence),
+            evidence_replay_hash(&second, &second_evidence)
+        );
     }
 }

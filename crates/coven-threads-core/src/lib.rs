@@ -56,36 +56,38 @@
 pub mod approval;
 pub mod audit;
 pub mod channel;
-pub mod identity_invariants;
-pub mod surface_regions;
 pub mod fray;
+pub mod identity_invariants;
 pub mod ids;
 pub mod manifest;
 pub mod pattern;
 pub mod portability;
 pub mod staging;
 pub mod strand;
+pub mod surface_regions;
 pub mod thread;
 pub mod validate;
 pub mod weave;
 
-pub use surface_regions::{
-    ExecutionPromptRegion, HeartbeatBehaviorRegion, MaterializedDiff, RegionEvidence,
-    SurfaceDiff, SurfaceRegionDescriptor, SurfaceRegionPredicate, SurfaceRegionRegistry,
-    ToolDefaultsRegion,
-};
-pub use identity_invariants::{
-    AdvisoryProbeResult, AdvisoryProbes, CompositeIdentityInvariant, FamiliarNameInvariant,
-    ManifestAnchoredInvariant,
-};
 pub use approval::{
-    ApprovalPath, ApprovalPathKind, ApprovalPathWireEnvelope, ProposalClassification,
-    ProposalWindowAuditDetail, ProposalWindowCloseAuditDetail, SurfaceRegionId, VetoWindow,
-    WindowCloseReason,
+    ApprovalPath, ApprovalPathKind, ApprovalPathWireEnvelope, ProposalApprovalAuditDetail,
+    ProposalClassification, ProposalWindowAuditDetail, ProposalWindowCloseAuditDetail,
+    SurfaceRegionId, VetoWindow, WindowCloseReason,
 };
-pub use audit::{AuditEventType, WardAuditRecord, WARD_AUDIT_SCHEMA_SQL};
+pub use audit::{
+    ward_audit_migration_sql, ward_audit_schema_action, AuditEventType,
+    MemoryEntryAdmissionAuditDetail, PrincipalAuthorizedWriteAuditDetail, WardAuditRecord,
+    WardAuditSchemaAction, WARD_AUDIT_SCHEMA_SQL, WARD_AUDIT_SCHEMA_VERSION,
+    WARD_AUDIT_STAMP_V020_SQL,
+};
 pub use channel::Channel;
 pub use fray::{FrayOrSnap, FrayReason, SnapReason};
+pub use identity_invariants::{
+    AdvisoryProbeResult, AdvisoryProbes, CandidateIdentityContext, CandidateIdentityFact,
+    CandidateIdentityFacts, CompositeIdentityInvariant, FamiliarNameInvariant,
+    IdentityAwarePattern, IdentityFact, IdentityInvariantDeclaration, IdentityInvariantOperator,
+    IdentityInvariantSet, ManifestAnchoredInvariant,
+};
 pub use ids::{
     CovenId, EventRef, FamiliarId, ManifestId, ProposalId, StrandId, SurfaceId, ThreadId, WeaveId,
     WriterId,
@@ -103,6 +105,11 @@ pub use portability::{
 };
 pub use staging::{PendingProposal, StagedContents, StagedEdit};
 pub use strand::{HashAlgo, SigKind, Strand, StrandKind};
+pub use surface_regions::{
+    evidence_replay_hash, ExecutionPromptRegion, HeartbeatBehaviorRegion, MaterializedDiff,
+    RegionEvidence, SurfaceDiff, SurfaceRegionDescriptor, SurfaceRegionPredicate,
+    SurfaceRegionRegistry, ToolDefaultsRegion,
+};
 pub use thread::{TensionState, Thread};
 pub use validate::{validate, validate_fail_closed, MutationRequest, RejectReason, Verdict};
 pub use weave::{Weave, WeaveError, WeaveRecord};
