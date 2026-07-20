@@ -519,7 +519,7 @@ END;
     }
 
     fn user_version(conn: &Connection) -> i64 {
-        conn.query_row("PRAGMA user_version;", [], |row| row.get(0))
+        conn.pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap()
     }
 

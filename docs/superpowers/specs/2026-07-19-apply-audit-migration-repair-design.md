@@ -19,9 +19,9 @@ must inspect `ward_audit` itself before execution:
 For the exact legacy shape, the migration first adds the nullable `detail`
 column to the legacy table, then rebuilds the table and copies `detail` into
 the replacement table. This gives genuine v0.1.3 rows a `NULL` detail value
-without hard-coding data loss into the copy step. The SQL never reads or
-writes database-wide `PRAGMA user_version`, so unrelated shared-store version
-state is preserved.
+without hard-coding data loss into the copy step. Ward SQL never reads or
+writes database-wide `user_version`, so unrelated shared-store version state is
+preserved.
 
 Running the legacy migration against a current schema will fail when it tries
 to add an already-present `detail` column, before dropping or rewriting any
