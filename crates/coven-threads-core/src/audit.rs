@@ -30,8 +30,8 @@
 //!   run `WARD_AUDIT_MIGRATION_V014_SQL`;
 //! - `current_v014` — the table exactly matches the v0.1.4 current
 //!   fingerprint; continue without schema work;
-//! - `unknown` — every other shape, including extra or missing columns,
-//!   indexes, triggers, or `event_type` CHECK drift; fail closed.
+//! - `unknown` — every other shape, including any extra or missing declared
+//!   table constraint, column, index, or trigger; fail closed.
 //! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact `legacy_v013`
 //! fingerprint. It independently re-checks that fingerprint inside the
 //! transaction before any `ALTER`, then adds `detail` and rebuilds `ward_audit`
@@ -332,7 +332,11 @@ WITH
             sql,
             replace(
                 replace(
-                    replace(replace(lower(sql), ' ', ''), char(10), ''),
+                    replace(
+                        replace(replace(sql, '"', ''), ' ', ''),
+                        char(10),
+                        ''
+                    ),
                     char(13),
                     ''
                 ),
@@ -402,7 +406,11 @@ WITH
                 name,
                 replace(
                     replace(
-                        replace(replace(lower(COALESCE(sql, '')), ' ', ''), char(10), ''),
+                        replace(
+                            replace(replace(COALESCE(sql, ''), '"', ''), ' ', ''),
+                            char(10),
+                            ''
+                        ),
                         char(13),
                         ''
                     ),
@@ -431,14 +439,10 @@ macro_rules! ward_audit_exact_legacy_predicate_sql {
     () => {
         r#"
 table_exists = 1
-AND instr(normalized_table_sql, 'idintegerprimarykeyautoincrement') > 0
-AND instr(
-    normalized_table_sql,
-    'event_typetextnotnullcheck(event_typein(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger''))'
-) > 0
+AND normalized_table_sql = 'CREATETABLEward_audit(idINTEGERPRIMARYKEYAUTOINCREMENT,event_typeTEXTNOTNULLCHECK(event_typeIN(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger'')),proposal_idTEXT,familiar_idTEXTNOTNULL,ward_versionTEXT,ward_hashBLOBNOTNULL,tierTEXT,decisionTEXTNOTNULL,approverTEXT,diff_hashBLOB,files_touchedTEXTNOTNULL,channelTEXT,thread_idTEXT,submitted_atTEXTNOTNULL,decided_atTEXTNOTNULL,recorded_atTEXTNOTNULLDEFAULT(strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')))'
 AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|files_touched|TEXT|1|<null>|0||11|channel|TEXT|0|<null>|0||12|thread_id|TEXT|0|<null>|0||13|submitted_at|TEXT|1|<null>|0||14|decided_at|TEXT|1|<null>|0||15|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
 AND index_fp = 'ward_audit_event_idx|0|c|0|0:event_type,1:recorded_at||ward_audit_familiar_idx|0|c|0|0:familiar_id,1:recorded_at'
-AND trigger_fp = 'ward_audit_append_only_delete|createtriggerward_audit_append_only_deletebeforedeleteonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end||ward_audit_append_only_update|createtriggerward_audit_append_only_updatebeforeupdateonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end'
+AND trigger_fp = 'ward_audit_append_only_delete|CREATETRIGGERward_audit_append_only_deleteBEFOREDELETEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END||ward_audit_append_only_update|CREATETRIGGERward_audit_append_only_updateBEFOREUPDATEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END'
 "#
     };
 }
@@ -447,14 +451,10 @@ macro_rules! ward_audit_exact_current_predicate_sql {
     () => {
         r#"
 table_exists = 1
-AND instr(normalized_table_sql, 'idintegerprimarykeyautoincrement') > 0
-AND instr(
-    normalized_table_sql,
-    'event_typetextnotnullcheck(event_typein(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger'',''apply_audit''))'
-) > 0
+AND normalized_table_sql = 'CREATETABLEward_audit(idINTEGERPRIMARYKEYAUTOINCREMENT,event_typeTEXTNOTNULLCHECK(event_typeIN(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger'',''apply_audit'')),proposal_idTEXT,familiar_idTEXTNOTNULL,ward_versionTEXT,ward_hashBLOBNOTNULL,tierTEXT,decisionTEXTNOTNULL,approverTEXT,diff_hashBLOB,detailTEXT,files_touchedTEXTNOTNULL,channelTEXT,thread_idTEXT,submitted_atTEXTNOTNULL,decided_atTEXTNOTNULL,recorded_atTEXTNOTNULLDEFAULT(strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')))'
 AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|detail|TEXT|0|<null>|0||11|files_touched|TEXT|1|<null>|0||12|channel|TEXT|0|<null>|0||13|thread_id|TEXT|0|<null>|0||14|submitted_at|TEXT|1|<null>|0||15|decided_at|TEXT|1|<null>|0||16|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
 AND index_fp = 'ward_audit_event_idx|0|c|0|0:event_type,1:recorded_at||ward_audit_familiar_idx|0|c|0|0:familiar_id,1:recorded_at'
-AND trigger_fp = 'ward_audit_append_only_delete|createtriggerward_audit_append_only_deletebeforedeleteonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end||ward_audit_append_only_update|createtriggerward_audit_append_only_updatebeforeupdateonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end'
+AND trigger_fp = 'ward_audit_append_only_delete|CREATETRIGGERward_audit_append_only_deleteBEFOREDELETEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END||ward_audit_append_only_update|CREATETRIGGERward_audit_append_only_updateBEFOREUPDATEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END'
 "#
     };
 }
@@ -471,11 +471,14 @@ AND trigger_fp = 'ward_audit_append_only_delete|createtriggerward_audit_append_o
 /// - [`WARD_AUDIT_SCHEMA_STATE_UNKNOWN`] — fail closed and investigate the
 ///   table manually.
 ///
-/// The fingerprint is strict: ordered column metadata (including
-/// `recorded_at`'s default and primary-key flags), the exact explicit index
-/// set, the exact append-only trigger set, and the `event_type` CHECK
-/// signature must all match. Any extra or missing column, index, trigger, or
-/// CHECK drift returns `unknown`.
+/// The fingerprint is strict: the full normalized `CREATE TABLE` definition,
+/// ordered column metadata (including `recorded_at`'s default and primary-key
+/// flags), the exact explicit index set, and the exact append-only trigger set
+/// must all match. Full table-SQL equality covers every declared table-level
+/// constraint (`CHECK`, `UNIQUE`, foreign-key clauses, and the `event_type`
+/// list), so any extra or missing column, constraint, index, or trigger
+/// returns `unknown`. Normalization removes whitespace and SQLite's renamed-
+/// table double quotes without weakening literal or constraint equality.
 pub const WARD_AUDIT_SCHEMA_STATE_SQL: &str = concat!(
     ward_audit_schema_state_ctes_sql!(),
     r#"
@@ -500,7 +503,9 @@ FROM ward_audit_shape;
 /// triggers (RFC-0001 §5.6: entries MUST NOT be deleted or modified).
 /// SQLite cannot `ALTER` a CHECK constraint on an existing table, so this
 /// transaction:
-/// 1. re-checks the exact legacy fingerprint in SQL before any mutation;
+/// 1. re-checks the exact legacy fingerprint in SQL before any mutation,
+///    including full normalized `CREATE TABLE` equality plus column/index/
+///    trigger fingerprints;
 /// 2. adds the legacy `detail` column so the old table matches the copy shape;
 /// 3. creates `ward_audit_new` with the updated CHECK;
 /// 4. copies every existing row, preserving `detail`;
@@ -616,12 +621,12 @@ CREATE TABLE IF NOT EXISTS ward_audit (
     decision      TEXT    NOT NULL,
     approver      TEXT,
     diff_hash     BLOB,
-    detail        TEXT,             -- event-type-specific JSON; see module docs
-    files_touched TEXT    NOT NULL, -- JSON array of surface ids
+    detail        TEXT,
+    files_touched TEXT    NOT NULL,
     channel       TEXT,
     thread_id     TEXT,
-    submitted_at  TEXT    NOT NULL, -- RFC 3339
-    decided_at    TEXT    NOT NULL, -- RFC 3339
+    submitted_at  TEXT    NOT NULL,
+    decided_at    TEXT    NOT NULL,
     recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -743,6 +748,43 @@ END;
         assert_eq!(ward_audit_schema_state(conn), expected);
     }
 
+    fn normalized_table_sql(conn: &Connection) -> String {
+        conn.query_row(
+            concat!(
+                ward_audit_schema_state_ctes_sql!(),
+                r#"
+SELECT normalized_table_sql
+FROM ward_audit_shape;
+"#
+            ),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn schema_sql_with_extra_table_constraint(
+        base_schema_sql: &str,
+        constraint_sql: &str,
+    ) -> String {
+        let marker = "\n);\n\nCREATE INDEX";
+        let replacement = format!(",\n    {constraint_sql}{marker}");
+        let schema_sql = base_schema_sql.replacen(marker, &replacement, 1);
+        assert_ne!(
+            schema_sql, base_schema_sql,
+            "expected to inject {constraint_sql}"
+        );
+        schema_sql
+    }
+
+    fn legacy_schema_with_extra_table_constraint(constraint_sql: &str) -> String {
+        schema_sql_with_extra_table_constraint(LEGACY_WARD_AUDIT_SCHEMA_SQL, constraint_sql)
+    }
+
+    fn current_schema_with_extra_table_constraint(constraint_sql: &str) -> String {
+        schema_sql_with_extra_table_constraint(WARD_AUDIT_SCHEMA_SQL, constraint_sql)
+    }
+
     fn expected_explicit_index_names() -> BTreeSet<String> {
         EXPECTED_EXPLICIT_INDEX_NAMES
             .iter()
@@ -803,6 +845,39 @@ END;
         let row = load_audit_row(&conn, row_id);
         assert_eq!(row.event_type, "apply_audit");
         assert_eq!(row.detail.as_deref(), Some(FIXED_PREV_DETAIL));
+    }
+
+    fn assert_legacy_drift_guard_rollback_preserves_state(
+        constraint_sql: &str,
+        after_rollback: impl FnOnce(&Connection),
+    ) {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(&legacy_schema_with_extra_table_constraint(constraint_sql))
+            .unwrap();
+        let row_id = insert_legacy_ward_updated_row(&conn);
+        let before = load_legacy_audit_row(&conn, row_id);
+        let before_version = user_version(&conn);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("drifted legacy schema must fail at the migration guard");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected migration error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_legacy_audit_row(&conn, row_id), before);
+        assert_eq!(user_version(&conn), before_version);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        assert!(!has_column(&conn, "detail"));
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+
+        after_rollback(&conn);
     }
 
     fn load_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
@@ -929,7 +1004,11 @@ END;
         conn.last_insert_rowid()
     }
 
-    fn insert_legacy_ward_updated_row(conn: &Connection) -> i64 {
+    fn try_insert_legacy_ward_updated_row(
+        conn: &Connection,
+        decision: &str,
+        recorded_at: &str,
+    ) -> rusqlite::Result<i64> {
         conn.execute(
             r#"
             INSERT INTO ward_audit (
@@ -949,7 +1028,7 @@ END;
                 Some("0.1.3"),
                 FIXED_WARD_HASH.as_ref(),
                 Some("tier_1"),
-                "updated",
+                decision,
                 Some("writer:legacy"),
                 Some(FIXED_DIFF_HASH.as_ref()),
                 FIXED_FILES_TOUCHED,
@@ -957,11 +1036,14 @@ END;
                 Some("thread-legacy"),
                 FIXED_SUBMITTED_AT,
                 FIXED_DECIDED_AT,
-                FIXED_RECORDED_AT,
+                recorded_at,
             ],
-        )
-        .unwrap();
-        conn.last_insert_rowid()
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    fn insert_legacy_ward_updated_row(conn: &Connection) -> i64 {
+        try_insert_legacy_ward_updated_row(conn, "updated", FIXED_RECORDED_AT).unwrap()
     }
 
     fn insert_legacy_ward_updated_row_with_extra(conn: &Connection, extra: &str) -> i64 {
@@ -1150,6 +1232,27 @@ END;
     }
 
     #[test]
+    fn fresh_and_migrated_current_schemas_share_the_same_normalized_table_sql() {
+        let fresh = Connection::open_in_memory().unwrap();
+        fresh.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        let migrated = Connection::open_in_memory().unwrap();
+        migrated
+            .execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL)
+            .unwrap();
+        migrated
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .unwrap();
+
+        assert_schema_state(&fresh, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&migrated, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_eq!(
+            normalized_table_sql(&fresh),
+            normalized_table_sql(&migrated)
+        );
+    }
+
+    #[test]
     fn fresh_schema_preserves_user_version_zero_and_creates_current_shape() {
         assert_fresh_schema_preserves_user_version(0);
     }
@@ -1190,6 +1293,66 @@ END;
         assert!(!has_column(&conn, "detail"));
         assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
         assert_eq!(trigger_names(&conn), expected_trigger_names());
+    }
+
+    #[test]
+    fn legacy_schema_with_extra_table_check_is_unknown_and_guard_preserves_constraint() {
+        assert_legacy_drift_guard_rollback_preserves_state(
+            "CHECK (length(decision) > 0)",
+            |conn| {
+                let err = try_insert_legacy_ward_updated_row(conn, "", FIXED_RECORDED_AT)
+                    .expect_err(
+                        "legacy CHECK drift must still reject empty decisions after rollback",
+                    );
+                assert!(
+                    err.to_string().contains("CHECK constraint failed"),
+                    "unexpected post-rollback CHECK error: {err}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn legacy_schema_with_extra_unique_is_unknown_and_guard_preserves_constraint() {
+        assert_legacy_drift_guard_rollback_preserves_state(
+            "UNIQUE (decision, recorded_at)",
+            |conn| {
+                let err = try_insert_legacy_ward_updated_row(conn, "updated", FIXED_RECORDED_AT)
+                    .expect_err(
+                        "legacy UNIQUE drift must still reject duplicate decision/recorded_at rows after rollback",
+                    );
+                assert!(
+                    err.to_string().contains("UNIQUE constraint failed"),
+                    "unexpected post-rollback UNIQUE error: {err}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn current_schema_with_extra_table_check_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(&current_schema_with_extra_table_constraint(
+            "CHECK (length(decision) > 0)",
+        ))
+        .unwrap();
+
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn current_schema_with_extra_unique_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(&current_schema_with_extra_table_constraint(
+            "UNIQUE (decision, recorded_at)",
+        ))
+        .unwrap();
+
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
     }
 
     #[test]

@@ -23,15 +23,16 @@ callers run before touching `ward_audit`. It returns one stable tag:
 
 The fingerprint is exact and table-local:
 
+- full normalized `CREATE TABLE ward_audit (...)` equality;
 - ordered column metadata from `pragma_table_info('ward_audit')`, including
   name, type, `NOT NULL`, `DEFAULT`, and primary-key metadata;
-- exact explicit index set (excluding SQLite internal autoindexes);
-- exact append-only trigger set;
-- exact `event_type` CHECK signature, distinguishing legacy absence vs current
-  presence of `apply_audit`.
+- exact explicit index set (excluding SQLite internal autoindexes); and
+- exact append-only trigger set.
 
-Extra or missing columns, indexes, triggers, or CHECK drift all classify as
-`unknown`.
+The full normalized table definition covers every declared table-level
+constraint — the `event_type` CHECK list, extra `CHECK` clauses, `UNIQUE`
+clauses, and foreign-key clauses — so any extra or missing constraint, column,
+index, or trigger classifies as `unknown`.
 
 ## Migration design
 
@@ -64,11 +65,15 @@ Executable rusqlite tests cover:
 2. partial legacy drift (`legacy` + extra column/data) classifying as
    `unknown`, rejecting at the guard, and rolling back cleanly without losing
    row data, extra columns, indexes, triggers, or unrelated `user_version`;
-3. current drift cases such as a missing append-only trigger or an extra index
+3. legacy/current drift caused by extra table-level `CHECK` or `UNIQUE`
+   constraints classifying as `unknown`, with legacy guard failures requiring
+   explicit `ROLLBACK` and preserving the original constraint behavior;
+4. current drift cases such as a missing append-only trigger or an extra index
    classifying as `unknown`;
-4. exact current/rerun guard failures requiring explicit `ROLLBACK`;
-5. successful exact-legacy upgrade landing in `current_v014`; and
-6. post-`ALTER` failure rollback restoring the full legacy table state.
+5. exact current/rerun guard failures requiring explicit `ROLLBACK`;
+6. successful exact-legacy upgrade landing in `current_v014`, with fresh and
+   migrated current schemas sharing the same normalized table definition; and
+7. post-`ALTER` failure rollback restoring the full legacy table state.
 
 ## Scope
 

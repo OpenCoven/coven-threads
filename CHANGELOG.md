@@ -15,13 +15,16 @@ All notable changes to `coven-threads-core` are documented here.
 - `APPLY_AUDIT_DETAIL_KEY_PREV` / `APPLY_AUDIT_DETAIL_KEY_BYTES` — stable JSON key constants.
 - `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable state tags (`missing`,
   `legacy_v013`, `current_v014`, `unknown`) — reusable table-local schema
-  fingerprint contract for daemon callers.
+  fingerprint contract for daemon callers, with full normalized `CREATE TABLE`
+  equality covering all declared table-level constraints alongside column,
+  explicit-index, and trigger fingerprints.
 - `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL for a detail-preserving
   rebuild of `ward_audit` guarded by the exact `legacy_v013` fingerprint. The
   daemon should query `WARD_AUDIT_SCHEMA_STATE_SQL`, initialize when missing,
   migrate only `legacy_v013`, continue on `current_v014`, and fail closed on
   `unknown`. The migration independently re-checks `legacy_v013` before any
-  `ALTER`, then copies rows into the replacement table without discarding
+  `ALTER`, using the same full normalized-table + column/index/trigger
+  predicate, then copies rows into the replacement table without discarding
   evidence.
 - Exhaustiveness test `schema_names_all_event_tags` extended to cover `ApplyAudit`.
 - New tests: `for_apply_produces_correct_shape`,
@@ -29,9 +32,14 @@ All notable changes to `coven-threads-core` are documented here.
   `schema_state_query_returns_missing_on_empty_db`,
   `exact_legacy_fixture_returns_legacy_v013`,
   `exact_current_schema_returns_current_v014`,
+  `fresh_and_migrated_current_schemas_share_the_same_normalized_table_sql`,
   `fresh_schema_preserves_user_version_zero_and_creates_current_shape`,
   `fresh_schema_preserves_user_version_ninety_nine_and_creates_current_shape`,
   `legacy_plus_extra_column_and_data_is_unknown_and_guard_preserves_state`,
+  `legacy_schema_with_extra_table_check_is_unknown_and_guard_preserves_constraint`,
+  `legacy_schema_with_extra_unique_is_unknown_and_guard_preserves_constraint`,
+  `current_schema_with_extra_table_check_is_unknown`,
+  `current_schema_with_extra_unique_is_unknown`,
   `current_schema_missing_append_only_trigger_is_unknown_and_update_succeeds`,
   `current_schema_with_extra_index_is_unknown`,
   `migration_rejects_current_schema_rows_with_detail_and_preserves_state`,
