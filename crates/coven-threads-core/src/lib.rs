@@ -66,7 +66,11 @@ pub mod thread;
 pub mod validate;
 pub mod weave;
 
-pub use audit::{AuditEventType, WardAuditRecord, WARD_AUDIT_SCHEMA_SQL};
+pub use audit::{
+    AuditEventType, WardAuditRecord, WARD_AUDIT_MIGRATION_V014_SQL, WARD_AUDIT_SCHEMA_SQL,
+    WARD_AUDIT_SCHEMA_STATE_CURRENT_V014, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013,
+    WARD_AUDIT_SCHEMA_STATE_MISSING, WARD_AUDIT_SCHEMA_STATE_SQL, WARD_AUDIT_SCHEMA_STATE_UNKNOWN,
+};
 pub use channel::Channel;
 pub use fray::{FrayOrSnap, FrayReason, SnapReason};
 pub use ids::{

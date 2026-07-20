@@ -22,19 +22,23 @@
 //!
 //! `WARD_AUDIT_SCHEMA_SQL` creates the fresh v0.1.4 `ward_audit` shape without
 //! mutating database-wide `PRAGMA user_version`.
-//! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact v0.1.3 legacy
-//! shape. Callers must inspect the `ward_audit` table itself before execution:
-//! - exact legacy v0.1.3: the table exists, `detail` is absent, and the table
-//!   CHECK does not contain `apply_audit`;
-//! - current v0.1.4: `detail` exists and the table CHECK accepts
-//!   `apply_audit`;
-//! - partial/unknown shapes: fail closed and do not run the migration.
-//! The migration first adds `detail`, then rebuilds `ward_audit` in one
-//! transaction so the current CHECK set is installed and every existing row is
-//! preserved.
-//! Running that migration against a current schema, or rerunning it after a
-//! successful upgrade, fails before destructive work; callers must explicitly
-//! roll back the failed transaction before continuing.
+//! `WARD_AUDIT_SCHEMA_STATE_SQL` is the reusable, table-local fingerprint query
+//! that returns one of four stable tags:
+//! - `missing` — `ward_audit` does not exist; initialize with
+//!   `WARD_AUDIT_SCHEMA_SQL`;
+//! - `legacy_v013` — the table exactly matches the v0.1.3 legacy fingerprint;
+//!   run `WARD_AUDIT_MIGRATION_V014_SQL`;
+//! - `current_v014` — the table exactly matches the v0.1.4 current
+//!   fingerprint; continue without schema work;
+//! - `unknown` — every other shape, including extra or missing columns,
+//!   indexes, triggers, or `event_type` CHECK drift; fail closed.
+//! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact `legacy_v013`
+//! fingerprint. It independently re-checks that fingerprint inside the
+//! transaction before any `ALTER`, then adds `detail` and rebuilds `ward_audit`
+//! so the current CHECK set is installed and every existing row is preserved.
+//! If a later migration step fails after `ALTER TABLE ... ADD COLUMN detail`,
+//! callers must explicitly roll back the failed transaction before continuing
+//! so SQLite restores the untouched legacy table.
 //!
 //! ## Where content hashes ride for applied writes
 //!
@@ -306,39 +310,233 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
     }
 }
 
-/// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
+/// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] when `ward_audit` is
+/// absent.
+pub const WARD_AUDIT_SCHEMA_STATE_MISSING: &str = "missing";
+/// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for the exact
+/// v0.1.3 legacy schema fingerprint.
+pub const WARD_AUDIT_SCHEMA_STATE_LEGACY_V013: &str = "legacy_v013";
+/// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for the exact
+/// v0.1.4 current schema fingerprint.
+pub const WARD_AUDIT_SCHEMA_STATE_CURRENT_V014: &str = "current_v014";
+/// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for every other
+/// `ward_audit` shape.
+pub const WARD_AUDIT_SCHEMA_STATE_UNKNOWN: &str = "unknown";
+
+macro_rules! ward_audit_schema_state_ctes_sql {
+    () => {
+        r#"
+WITH
+    ward_audit_table AS (
+        SELECT
+            sql,
+            replace(
+                replace(
+                    replace(replace(lower(sql), ' ', ''), char(10), ''),
+                    char(13),
+                    ''
+                ),
+                char(9),
+                ''
+            ) AS normalized_sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'ward_audit'
+    ),
+    ward_audit_exists AS (
+        SELECT EXISTS(SELECT 1 FROM ward_audit_table) AS ok
+    ),
+    ward_audit_column_fingerprint AS (
+        SELECT COALESCE(
+            group_concat(
+                printf(
+                    '%d|%s|%s|%d|%s|%d',
+                    cid,
+                    name,
+                    type,
+                    "notnull",
+                    COALESCE(dflt_value, '<null>'),
+                    pk
+                ),
+                '||'
+            ),
+            ''
+        ) AS fp
+        FROM (
+            SELECT cid, name, type, "notnull", dflt_value, pk
+            FROM pragma_table_info('ward_audit')
+            ORDER BY cid
+        )
+    ),
+    ward_audit_explicit_indexes AS (
+        SELECT name, "unique", origin, partial
+        FROM pragma_index_list('ward_audit')
+        WHERE origin = 'c' AND name NOT LIKE 'sqlite_autoindex_%'
+    ),
+    ward_audit_index_fingerprint AS (
+        SELECT COALESCE(group_concat(item, '||'), '') AS fp
+        FROM (
+            SELECT printf(
+                '%s|%d|%s|%d|%s',
+                idx.name,
+                idx."unique",
+                idx.origin,
+                idx.partial,
+                COALESCE((
+                    SELECT group_concat(printf('%d:%s', seqno, name), ',')
+                    FROM (
+                        SELECT seqno, name
+                        FROM pragma_index_info(idx.name)
+                        ORDER BY seqno
+                    )
+                ), '')
+            ) AS item
+            FROM ward_audit_explicit_indexes AS idx
+            ORDER BY idx.name
+        )
+    ),
+    ward_audit_trigger_fingerprint AS (
+        SELECT COALESCE(group_concat(item, '||'), '') AS fp
+        FROM (
+            SELECT printf(
+                '%s|%s',
+                name,
+                replace(
+                    replace(
+                        replace(replace(lower(COALESCE(sql, '')), ' ', ''), char(10), ''),
+                        char(13),
+                        ''
+                    ),
+                    char(9),
+                    ''
+                )
+            ) AS item
+            FROM sqlite_master
+            WHERE type = 'trigger' AND tbl_name = 'ward_audit'
+            ORDER BY name
+        )
+    ),
+    ward_audit_shape AS (
+        SELECT
+            (SELECT ok FROM ward_audit_exists) AS table_exists,
+            COALESCE((SELECT normalized_sql FROM ward_audit_table), '') AS normalized_table_sql,
+            (SELECT fp FROM ward_audit_column_fingerprint) AS column_fp,
+            (SELECT fp FROM ward_audit_index_fingerprint) AS index_fp,
+            (SELECT fp FROM ward_audit_trigger_fingerprint) AS trigger_fp
+    )
+"#
+    };
+}
+
+macro_rules! ward_audit_exact_legacy_predicate_sql {
+    () => {
+        r#"
+table_exists = 1
+AND instr(normalized_table_sql, 'idintegerprimarykeyautoincrement') > 0
+AND instr(
+    normalized_table_sql,
+    'event_typetextnotnullcheck(event_typein(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger''))'
+) > 0
+AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|files_touched|TEXT|1|<null>|0||11|channel|TEXT|0|<null>|0||12|thread_id|TEXT|0|<null>|0||13|submitted_at|TEXT|1|<null>|0||14|decided_at|TEXT|1|<null>|0||15|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
+AND index_fp = 'ward_audit_event_idx|0|c|0|0:event_type,1:recorded_at||ward_audit_familiar_idx|0|c|0|0:familiar_id,1:recorded_at'
+AND trigger_fp = 'ward_audit_append_only_delete|createtriggerward_audit_append_only_deletebeforedeleteonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end||ward_audit_append_only_update|createtriggerward_audit_append_only_updatebeforeupdateonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end'
+"#
+    };
+}
+
+macro_rules! ward_audit_exact_current_predicate_sql {
+    () => {
+        r#"
+table_exists = 1
+AND instr(normalized_table_sql, 'idintegerprimarykeyautoincrement') > 0
+AND instr(
+    normalized_table_sql,
+    'event_typetextnotnullcheck(event_typein(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger'',''apply_audit''))'
+) > 0
+AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|detail|TEXT|0|<null>|0||11|files_touched|TEXT|1|<null>|0||12|channel|TEXT|0|<null>|0||13|thread_id|TEXT|0|<null>|0||14|submitted_at|TEXT|1|<null>|0||15|decided_at|TEXT|1|<null>|0||16|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
+AND index_fp = 'ward_audit_event_idx|0|c|0|0:event_type,1:recorded_at||ward_audit_familiar_idx|0|c|0|0:familiar_id,1:recorded_at'
+AND trigger_fp = 'ward_audit_append_only_delete|createtriggerward_audit_append_only_deletebeforedeleteonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end||ward_audit_append_only_update|createtriggerward_audit_append_only_updatebeforeupdateonward_auditbeginselectraise(abort,''ward_auditisappend-only(rfc-0001§5.6)'');end'
+"#
+    };
+}
+
+/// Table-local schema-state query for `ward.audit` inside `coven.sqlite3`
+/// (§3.4).
+///
+/// Callers run this exact query and branch on the stable text result:
+/// - [`WARD_AUDIT_SCHEMA_STATE_MISSING`] — initialize with
+///   [`WARD_AUDIT_SCHEMA_SQL`];
+/// - [`WARD_AUDIT_SCHEMA_STATE_LEGACY_V013`] — run
+///   [`WARD_AUDIT_MIGRATION_V014_SQL`];
+/// - [`WARD_AUDIT_SCHEMA_STATE_CURRENT_V014`] — continue without schema work;
+/// - [`WARD_AUDIT_SCHEMA_STATE_UNKNOWN`] — fail closed and investigate the
+///   table manually.
+///
+/// The fingerprint is strict: ordered column metadata (including
+/// `recorded_at`'s default and primary-key flags), the exact explicit index
+/// set, the exact append-only trigger set, and the `event_type` CHECK
+/// signature must all match. Any extra or missing column, index, trigger, or
+/// CHECK drift returns `unknown`.
+pub const WARD_AUDIT_SCHEMA_STATE_SQL: &str = concat!(
+    ward_audit_schema_state_ctes_sql!(),
+    r#"
+SELECT CASE
+    WHEN table_exists = 0 THEN 'missing'
+    WHEN "#,
+    ward_audit_exact_legacy_predicate_sql!(),
+    r#" THEN 'legacy_v013'
+    WHEN "#,
+    ward_audit_exact_current_predicate_sql!(),
+    r#" THEN 'current_v014'
+    ELSE 'unknown'
+END AS schema_state
+FROM ward_audit_shape;
+"#,
+);
+
+/// DDL migration for the exact `legacy_v013` `ward.audit` fingerprint inside
+/// `coven.sqlite3` (§3.4).
 ///
 /// Append-only is enforced *in the store*: UPDATE and DELETE abort via
 /// triggers (RFC-0001 §5.6: entries MUST NOT be deleted or modified).
-/// DDL migration for v0.1.3 → v0.1.4: rebuilds `ward_audit` from the exact
-/// legacy shape so its CHECK constraint includes `apply_audit` and its copy
-/// path preserves `detail`.
+/// SQLite cannot `ALTER` a CHECK constraint on an existing table, so this
+/// transaction:
+/// 1. re-checks the exact legacy fingerprint in SQL before any mutation;
+/// 2. adds the legacy `detail` column so the old table matches the copy shape;
+/// 3. creates `ward_audit_new` with the updated CHECK;
+/// 4. copies every existing row, preserving `detail`;
+/// 5. swaps the tables; and
+/// 6. re-creates the exact explicit indexes and append-only triggers.
 ///
-/// SQLite cannot `ALTER` a CHECK constraint on an existing table. This SQL
-/// performs a safe swap in one transaction:
-/// 1. Adds the legacy `detail` column so the old table matches the copy shape.
-/// 2. Creates `ward_audit_new` with the updated CHECK.
-/// 3. Copies all existing rows, preserving `detail`.
-/// 4. Drops the old table.
-/// 5. Renames the new table into place.
-/// 6. Re-creates indexes and append-only triggers.
-///
-/// **Caller gate:** inspect `ward_audit` itself before executing this SQL.
-/// Run it only when the table exists, `detail` is absent, and the table CHECK
-/// does not contain `apply_audit`. If `detail` exists and the table accepts
-/// `apply_audit`, the schema is already current. Any partial/unknown shape
-/// must fail closed instead of running the migration.
-///
-/// Current-schema invocation and post-upgrade reruns fail before any
-/// destructive step: a current schema aborts on `ALTER TABLE ... ADD COLUMN
-/// detail` with a duplicate-column error, while a rerun after a successful
-/// upgrade fails on the same `ALTER TABLE` because the column already exists.
-/// Callers must `ROLLBACK` failed migration transactions before continuing;
-/// the migration remains fail-closed because no later step can run after that
-/// early abort. This SQL does not read or write database-wide
+/// Callers should still branch on [`WARD_AUDIT_SCHEMA_STATE_SQL`] first:
+/// initialize when the state is `missing`, migrate only `legacy_v013`,
+/// continue on `current_v014`, and fail closed on `unknown`. This migration
+/// independently guards the same `legacy_v013` fingerprint so callers cannot
+/// mutate a partial or already-current schema by skipping classification. If a
+/// later step fails after `ALTER TABLE ... ADD COLUMN detail`, callers must
+/// `ROLLBACK` the failed transaction before continuing so SQLite restores the
+/// untouched legacy table. This SQL does not read or write database-wide
 /// `PRAGMA user_version`.
-pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = r#"
+pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = concat!(
+    r#"
 BEGIN;
+
+CREATE TEMP TABLE ward_audit_migration_guard (
+    ok INTEGER NOT NULL CHECK (ok = 1)
+);
+
+INSERT INTO ward_audit_migration_guard (ok)
+"#,
+    ward_audit_schema_state_ctes_sql!(),
+    r#"
+SELECT CASE
+    WHEN "#,
+    ward_audit_exact_legacy_predicate_sql!(),
+    r#" THEN 1
+    ELSE 0
+END
+FROM ward_audit_shape;
+
+DROP TABLE ward_audit_migration_guard;
 
 ALTER TABLE ward_audit ADD COLUMN detail TEXT;
 
@@ -395,12 +593,13 @@ BEGIN
 END;
 
 COMMIT;
-"#;
+"#,
+);
 
 /// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
 ///
-/// See module docs for shape detection and migration gating. This DDL creates
-/// the current `ward_audit` shape without mutating database-wide
+/// See module docs for the full schema-state contract. This DDL creates the
+/// exact `current_v014` fingerprint without mutating database-wide
 /// `PRAGMA user_version`.
 pub const WARD_AUDIT_SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS ward_audit (
@@ -447,6 +646,7 @@ mod tests {
     use super::*;
     use crate::ids::{SurfaceId, WriterId};
     use rusqlite::{params, Connection};
+    use std::collections::BTreeSet;
 
     const FIXED_SUBMITTED_AT: &str = "2026-07-19T00:00:00.000Z";
     const FIXED_DECIDED_AT: &str = "2026-07-19T00:01:00.000Z";
@@ -497,6 +697,13 @@ BEGIN
 END;
 "#;
 
+    const EXPECTED_EXPLICIT_INDEX_NAMES: &[&str] =
+        &["ward_audit_event_idx", "ward_audit_familiar_idx"];
+    const EXPECTED_TRIGGER_NAMES: &[&str] = &[
+        "ward_audit_append_only_delete",
+        "ward_audit_append_only_update",
+    ];
+
     #[derive(Debug, PartialEq, Eq)]
     struct StoredAuditRow {
         id: i64,
@@ -527,49 +734,61 @@ END;
         conn.pragma_update(None, "user_version", version).unwrap();
     }
 
-    fn ward_audit_table_sql(conn: &Connection) -> String {
-        conn.query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'ward_audit';",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap()
+    fn ward_audit_schema_state(conn: &Connection) -> String {
+        conn.query_row(WARD_AUDIT_SCHEMA_STATE_SQL, [], |row| row.get(0))
+            .unwrap()
     }
 
-    fn ward_audit_has_detail_column(conn: &Connection) -> bool {
+    fn assert_schema_state(conn: &Connection, expected: &str) {
+        assert_eq!(ward_audit_schema_state(conn), expected);
+    }
+
+    fn expected_explicit_index_names() -> BTreeSet<String> {
+        EXPECTED_EXPLICIT_INDEX_NAMES
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect()
+    }
+
+    fn expected_trigger_names() -> BTreeSet<String> {
+        EXPECTED_TRIGGER_NAMES
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect()
+    }
+
+    fn explicit_index_names(conn: &Connection) -> BTreeSet<String> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT name FROM pragma_index_list('ward_audit') WHERE origin = 'c' AND name NOT LIKE 'sqlite_autoindex_%' ORDER BY name;",
+            )
+            .unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    fn trigger_names(conn: &Connection) -> BTreeSet<String> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'ward_audit' ORDER BY name;",
+            )
+            .unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    fn has_column(conn: &Connection, name: &str) -> bool {
         conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('ward_audit') WHERE name = 'detail');",
-            [],
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('ward_audit') WHERE name = ?1);",
+            params![name],
             |row| row.get::<_, i64>(0),
         )
         .unwrap()
             == 1
-    }
-
-    fn ward_audit_accepts_apply_audit(conn: &Connection) -> bool {
-        ward_audit_table_sql(conn).contains("'apply_audit'")
-    }
-
-    fn assert_legacy_ward_audit_shape(conn: &Connection) {
-        assert!(
-            !ward_audit_has_detail_column(conn),
-            "legacy schema must not expose detail"
-        );
-        assert!(
-            !ward_audit_accepts_apply_audit(conn),
-            "legacy schema CHECK must not mention apply_audit"
-        );
-    }
-
-    fn assert_current_ward_audit_shape(conn: &Connection) {
-        assert!(
-            ward_audit_has_detail_column(conn),
-            "current schema must expose detail"
-        );
-        assert!(
-            ward_audit_accepts_apply_audit(conn),
-            "current schema CHECK must accept apply_audit"
-        );
     }
 
     fn assert_fresh_schema_preserves_user_version(initial_version: i64) {
@@ -578,7 +797,7 @@ END;
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
 
         assert_eq!(user_version(&conn), initial_version);
-        assert_current_ward_audit_shape(&conn);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
 
         let row_id = insert_current_apply_audit_row(&conn);
         let row = load_audit_row(&conn, row_id);
@@ -656,6 +875,24 @@ END;
         .unwrap()
     }
 
+    fn load_legacy_extra_value(conn: &Connection, id: i64) -> Option<String> {
+        conn.query_row(
+            "SELECT legacy_extra FROM ward_audit WHERE id = ?1;",
+            params![id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn ward_audit_new_conflict_value(conn: &Connection) -> String {
+        conn.query_row(
+            "SELECT conflict FROM ward_audit_new ORDER BY rowid LIMIT 1;",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
     fn insert_current_apply_audit_row(conn: &Connection) -> i64 {
         conn.execute(
             r#"
@@ -721,6 +958,42 @@ END;
                 FIXED_SUBMITTED_AT,
                 FIXED_DECIDED_AT,
                 FIXED_RECORDED_AT,
+            ],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    fn insert_legacy_ward_updated_row_with_extra(conn: &Connection, extra: &str) -> i64 {
+        conn.execute(
+            r#"
+            INSERT INTO ward_audit (
+                event_type, proposal_id, familiar_id, ward_version, ward_hash,
+                tier, decision, approver, diff_hash, files_touched, channel,
+                thread_id, submitted_at, decided_at, recorded_at, legacy_extra
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5,
+                ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, ?13, ?14, ?15, ?16
+            )
+            "#,
+            params![
+                "ward_updated",
+                Some("proposal-legacy"),
+                "familiar-legacy",
+                Some("0.1.3"),
+                FIXED_WARD_HASH.as_ref(),
+                Some("tier_1"),
+                "updated",
+                Some("writer:legacy"),
+                Some(FIXED_DIFF_HASH.as_ref()),
+                FIXED_FILES_TOUCHED,
+                Some("mutation"),
+                Some("thread-legacy"),
+                FIXED_SUBMITTED_AT,
+                FIXED_DECIDED_AT,
+                FIXED_RECORDED_AT,
+                extra,
             ],
         )
         .unwrap();
@@ -857,6 +1130,26 @@ END;
     }
 
     #[test]
+    fn schema_state_query_returns_missing_on_empty_db() {
+        let conn = Connection::open_in_memory().unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_MISSING);
+    }
+
+    #[test]
+    fn exact_legacy_fixture_returns_legacy_v013() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+    }
+
+    #[test]
+    fn exact_current_schema_returns_current_v014() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+    }
+
+    #[test]
     fn fresh_schema_preserves_user_version_zero_and_creates_current_shape() {
         assert_fresh_schema_preserves_user_version(0);
     }
@@ -867,28 +1160,91 @@ END;
     }
 
     #[test]
+    fn legacy_plus_extra_column_and_data_is_unknown_and_guard_preserves_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        conn.execute_batch("ALTER TABLE ward_audit ADD COLUMN legacy_extra TEXT;")
+            .unwrap();
+        let row_id = insert_legacy_ward_updated_row_with_extra(&conn, "survivor");
+        let before = load_legacy_audit_row(&conn, row_id);
+        let before_extra = load_legacy_extra_value(&conn, row_id);
+        let before_version = user_version(&conn);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("partial legacy schema must fail at the migration guard");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected migration error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_legacy_audit_row(&conn, row_id), before);
+        assert_eq!(load_legacy_extra_value(&conn, row_id), before_extra);
+        assert_eq!(user_version(&conn), before_version);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        assert!(has_column(&conn, "legacy_extra"));
+        assert!(!has_column(&conn, "detail"));
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+    }
+
+    #[test]
+    fn current_schema_missing_append_only_trigger_is_unknown_and_update_succeeds() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        let row_id = insert_current_apply_audit_row(&conn);
+
+        conn.execute_batch("DROP TRIGGER ward_audit_append_only_update;")
+            .unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+        conn.execute(
+            "UPDATE ward_audit SET decision = 'mutated' WHERE id = ?1;",
+            params![row_id],
+        )
+        .unwrap();
+        assert_eq!(load_audit_row(&conn, row_id).decision, "mutated");
+    }
+
+    #[test]
+    fn current_schema_with_extra_index_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+
+        conn.execute_batch("CREATE INDEX ward_audit_decision_idx ON ward_audit (decision);")
+            .unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
     fn migration_rejects_current_schema_rows_with_detail_and_preserves_state() {
         let conn = Connection::open_in_memory().unwrap();
         set_user_version(&conn, 37);
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_current_ward_audit_shape(&conn);
         let row_id = insert_current_apply_audit_row(&conn);
         let before = load_audit_row(&conn, row_id);
         let before_version = user_version(&conn);
-        assert_eq!(before_version, 37);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
 
         let err = conn
             .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
-            .expect_err("current-schema migration must fail on duplicate detail");
+            .expect_err("current schema migration must fail at the legacy guard");
         assert!(
-            err.to_string().contains("duplicate column name: detail"),
+            err.to_string().contains("CHECK constraint failed"),
             "unexpected migration error: {err}"
         );
-        let _ = conn.execute_batch("ROLLBACK;");
+        conn.execute_batch("ROLLBACK;").unwrap();
 
-        let after = load_audit_row(&conn, row_id);
-        assert_eq!(after, before);
-        assert_current_ward_audit_shape(&conn);
+        assert_eq!(load_audit_row(&conn, row_id), before);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(user_version(&conn), before_version);
     }
 
@@ -897,35 +1253,36 @@ END;
         let conn = Connection::open_in_memory().unwrap();
         set_user_version(&conn, 37);
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_legacy_ward_audit_shape(&conn);
         let row_id = insert_legacy_ward_updated_row(&conn);
         let before = load_legacy_audit_row(&conn, row_id);
-        assert_eq!(before.event_type, "ward_updated");
-        assert_eq!(before.decision, "updated");
         assert_eq!(user_version(&conn), 37);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
 
         conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
-        assert_current_ward_audit_shape(&conn);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(user_version(&conn), 37);
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
 
         let after = load_audit_row(&conn, row_id);
         assert_eq!(after.id, row_id);
-        assert_eq!(after.event_type, "ward_updated");
-        assert_eq!(after.proposal_id.as_deref(), Some("proposal-legacy"));
-        assert_eq!(after.familiar_id, "familiar-legacy");
-        assert_eq!(after.ward_version.as_deref(), Some("0.1.3"));
-        assert_eq!(after.ward_hash, FIXED_WARD_HASH.to_vec());
-        assert_eq!(after.tier.as_deref(), Some("tier_1"));
-        assert_eq!(after.decision, "updated");
-        assert_eq!(after.approver.as_deref(), Some("writer:legacy"));
-        assert_eq!(after.diff_hash, Some(FIXED_DIFF_HASH.to_vec()));
+        assert_eq!(after.event_type, before.event_type);
+        assert_eq!(after.proposal_id, before.proposal_id);
+        assert_eq!(after.familiar_id, before.familiar_id);
+        assert_eq!(after.ward_version, before.ward_version);
+        assert_eq!(after.ward_hash, before.ward_hash);
+        assert_eq!(after.tier, before.tier);
+        assert_eq!(after.decision, before.decision);
+        assert_eq!(after.approver, before.approver);
+        assert_eq!(after.diff_hash, before.diff_hash);
         assert_eq!(after.detail, None);
-        assert_eq!(after.files_touched, FIXED_FILES_TOUCHED);
-        assert_eq!(after.channel.as_deref(), Some("mutation"));
-        assert_eq!(after.thread_id.as_deref(), Some("thread-legacy"));
-        assert_eq!(after.submitted_at, FIXED_SUBMITTED_AT);
-        assert_eq!(after.decided_at, FIXED_DECIDED_AT);
-        assert_eq!(after.recorded_at, FIXED_RECORDED_AT);
+        assert_eq!(after.files_touched, before.files_touched);
+        assert_eq!(after.channel, before.channel);
+        assert_eq!(after.thread_id, before.thread_id);
+        assert_eq!(after.submitted_at, before.submitted_at);
+        assert_eq!(after.decided_at, before.decided_at);
+        assert_eq!(after.recorded_at, before.recorded_at);
 
         let apply_row_id = insert_current_apply_audit_row(&conn);
         let apply_row = load_audit_row(&conn, apply_row_id);
@@ -951,11 +1308,10 @@ END;
         let conn = Connection::open_in_memory().unwrap();
         set_user_version(&conn, 37);
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_legacy_ward_audit_shape(&conn);
         let legacy_row_id = insert_legacy_ward_updated_row(&conn);
 
         conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
-        assert_current_ward_audit_shape(&conn);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(user_version(&conn), 37);
 
         let apply_row_id = insert_current_apply_audit_row(&conn);
@@ -964,18 +1320,47 @@ END;
 
         let err = conn
             .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
-            .expect_err("rerunning the migration must fail on duplicate detail");
+            .expect_err("rerunning the migration must fail at the legacy guard");
         assert!(
-            err.to_string().contains("duplicate column name: detail"),
+            err.to_string().contains("CHECK constraint failed"),
             "unexpected migration error: {err}"
         );
-        let _ = conn.execute_batch("ROLLBACK;");
+        conn.execute_batch("ROLLBACK;").unwrap();
 
-        let legacy_after = load_audit_row(&conn, legacy_row_id);
-        let apply_after = load_audit_row(&conn, apply_row_id);
-        assert_eq!(legacy_after, legacy_before);
-        assert_eq!(apply_after, apply_before);
-        assert_current_ward_audit_shape(&conn);
+        assert_eq!(load_audit_row(&conn, legacy_row_id), legacy_before);
+        assert_eq!(load_audit_row(&conn, apply_row_id), apply_before);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(user_version(&conn), 37);
+    }
+
+    #[test]
+    fn post_alter_failure_rollback_restores_legacy_schema_after_create_conflict() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let row_id = insert_legacy_ward_updated_row(&conn);
+        let before = load_legacy_audit_row(&conn, row_id);
+        conn.execute_batch(
+            "CREATE TABLE ward_audit_new (conflict TEXT NOT NULL);\nINSERT INTO ward_audit_new (conflict) VALUES ('sentinel');",
+        )
+        .unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("conflicting replacement table must fail after ALTER TABLE succeeds");
+        assert!(
+            err.to_string()
+                .contains("table ward_audit_new already exists"),
+            "unexpected migration error: {err}"
+        );
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_legacy_audit_row(&conn, row_id), before);
+        assert_eq!(user_version(&conn), 37);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+        assert!(!has_column(&conn, "detail"));
+        assert_eq!(ward_audit_new_conflict_value(&conn), "sentinel");
     }
 }
