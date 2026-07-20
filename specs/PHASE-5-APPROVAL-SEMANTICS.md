@@ -1,18 +1,21 @@
 # PHASE-5 PROPOSAL — Approval semantics over the Phase-2 Ward
 
-**Status:** PROPOSAL (decisions recorded — awaiting PR merge to open Phase 5)
+**Status:** DECISION RECORD (Sections 0–5 are the reviewed proposal; Sections
+6–8 record the decision to open implementation. Freeze remains gated.)
 **Date:** 2026-07-18
 **Decision date:** 2026-07-18
 **Bead:** `threads-uqx`
 **Authors:** Sage lane (drafted by coordinator session agent)
-**Decided by:** Val Alexander + Nova (main session)
+**Decided by:** Val Alexander + Nova (decision commit `b085fc8`, authored by
+Val and carrying Nova's co-author attestation)
 
 ---
 
 ## 0. Scope and sources
 
-This is a proposal document only. It does not start Phase 5, amend frozen
-Phase 0, or change the daemon. Val and Nova decide whether Phase 5 opens.
+Sections 0–5 preserve the proposal as reviewed. They do not amend frozen Phase
+0 or change the daemon. Sections 6–8 are the subsequent Val + Nova decision
+record that opened Phase 5 implementation; they do not declare Phase 5 frozen.
 
 Sources read and cited:
 
@@ -23,7 +26,8 @@ Sources read and cited:
 - `../familiar-contract/rfcs/RFC-0001-familiar-contract.md`: §4.2 protected
   invariants, §4.3 editable surface, §5.3 approval tiers, §5.4 gates, §5.5
   probes. RFC amendments for closure precondition and provenance predicate are
-  pending on issues #3/#4 and are treated as upstream-in-flight.
+  drafted in OpenCoven/familiar-contract PR #3 and remain an upstream freeze
+  gate until Nova + Val approve and merge them.
 - `../coven-grimoire/articles/drafts/2026-06-24-ward-layer-spec-brief.md` §9:
   canonical home of WARD-C1..C7.
 - `specs/PHASE-4-CAVE-SURFACES.md`: approval flow §3.7, fail-closed rendering
@@ -99,8 +103,10 @@ That matches RFC-0001 §5.3 and explains why Phase 4 already models
 `proposal_approved`, `proposal_rejected`, and `proposal_vetoed` audit events.
 
 What stays dead is stringly coupling among `blocks = [...]`, `gate = "..."`,
-and ad hoc veto fields. If Phase 5 opens, policy should be typed and
-daemon-owned. The Cave may render it; it must not become a policy engine.
+and ad hoc veto fields. RFC-0001's TOML Ward declaration remains normative:
+`[protected].invariants` entries compile into typed, daemon-owned predicates at
+load. An unknown or uncompilable declaration fails closed. The old strings do
+not become enforcement objects, and the Cave must not become a policy engine.
 
 Recommended name: `ApprovalPath`, not `Tier`. "Tier" is already the path-trust
 axis in Phase 2. Reusing it would collapse where a write lands with which
@@ -127,10 +133,12 @@ authoritative gate; `describe()` yields a derived descriptor. Identity
 invariants should become predicate implementations in the weave, not strings
 interpreted by clients.
 
-The v0.1 invariant syntax should stay dead. It was legible but underspecified:
-parser semantics, evidence collection, normalization, provenance, and failure
-handling were not defined. Pending RFC issues #3/#4 should land, or be waived
-by Val/Nova, before Phase 5 freezes invariant interfaces.
+The v0.1 invariant interpretation should stay dead. RFC-0001 still requires a
+TOML `[protected].invariants` declaration surface, so Phase 5 must define a
+deterministic compiler from supported declarations into `PatternPredicate`
+implementations. Parser semantics, normalization, evidence, and failure modes
+belong to that compiler; unsupported declarations fail closed. The corrected
+RFC PR #3 must land before Phase 5 freezes invariant interfaces.
 
 ---
 
@@ -242,9 +250,18 @@ Delayed apply needs audit moments:
 - `proposal_submitted`: classification, diff hash, affected paths/regions,
   predicate evidence, deadline;
 - `proposal_window_opened`: gate evidence and veto deadline recorded;
-- final `proposal_approved`, `proposal_vetoed`, `proposal_expired`, or
-  `proposal_rejected`: daemon revalidation result immediately before apply or
-  refusal.
+- one terminal event after deadline or explicit action:
+
+| Terminal event | Close reason | Meaning |
+| --- | --- | --- |
+| `proposal_approved` | `applied` | Deadline and minimum visibility elapsed, no veto exists, replay matched, and the write committed. |
+| `proposal_vetoed` | `vetoed` | A principal veto closed the window before apply. |
+| `proposal_rejected` | `evidence_diverged` | Deadline triggered replay and the evidence hash changed. |
+| `proposal_rejected` | `revalidation_failed` | Replay could not produce authoritative evidence. |
+| `proposal_rejected` | `superseded` | A newer proposal replaced this pending proposal before apply. |
+
+Deadline expiry is a trigger for revalidation, not a successful or failed
+terminal state by itself. There is no `proposal_expired` terminal event.
 
 WARD-C6 matters by analogy: a time-separated, lossy or delayed boundary needs a
 ledger. A proposal whose evidence cannot be replayed at deadline fails closed.
@@ -257,8 +274,10 @@ exists; until then unknown or stale veto state renders blocked under Phase 4 §4
 
 - No general policy engine; README anti-goals and Phase 4 §6 bind.
 - No client-side approval authority; Cave forwards, daemon decides.
-- No revival of v0.1 TOML as normative format.
-- No Phase-5 start and no changes to frozen Phase 0.
+- No revival of v0.1 stringly TOML semantics. RFC-0001's Ward TOML declaration
+  format remains normative and compiles into typed predicates.
+- No Phase-5 freeze and no changes to frozen Phase 0. The later implementation
+  opening is recorded separately in Sections 6–8.
 - No weakening of Gate 4; every path ends in live daemon re-materialization.
 - No `.af` compatibility work; Phase 3 already decided `.weave` canonical plus
   lossy one-way `.af` exporter.
@@ -269,24 +288,33 @@ exists; until then unknown or stale veto state renders blocked under Phase 4 §4
 
 ## 6. Decisions (Val + Nova, 2026-07-18)
 
-All eight questions resolved on Sage's recommended defaults. RFC dependency
-blocker (issues #3/#4) resolved: both landed in OpenCoven/familiar-contract@2a5bb98
-and issues closed before this decision record was written.
+All eight questions resolved on Sage's recommended defaults. The RFC dependency
+shape is resolved in corrected familiar-contract PR #3, but its Nova + Val
+approval and merge remain a Phase 5 freeze gate.
+
+Decision evidence: commit `b085fc8` (`spec(phase-5): record Val+Nova decisions,
+open Phase 5`), authored by Val Alexander and carrying
+`Co-authored-by: Nova <nova@opencoven.dev>`. This amendment corrects factual and
+authority-model defects in that record without changing the attested decision
+to open implementation.
 
 1. **`ApprovalPath` separate from `Channel`? → YES.**
    Channel remains the load axis (why a thread is stressed). ApprovalPath is
    the promotion ceremony. Conflating them would make Phase 0 load-axis
    semantics ambiguous. `ApprovalPath` proceeds as a distinct type.
-   *Follows the source-authoritative-enforcement rule: ApprovalPath is
-   authoritative; Channel is a derived load descriptor. Never gate on Channel.
-   If this rule shifts, revisit all eight decisions.* (Echo, Sage 2026-07-18)
+   *Both are authoritative in their own dimensions: Channel remains the
+   first-class Phase-0 load/enforcement axis, while ApprovalPath selects the
+   promotion ceremony. Never derive ApprovalPath from Channel. If this
+   separation shifts, revisit all eight decisions.* (Echo, Sage 2026-07-18;
+   corrected after independent coherence review 2026-07-19)
 
 2. **Veto windows: delayed-apply or provisional-apply? → DELAYED APPLY ONLY.**
    Matches Gate-4 fail-closed posture and Phase 4 "no optimistic UI, no queued
    decisions." Provisional apply + rollback is a distinct threat model; not
    opening that door in Phase 5.
    *Audit implication: the veto window close event needs an explicit reason
-   field — `applied | vetoed | expired | superseded`. Without it,
+   field — `applied | vetoed | evidence_diverged | revalidation_failed |
+   superseded`. Without it,
    delayed-apply is a post-hoc audit black hole. Confirm `ApplyAudit` (issue
    #5) captures the close event, not just the apply event. (Echo 2026-07-18)*
 
@@ -307,10 +335,11 @@ and issues closed before this decision record was written.
    fail-closed (no promotion) — not silent fallback to LLM judgment.
    Ambiguity is an explicit ignored/blocked state. (Echo 2026-07-18)*
 
-5. **Must RFC issues #3/#4 land before freeze? → MOOT; both landed.**
-   OpenCoven/coven-threads#3 and #4 closed 2026-07-18. Phase 5 freeze has no
-   RFC amendment blocker. See familiar-contract@2a5bb98 for the resolved shape;
-   issues #3/#4 preserved in git history for provenance.
+5. **Must the RFC #3/#4 amendments (familiar-contract PR #3) land before
+   freeze? → YES.**
+   The corrected amendments are drafted in OpenCoven/familiar-contract PR #3.
+   Implementation may proceed against that reviewed shape, but Phase 5 cannot
+   freeze until Nova + Val approve and merge the upstream normative text.
 
 6. **Cave `ProposalView` extension: daemon contract first or simultaneous?
    → DAEMON CONTRACT FIRST.**
@@ -343,7 +372,9 @@ Phase 5 opened 2026-07-18 (Val + Nova decision). Beads are live.
 - `threads-uqx` — [EPIC] approval semantics over the Phase-2 Ward.
 - `threads-uqx.1` — ✅ RESOLVED: `ApprovalPath` separate from `Channel`; delayed
   apply; classify-first for regions; deterministic+probe for invariants.
-- `threads-uqx.2` — ✅ RESOLVED: RFC #3/#4 landed (familiar-contract@2a5bb98).
+- `threads-uqx.2` — RFC #3/#4 amendment gate: corrected DRAFT
+  familiar-contract PR #3 must receive Nova + Val approval and merge before
+  Phase 5 freeze.
 - `threads-uqx.3` — Core type sketch: `ApprovalPath`, `VetoWindow`,
   `ProposalClassification`, region evidence, audit event shape.
   *Design constraints from Sage/Echo (2026-07-18) to incorporate:*
@@ -362,7 +393,10 @@ Phase 5 opened 2026-07-18 (Val + Nova decision). Beads are live.
   scheduler, revalidation at deadline, append-only audit in `coven.sqlite3`.
 - `threads-uqx.7` — Cave contract amendment after daemon read models exist;
   add blocked fixtures for veto states.
-- `threads-uqx.8` — Cody implementation lane: core crate and daemon tests.
+- `threads-uqx.8` — Cody implementation lane: core crate and daemon tests,
+  migration coverage, and fidelity coverage proving the retired name, person,
+  pronouns, purpose, and Coven-membership invariant shapes are either compiled
+  deterministically or rejected explicitly.
 - `threads-uqx.9` — Nova sign-off: RFC round-trip, Gate-4 fail-closed proof,
   descriptor-not-authority review.
 - `threads-uqx.10` — Val freeze: Phase-5 design frozen or rejected.
