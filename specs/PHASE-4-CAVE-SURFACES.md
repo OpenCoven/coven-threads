@@ -241,6 +241,13 @@ including staged contents. `familiarUuid` is compared directly with the staged
 payload; the daemon's human `familiarId` remains display data and is not used as
 the identity join key.
 
+Revision algorithm (normative): remove top-level procedural
+`decisionRequest`/`decisionState`; recursively sort every JSON object by Unicode
+code-point key order while preserving array order; serialize compact UTF-8 JSON;
+then lowercase-hex SHA-256 the bytes. Cave computes this revision from the same
+parsed envelope used to render edits and requires equality with the daemon's
+`proposalRevision`. A mismatch blocks the card before any action is offered.
+
 ```jsonc
 // Scheduled proposal whose daemon metadata is verified.
 {
@@ -271,6 +278,24 @@ the identity join key.
 
 `availableDecisions` is a closed presentation mapping over verified daemon
 fields, not local authorization:
+
+The daemon wire uses snake_case enum values and nested field names. The adapter
+performs only this closed normalization before the mapping:
+
+| Daemon wire | Cave view |
+|---|---|
+| `auto_regression` | `auto-regression` |
+| `familiar_coherence` | `familiar-coherence` |
+| `human_approval` | `human-approval` |
+| `human_approval_with_rationale` | `human-approval-with-rationale` |
+| `awaiting_human_approval` | `awaiting-human-approval` |
+| `veto_window_open` | `veto-window-open` |
+| `ready_for_replay` | `ready-for-replay` |
+| `blocked` | `blocked` |
+| `approvalPath.veto_deadline` | `approvalPath.vetoDeadline` |
+
+Any value outside this table is `unknown-lifecycle`; no generic case conversion
+or label synthesis is permitted. `approvalPath.label` is never normalized.
 
 | Daemon lifecycle and path | Cave action |
 |---|---|
