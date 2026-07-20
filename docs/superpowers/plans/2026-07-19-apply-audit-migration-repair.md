@@ -301,8 +301,9 @@ git diff origin/cody/apply-audit-v014...HEAD --stat
 git status --short --branch
 ```
 
-Expected: only the changelog, design, plan, and audit migration files are
-changed; the worktree is clean after commits.
+Expected: only the design doc, plan doc, `crates/coven-threads-core/Cargo.toml`,
+`Cargo.lock`, and `crates/coven-threads-core/src/audit.rs` are changed; the
+worktree is clean after commits.
 
 - [ ] **Step 3: Record verification in Beads**
 
