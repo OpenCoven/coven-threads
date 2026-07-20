@@ -102,6 +102,11 @@ files:
   `busy_timeout` and repeated synchronized starts proving one caller upgrades,
   the other waits, then fails only at the legacy guard after seeing exact
   current (never with a lock error), while preserving the legacy row.
+- Add a post-rebuild drift coverage path that reuses
+  `WARD_AUDIT_MIGRATION_V014_SQL`, injects an unexpected durable
+  `main.ward_audit_*` object immediately before the real postcondition guard,
+  requires a guard failure, and proves explicit rollback restores exact legacy
+  row/schema/constraints/user_version while removing the injected object.
 - Add reason-demo coverage proving an unqualified `INSERT INTO ward_audit ...`
   lands in TEMP while the durable contract remains `unknown`.
 - Add a controlled post-`ALTER` rollback coverage path that starts from exact
@@ -154,11 +159,14 @@ files:
 - Update `WARD_AUDIT_MIGRATION_V014_SQL` so it:
   - starts with `BEGIN IMMEDIATE` so concurrent migrators serialize before the
     legacy guard read;
-  - creates a uniquely named TEMP guard table with `CHECK (ok = 1)`;
+  - creates a uniquely named TEMP precondition guard table with `CHECK (ok = 1)`;
   - inserts `1` only when the full exact legacy durable predicate holds and no
     unexpected durable reserved-name object or temp shadow/reserved temp object
     exists, otherwise inserts `0` and aborts;
-  - drops the guard on the success path;
+  - after the rebuild, creates a distinct TEMP postcondition guard that reruns
+    the shared schema-state CTE/predicates and requires exact `current_v014`
+    before `COMMIT`;
+  - drops both guards on the success path;
   - keeps `ALTER ADD detail`, strict replacement-table creation, detail copy,
     and explicit main index/trigger recreation, all qualified to `main`
     wherever SQLite syntax permits;
@@ -195,7 +203,7 @@ files:
 Create a new commit (no amend) with:
 
 ```text
-fix(audit): serialize schema guard transactions
+fix(audit): verify migration postcondition
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```

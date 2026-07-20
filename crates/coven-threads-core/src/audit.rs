@@ -65,11 +65,15 @@
 //! shadow. It independently re-checks that fingerprint inside one
 //! `BEGIN IMMEDIATE` transaction before any `ALTER`, then adds `detail` and
 //! rebuilds `main.ward_audit` so the current CHECK set is installed and every
-//! existing row is preserved. The IMMEDIATE reservation means concurrent
-//! migrators serialize before any legacy-guard read: the winner upgrades first,
-//! and a second caller waits, reclassifies the durable table as current when
-//! the guard re-runs, then fails closed at the legacy guard without a
-//! `sqlite_master` lock race. If a later migration step fails after
+//! existing row is preserved. Before `COMMIT`, a distinct TEMP postcondition
+//! guard reruns the shared schema-state CTE/predicates and requires exact
+//! `current_v014`, so callers cannot durably commit a rebuilt-but-self-unknown
+//! namespace if extra `ward_audit` / `ward_audit_*` objects appear mid-transaction.
+//! The IMMEDIATE reservation means concurrent migrators serialize before any
+//! legacy-guard read: the winner upgrades first, and a second caller waits,
+//! reclassifies the durable table as current when the guard re-runs, then fails
+//! closed at the legacy guard without a `sqlite_master` lock race. If the
+//! postcondition guard or any later migration step fails after
 //! `ALTER TABLE main.ward_audit ADD COLUMN detail`, callers must explicitly roll
 //! back the failed transaction before continuing so SQLite restores the
 //! untouched legacy table.
@@ -700,18 +704,22 @@ FROM ward_audit_shape;
 /// 3. creates `main.ward_audit_new` with the updated CHECK;
 /// 4. copies every existing row, preserving `detail`;
 /// 5. swaps the tables; and
-/// 6. re-creates the exact explicit main indexes and append-only main triggers.
+/// 6. re-creates the exact explicit main indexes and append-only main triggers;
+///    and
+/// 7. re-runs the shared schema-state expression in a distinct TEMP
+///    postcondition guard and requires exact `current_v014` before `COMMIT`.
 ///
 /// Callers should still branch on [`WARD_AUDIT_SCHEMA_STATE_SQL`] first:
 /// initialize when the state is `missing`, migrate only `legacy_v013`,
 /// continue on `current_v014`, and fail closed on `unknown`. This migration
 /// independently guards the same `legacy_v013` fingerprint, durable
-/// reserved-namespace whitelist, and temp-shadow rejection so callers cannot
-/// mutate a partial, already-current, or shadowed schema by skipping
-/// classification. Because the transaction begins IMMEDIATELY, concurrent
-/// migrators serialize before the guard read; after the winner commits, a
-/// second caller re-runs the guard against the now-current schema and fails
-/// closed there rather than racing into a `sqlite_master` lock. If a later step
+/// reserved-namespace whitelist, temp-shadow rejection, and exact-current
+/// postcondition so callers cannot mutate a partial, already-current,
+/// shadowed, or rebuilt-but-drifted schema by skipping classification. Because
+/// the transaction begins IMMEDIATELY, concurrent migrators serialize before
+/// the guard read; after the winner commits, a second caller re-runs the guard
+/// against the now-current schema and fails closed there rather than racing
+/// into a `sqlite_master` lock. If the postcondition guard or a later step
 /// fails after `ALTER TABLE main.ward_audit ADD COLUMN detail`, callers must
 /// `ROLLBACK` the failed transaction before continuing so SQLite restores the
 /// untouched legacy table. This SQL does not read or write database-wide
@@ -791,6 +799,24 @@ BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
+
+CREATE TEMP TABLE coven_threads_ward_audit_migration_post_guard (
+    ok INTEGER NOT NULL CHECK (ok = 1)
+);
+
+INSERT INTO coven_threads_ward_audit_migration_post_guard (ok)
+"#,
+    ward_audit_schema_state_ctes_sql!(),
+    r#"
+SELECT CASE
+    WHEN ("#,
+    ward_audit_schema_state_case_sql!(),
+    r#") = 'current_v014' THEN 1
+    ELSE 0
+END
+FROM ward_audit_shape;
+
+DROP TABLE coven_threads_ward_audit_migration_post_guard;
 
 COMMIT;
 "#,
@@ -1228,6 +1254,24 @@ END;
     fn create_temp_shadow_table(conn: &Connection, base_schema_sql: &str) {
         conn.execute_batch(&temp_shadow_table_sql(base_schema_sql))
             .unwrap();
+    }
+
+    fn inject_sql_before_anchor(base_sql: &str, anchor: &str, injection_sql: &str) -> String {
+        let replacement = format!("{injection_sql}\n\n{anchor}");
+        let updated = base_sql.replacen(anchor, &replacement, 1);
+        assert_ne!(
+            updated, base_sql,
+            "expected to inject before anchor {anchor}"
+        );
+        updated
+    }
+
+    fn migration_sql_with_durable_drift_before_post_guard(drift_sql: &str) -> String {
+        inject_sql_before_anchor(
+            WARD_AUDIT_MIGRATION_V014_SQL,
+            "CREATE TEMP TABLE coven_threads_ward_audit_migration_post_guard (",
+            drift_sql,
+        )
     }
 
     fn legacy_schema_with_extra_table_constraint(constraint_sql: &str) -> String {
@@ -1805,6 +1849,35 @@ END;
                 "{label} SQL must reserve the main database before guard reads"
             );
         }
+    }
+
+    #[test]
+    fn migration_sql_uses_distinct_pre_and_post_guards_before_commit() {
+        let pre_guard_offset = WARD_AUDIT_MIGRATION_V014_SQL
+            .find("CREATE TEMP TABLE coven_threads_ward_audit_migration_guard (")
+            .expect("migration SQL must define a precondition guard");
+        let post_guard_offset = WARD_AUDIT_MIGRATION_V014_SQL
+            .find("CREATE TEMP TABLE coven_threads_ward_audit_migration_post_guard (")
+            .expect("migration SQL must define a postcondition guard");
+        let post_guard_drop_offset = WARD_AUDIT_MIGRATION_V014_SQL
+            .find("DROP TABLE coven_threads_ward_audit_migration_post_guard;")
+            .expect("migration SQL must drop the postcondition guard before commit");
+        let commit_offset = WARD_AUDIT_MIGRATION_V014_SQL
+            .rfind("COMMIT;")
+            .expect("migration SQL must commit on success");
+
+        assert!(
+            pre_guard_offset < post_guard_offset,
+            "postcondition guard must run after the legacy precondition guard"
+        );
+        assert!(
+            post_guard_offset < post_guard_drop_offset,
+            "postcondition guard must be dropped on the success path"
+        );
+        assert!(
+            post_guard_drop_offset < commit_offset,
+            "postcondition guard must run before COMMIT"
+        );
     }
 
     #[test]
@@ -2792,7 +2865,7 @@ END;
     }
 
     #[test]
-    fn legacy_schema_upgrades_and_preserves_append_only_behavior() {
+    fn legacy_schema_upgrade_passes_post_guard_and_preserves_append_only_behavior() {
         let conn = Connection::open_in_memory().unwrap();
         set_user_version(&conn, 37);
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
@@ -2844,6 +2917,54 @@ END;
             .execute("DELETE FROM ward_audit WHERE id = ?1", params![row_id])
             .unwrap_err();
         assert!(delete_err.to_string().contains("append-only"));
+    }
+
+    #[test]
+    fn post_guard_rejects_durable_drift_and_rollback_restores_exact_legacy_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        let row_id = insert_legacy_ward_updated_row(&conn);
+        let before = load_legacy_audit_row(&conn, row_id);
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+
+        let drift_sql = migration_sql_with_durable_drift_before_post_guard(
+            "CREATE VIEW main.ward_audit_history AS SELECT id, decision FROM main.ward_audit;",
+        );
+        let err = conn
+            .execute_batch(&drift_sql)
+            .expect_err("postcondition guard must reject durable drift before commit");
+        assert!(
+            err.to_string().contains("CHECK constraint failed"),
+            "unexpected migration error: {err}"
+        );
+        assert!(has_column(&conn, "detail"));
+        assert!(main_schema_object_exists(
+            &conn,
+            "view",
+            "ward_audit_history"
+        ));
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+
+        conn.execute_batch("ROLLBACK;").unwrap();
+
+        assert_eq!(load_legacy_audit_row(&conn, row_id), before);
+        assert_eq!(user_version(&conn), 37);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+        assert!(!has_column(&conn, "detail"));
+        assert!(!main_schema_object_exists(&conn, "table", "ward_audit_new"));
+        assert!(!main_schema_object_exists(
+            &conn,
+            "view",
+            "ward_audit_history"
+        ));
+        assert_eq!(
+            stored_table_sql(&conn),
+            sql_literal_value(&conn, ward_audit_exact_legacy_table_sql_sql!())
+        );
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
     }
 
     #[test]

@@ -51,9 +51,13 @@ All notable changes to `coven-threads-core` are documented here.
   `legacy_v013`, continue on `current_v014`, and fail closed on `unknown`. The
   migration independently re-checks `legacy_v013` before any `ALTER`, now
   inside `BEGIN IMMEDIATE` so concurrent migrators serialize before the guard
-  read. After the first caller upgrades, a second caller waits, re-runs the
-  guard against exact current, and fails only at the legacy guard instead of
-  racing into `sqlite_master` lock errors. The SQL otherwise uses the same
+  read. After the rebuild, a distinct TEMP postcondition guard reruns the same
+  shared schema-state CTE/predicates and requires exact `current_v014` before
+  `COMMIT`, so a caller cannot durably commit a self-unknown rebuilt schema if
+  unexpected `main.ward_audit` / `main.ward_audit_*` drift appears mid-
+  transaction. After the first caller upgrades, a second caller waits, re-runs
+  the guard against exact current, and fails only at the legacy guard instead
+  of racing into `sqlite_master` lock errors. The SQL otherwise uses the same
   exact stored-table + column/index/trigger predicate plus durable namespace
   whitelist and temp-shadow rejection, then copies rows into the replacement
   table without discarding evidence.
@@ -84,12 +88,14 @@ All notable changes to `coven-threads-core` are documented here.
   `current_schema_with_altered_trigger_error_literal_is_unknown`,
   `current_schema_with_altered_trigger_body_is_unknown`,
   `schema_and_migration_sql_use_begin_immediate`,
+  `migration_sql_uses_distinct_pre_and_post_guards_before_commit`,
   `absent_ward_audit_with_reserved_index_collision_is_unknown_and_schema_sql_preserves_other_objects`,
   `absent_ward_audit_with_reserved_trigger_collision_is_unknown_and_schema_sql_preserves_other_objects`,
   `unknown_partial_current_schema_rejects_schema_sql_and_preserves_state`,
   `migration_rejects_current_schema_rows_with_detail_and_preserves_state`,
   `legacy_schema_with_preexisting_main_ward_audit_new_is_unknown_and_guard_rejects_before_alter`,
-  `legacy_schema_upgrades_and_preserves_append_only_behavior`,
+  `legacy_schema_upgrade_passes_post_guard_and_preserves_append_only_behavior`,
+  `post_guard_rejects_durable_drift_and_rollback_restores_exact_legacy_state`,
   `rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows`,
   `concurrent_schema_initialization_serializes_without_locked_errors`,
   `concurrent_legacy_migration_waits_then_rejects_current_at_guard`,

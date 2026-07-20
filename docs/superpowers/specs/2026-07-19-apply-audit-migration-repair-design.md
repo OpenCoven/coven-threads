@@ -94,10 +94,12 @@ The v0.1.4 repair remains a table-local migration. The SQL still:
 2. creates a strict replacement `main.ward_audit_new`;
 3. copies every row, preserving `detail`;
 4. swaps tables; and
-5. re-creates the required explicit main indexes and append-only main triggers.
+5. re-creates the required explicit main indexes and append-only main triggers;
+   and
+6. runs a distinct TEMP post-migration guard before `COMMIT`.
 
 The change is the guardrail: immediately after `BEGIN IMMEDIATE;`, the
-migration creates a uniquely named TEMP guard table with `CHECK (ok = 1)` and
+migration creates a uniquely named TEMP precondition guard table with `CHECK (ok = 1)` and
 inserts `1` only if the exact `legacy_v013` durable fingerprint holds **and**
 no unexpected durable reserved-name object or temp shadow/reserved temp object
 exists. Any missing/current/partial/shadowed schema inserts `0` instead,
@@ -108,6 +110,15 @@ and fails closed there instead of racing into a `sqlite_master` lock. This
 makes the migration fail closed even if a caller skips the classification query,
 and keeps initialization and migration aligned on the same exact state
 contract.
+
+Before `COMMIT`, the migration now creates a second uniquely named TEMP guard
+table that reruns the same shared schema-state CTE/predicates and requires exact
+`current_v014`. That postcondition guard catches rebuilt tables that have become
+self-unknown inside the still-open `BEGIN IMMEDIATE` transaction — for example,
+if an unexpected durable `main.ward_audit_*` view or index appears after the
+swap but before commit. On that failure path, the caller's explicit `ROLLBACK`
+restores the untouched exact legacy table, its rows, and the pre-migration
+namespace while removing the injected drift object.
 
 If a later step fails after `ALTER TABLE`, callers must explicitly `ROLLBACK`
 the failed transaction before continuing so SQLite restores the untouched
@@ -150,23 +161,27 @@ Executable rusqlite tests cover:
    `recorded_at DESC` index, a `COLLATE NOCASE` index, or altered append-only
    trigger SQL classifying as `unknown`;
 10. successful exact-legacy upgrade landing in `current_v014`, with fresh and
-   migrated current schemas both classifying `current_v014` while matching only
-   their controlled exact stored SQL variants; and
-11. a controlled post-`ALTER` SQL failure inside the transaction validating
+    migrated current schemas both classifying `current_v014` while matching only
+    their controlled exact stored SQL variants;
+11. a test-only migration variant that injects durable reserved-name drift after
+    the rebuild but before the real postcondition guard, proving the guard fails
+    closed and explicit rollback restores the exact legacy row/schema/
+    constraints/user_version while removing the injected object;
+12. a controlled post-`ALTER` SQL failure inside the transaction validating
     SQLite rollback semantics for the production migration contract and
     restoring the full legacy table state; and
-12. schema-qualified PRAGMA syntax on bundled SQLite plus the reason for the
-   fail-closed contract: unqualified inserts hit TEMP first while the contract
-   remains `unknown`.
-13. file-backed multi-connection initialization with two simultaneous callers,
-   `busy_timeout`, and repeated runs proving both `WARD_AUDIT_SCHEMA_SQL`
-   executions complete without locked/schema-locked errors because
-   `BEGIN IMMEDIATE` serializes them before guard reads; and
-14. file-backed multi-connection legacy migration with two simultaneous callers,
-   `busy_timeout`, and repeated runs proving one migration succeeds while the
-   second waits, re-runs the guard against exact `current_v014`, and fails only
-   at the legacy guard (never with a lock error), while preserving the legacy
-   row data.
+13. schema-qualified PRAGMA syntax on bundled SQLite plus the reason for the
+    fail-closed contract: unqualified inserts hit TEMP first while the contract
+    remains `unknown`.
+14. file-backed multi-connection initialization with two simultaneous callers,
+    `busy_timeout`, and repeated runs proving both `WARD_AUDIT_SCHEMA_SQL`
+    executions complete without locked/schema-locked errors because
+    `BEGIN IMMEDIATE` serializes them before guard reads; and
+15. file-backed multi-connection legacy migration with two simultaneous callers,
+    `busy_timeout`, and repeated runs proving one migration succeeds while the
+    second waits, re-runs the guard against exact `current_v014`, and fails only
+    at the legacy guard (never with a lock error), while preserving the legacy
+    row data.
 
 ## Scope
 
