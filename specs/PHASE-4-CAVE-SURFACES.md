@@ -6,6 +6,12 @@
 **Substrate:** `coven-threads-core` v0.1.2 (98 tests green) + coven daemon integration branch `feat/threads-gate-validator` (PR OpenCoven/coven#382, merge gated on `threads-986.19`)
 **Shape reference:** OpenTrust `docs/MEMORY-API-CONTRACT.md` / `docs/MEMORY-LAYER-STANDARD.md` — mirrored in *shape* (contract-first, evidence-over-summaries, freshness surfaced everywhere), **never in stack** (no Tauri, no Convex, no plugin architecture, no vendored code)
 
+**Phase 5 amendment (2026-07-20, bead `threads-uqx.7`):** scheduled
+proposal lifecycle metadata comes from the daemon read model added by
+OpenCoven/coven#430. Cave may combine that metadata with staged-file contents
+for inspection, but it never infers lifecycle transitions from clocks or local
+files.
+
 ---
 
 ## 0. Ground rules (normative, inherited — violating any of these is wrong by declaration)
@@ -221,9 +227,57 @@ never dropped from the list silently (§4.R7).
       { "surface": "MEMORY.md", "contents": { "encoding": "utf8|base64", "data": "…full desired contents, never diffs…" } }
     ],
     "stagedAt": "…"
-  }
+  },
+  "authority": { /* ProposalAuthorityView, below */ }
 }
 ```
+
+Phase 5 adds daemon-owned scheduling metadata without making Cave an approval
+engine. The daemon adapter joins each parse-ok staged file to
+`GET /api/v1/threads/proposals` by proposal id. Staged contents remain visible
+for principal inspection; every lifecycle field and display label comes from
+the daemon response.
+
+```jsonc
+// Scheduled proposal whose daemon metadata is verified.
+{
+  "state": "verified",
+  "approvalPath": {
+    "variant": "auto-regression|familiar-coherence|human-approval|human-approval-with-rationale",
+    "label": "auto|familiar_review|human_review|human_required", // daemon text, rendered verbatim
+    "vetoDeadline": "RFC3339 | null"
+  },
+  "lifecycle": "awaiting-human-approval|veto-window-open|ready-for-replay|blocked",
+  "blockedReason": "string | null",
+  "earliestClose": "RFC3339 | null",
+  "affectedRegions": ["tool_defaults"],
+  "availableDecisions": ["approve", "reject"] // deterministic mapping below
+}
+
+// Pre-Phase-5 proposal. Compatibility only; no scheduled lifecycle is invented.
+{ "state": "legacy", "reviewKind": "authority" }
+
+// Scheduled envelope exists, but daemon authority cannot be joined or verified.
+{
+  "state": "blocked",
+  "why": "daemon-unavailable|daemon-proposal-missing|daemon-unparseable|daemon-mismatch|unknown-lifecycle"
+}
+```
+
+`availableDecisions` is a closed presentation mapping over verified daemon
+fields, not local authorization:
+
+| Daemon lifecycle and path | Cave action |
+|---|---|
+| `awaiting-human-approval` + `human-approval` | approve or reject |
+| `awaiting-human-approval` + `human-approval-with-rationale` | approve with a non-empty note, or reject |
+| `veto-window-open` + a path carrying a veto deadline | reject, rendered as **Veto** |
+| `ready-for-replay`, `blocked`, unknown combination, or blocked authority | no action |
+
+Cave MUST NOT compare its clock to `vetoDeadline` or `earliestClose` to change
+the action set. Deadline expiry triggers daemon replay; only a fresh daemon
+response may move lifecycle. Every POST remains a forwarder and the daemon
+re-validates the decision.
 
 ### 2.7 `DegradedFamiliarView` — a familiar whose ward config cannot be parsed
 
@@ -282,6 +336,15 @@ never apply edits, never touch `pending/`, never write sqlite.
 - Proposal `parse: corrupt`: both actions disabled in the UI *and* the routes
   answer **HTTP 409** `{ "blocked": true, "why": "proposal-corrupt" }` if
   called anyway (§4.R6).
+- Phase 5 scheduled proposals expose only `authority.availableDecisions`.
+  Unknown, stale, unavailable, mismatched, or unrecognized daemon lifecycle
+  metadata disables both actions. Cave never substitutes a local default.
+- A veto uses the existing reject forwarder. The UI label changes to **Veto**
+  only when the verified daemon lifecycle is `veto-window-open`; the request is
+  still `POST /api/proposals/[id]/reject`.
+- `human_required` approval requires a non-empty `note` before Cave enables the
+  approve button. The daemon remains authoritative and rejects missing
+  rationale even if the route is called directly.
 
 ### 3.8 Response envelope — freshness on every response
 
@@ -334,6 +397,10 @@ approval actions disabled, evidence trace still reachable.
 | R10 | Snapped thread | `state: "snapped"` | Terminal treatment: read-only, "fresh authority ceremony required" copy; no repair affordance |
 | R11 | Unknown route/id (404s) | id not in source | 404 with envelope, `blocked: true`; UI renders not-found as blocked, not empty-healthy |
 | R12 | Familiar ward config unparseable | §2.7 `degraded` entry in weaves response | Blocked rail row named for the familiar, "ward unreadable — protection not verifiable" copy, sanitized error in trace, zero threads shown, all actions disabled; never silently absent (added 2026-07-18) |
+| R13 | Scheduled proposal lacks daemon lifecycle metadata | staged file has Phase 5 schema but daemon join is absent/unavailable | Proposal remains inspectable with blocked authority; both actions disabled |
+| R14 | Daemon proposal metadata disagrees with staged identity/targets | id, familiar, writer, staged time, or target set mismatch | Blocked `daemon-mismatch`; no locally preferred source |
+| R15 | Unknown lifecycle/path combination | unrecognized enum value or invalid combination | Blocked `unknown-lifecycle`; never fall back to legacy actions |
+| R16 | Scheduled proposal metadata stale | response is past `staleAfter` | Last-known lifecycle may render as trace only; both actions disabled until a fresh daemon response |
 
 Rollup arithmetic (R1, normative): `snapped > frayed > unknown > stale > holds`.
 
@@ -371,6 +438,13 @@ need; Phase 5+.
 - [ ] Both adapters answer every route with the §3.8 envelope
 - [ ] All ten fixture states exist and are exercised
 - [ ] Every §4 row has a test proving its rendering
-- [ ] No code path renders healthy from unverifiable input (R1–R11 sweep)
+- [ ] No code path renders healthy from unverifiable input (R1–R16 sweep)
 - [ ] POST routes forward-only; grep-level check: no `fs.write`/`unlink` under the proposals routes, no sqlite writes anywhere in Cave API
+- [ ] Phase 5 fixtures cover `awaiting-human-approval`,
+      `veto-window-open`, `ready-for-replay`, and `blocked`, plus unavailable,
+      mismatched, and unknown daemon metadata
+- [ ] Cave renders daemon approval labels verbatim and never advances lifecycle
+      from its own clock
+- [ ] `availableDecisions` follows the §2.6 closed mapping; rationale-required
+      approval stays disabled until a non-empty note exists
 - [ ] `pnpm typecheck`, `pnpm test:app`, `pnpm test:api` green
