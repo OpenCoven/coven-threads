@@ -2,7 +2,12 @@
 
 All notable changes to `coven-threads-core` are documented here.
 
-## [0.1.4] — unreleased
+## [0.2.0] — unreleased
+
+Compatibility note: `AuditEventType::ApplyAudit` and `WardAuditRecord::detail`
+expand public exhaustive APIs. Downstream `match` arms and struct literals can
+break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
+`0.1.x` patch release.
 
 ### Added
 
@@ -14,7 +19,7 @@ All notable changes to `coven-threads-core` are documented here.
 - `WardAuditRecord::apply_prev_sha256_hex()` / `apply_bytes_written()` — decode helpers for `ApplyAudit` detail.
 - `APPLY_AUDIT_DETAIL_KEY_PREV` / `APPLY_AUDIT_DETAIL_KEY_BYTES` — stable JSON key constants.
 - `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable state tags (`missing`,
-  `legacy_v013`, `current_v014`, `unknown`) — reusable table-local schema
+  `legacy_v013`, `current_v020`, `unknown`) — reusable table-local schema
   fingerprint contract for daemon callers, using exact stored
   `main.sqlite_master.sql` fingerprints for the durable `main.ward_audit`
   table, explicit main indexes, and append-only main triggers, plus ordered
@@ -28,31 +33,31 @@ All notable changes to `coven-threads-core` are documented here.
   means `main.ward_audit` is absent, no unexpected durable reserved object
   exists, **and** no temp shadow/reserved temp object exists; any temp-schema
   table/view/index/trigger named `ward_audit` or `ward_audit_*` also
-  fail-closes as `unknown`. Only the controlled fresh/migrated v0.1.4 table SQL
+  fail-closes as `unknown`. Only the controlled fresh/migrated v0.2.0 table SQL
   variants and the shipped v0.1.3 table SQL are accepted; no
   whitespace-destroying normalization is applied.
 - `WARD_AUDIT_SCHEMA_SQL` — atomic, self-guarding schema initialization for the
-  exact `current_v014` fingerprint. It now begins with `BEGIN IMMEDIATE`, so
+  exact `current_v020` fingerprint. It now begins with `BEGIN IMMEDIATE`, so
   the main-database write reservation is acquired before any guard read or
   classification. That makes concurrent initializers serialize cleanly: the
   second caller waits, re-runs the guard against the winner's committed schema,
-  and idempotently sees exact `current_v014` instead of racing into
+  and idempotently sees exact `current_v020` instead of racing into
   `sqlite_master` lock errors. The SQL still permits only `missing` or exact
-  `current_v014` before any mutation, uses idempotent `IF NOT EXISTS` DDL for
+  `current_v020` before any mutation, uses idempotent `IF NOT EXISTS` DDL for
   daemon compatibility, targets durable schema objects in `main` wherever
-  SQLite syntax permits, then requires exact `current_v014` before `COMMIT`.
+  SQLite syntax permits, then requires exact `current_v020` before `COMMIT`.
   Exact `legacy_v013`, every drifted `unknown` shape, any unexpected durable
   reserved object, and any temp shadow/reserved temp object fail closed;
   callers must `ROLLBACK` after any init error.
-- `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL for a detail-preserving
+- `WARD_AUDIT_MIGRATION_V020_SQL` — transaction SQL for a detail-preserving
   rebuild of `main.ward_audit` guarded by the exact `legacy_v013` fingerprint
   plus durable-whitelist and temp-shadow rejection. The daemon should query
   `WARD_AUDIT_SCHEMA_STATE_SQL`, initialize when missing, migrate only
-  `legacy_v013`, continue on `current_v014`, and fail closed on `unknown`. The
+  `legacy_v013`, continue on `current_v020`, and fail closed on `unknown`. The
   migration independently re-checks `legacy_v013` before any `ALTER`, now
   inside `BEGIN IMMEDIATE` so concurrent migrators serialize before the guard
   read. After the rebuild, a distinct TEMP postcondition guard reruns the same
-  shared schema-state CTE/predicates and requires exact `current_v014` before
+  shared schema-state CTE/predicates and requires exact `current_v020` before
   `COMMIT`, so a caller cannot durably commit a self-unknown rebuilt schema if
   unexpected `main.ward_audit` / `main.ward_audit_*` drift appears mid-
   transaction. After the first caller upgrades, a second caller waits, re-runs
@@ -67,7 +72,7 @@ All notable changes to `coven-threads-core` are documented here.
   `schema_state_query_returns_missing_on_empty_db`,
   `fresh_schema_sql_initializes_current_schema_atomically_and_enforces_append_only`,
   `exact_legacy_fixture_returns_legacy_v013`,
-  `exact_current_schema_returns_current_v014`,
+  `exact_current_schema_returns_current_v020`,
   `current_schema_sql_reruns_idempotently_and_preserves_rows_and_objects`,
   `fresh_and_migrated_current_schemas_use_controlled_exact_sql_variants`,
   `current_schema_with_spaced_event_type_literal_is_unknown`,
@@ -112,8 +117,8 @@ All notable changes to `coven-threads-core` are documented here.
 - **Column approach (Option A):** `diff_hash` carries `next_sha256`; `prev_sha256` + `bytes_written` ride in the new `detail` TEXT column as JSON. This avoids a second table rebuild by not adding typed hash columns while keeping the data query-accessible via SQLite JSON functions.
 - **Migration approach (Option B-lite):** exports
   `WARD_AUDIT_SCHEMA_STATE_SQL`, `WARD_AUDIT_SCHEMA_SQL`, and
-  `WARD_AUDIT_MIGRATION_V014_SQL` so the daemon can classify `missing` /
-  `legacy_v013` / `current_v014` / `unknown`, perform a quiet fail-closed init
+  `WARD_AUDIT_MIGRATION_V020_SQL` so the daemon can classify `missing` /
+  `legacy_v013` / `current_v020` / `unknown`, perform a quiet fail-closed init
   or upgrade, and recover cleanly with explicit rollback after any init or
   migration error. The durable contract is explicitly `main.ward_audit`, and
   the reserved durable namespace is valid only for that table plus its two

@@ -9,15 +9,19 @@ closed on any TEMP shadow/reserved temp object, make schema initialization fail
 closed and atomic, preserve evidence and unrelated `user_version`, and prove
 rollback behavior with executable rusqlite tests.
 
+Because PR #7 also adds the public `AuditEventType::ApplyAudit` enum variant
+and the public `WardAuditRecord::detail` field, the release must bump to v0.2.0
+instead of claiming `0.1.x` compatibility under Cargo `^0.1`.
+
 **Architecture:** Keep ownership in `crates/coven-threads-core/src/audit.rs`.
 Expose `WARD_AUDIT_SCHEMA_STATE_SQL` plus stable tags so callers can branch on
-`missing` / `legacy_v013` / `current_v014` / `unknown`, reserve `missing` for
+`missing` / `legacy_v013` / `current_v020` / `unknown`, reserve `missing` for
 an absent `main.ward_audit` with no unexpected durable reserved-name object and
 no temp shadow/reserved temp object, require the same exact durable whitelist
-for `legacy_v013` and `current_v014`, wrap both `WARD_AUDIT_SCHEMA_SQL` and
-`WARD_AUDIT_MIGRATION_V014_SQL` in `BEGIN IMMEDIATE` transactions so guard
+for `legacy_v013` and `current_v020`, wrap both `WARD_AUDIT_SCHEMA_SQL` and
+`WARD_AUDIT_MIGRATION_V020_SQL` in `BEGIN IMMEDIATE` transactions so guard
 reads happen under the main-database write reservation, let concurrent init
-serialize cleanly to `current_v014`, and make a concurrent second migration
+serialize cleanly to `current_v020`, and make a concurrent second migration
 wait, then reclassify current when the legacy guard re-runs. Durable DDL/DML
 stays explicitly qualified to `main` wherever SQLite permits it, and the
 init/migration paths never write database-wide `user_version`.
@@ -29,14 +33,17 @@ dev-dependencies) for in-memory and file-backed concurrency tests.
 
 ## Final File Map
 
-For this follow-up fingerprint repair, the diff stays scoped to these five
-files:
+For this semver-corrected follow-up, the repair delta relative to
+`origin/cody/apply-audit-v014` stays scoped to these eight tracked files:
 
 1. `CHANGELOG.md`
-2. `crates/coven-threads-core/Cargo.toml`
-3. `crates/coven-threads-core/src/audit.rs`
-4. `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`
-5. `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`
+2. `Cargo.lock`
+3. `Cargo.toml`
+4. `crates/coven-threads-core/src/audit.rs`
+5. `crates/coven-threads-core/src/lib.rs`
+6. `docs/architecture.md`
+7. `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`
+8. `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`
 
 ---
 
@@ -45,7 +52,7 @@ files:
 - Add schema-state tests for:
   - empty DB → `missing`;
   - exact legacy fixture → `legacy_v013`;
-  - exact current schema → `current_v014`;
+  - exact current schema → `current_v020`;
   - exact legacy/current with only the durable whitelist objects still
     classifying correctly;
   - absent-table reserved-name collisions (`ward_audit_event_idx`,
@@ -60,18 +67,18 @@ files:
   - `pragma_index_list('ward_audit', 'main')` sees durable explicit indexes.
 - Add init-safety tests for:
   - clean empty DB → `WARD_AUDIT_SCHEMA_SQL` succeeds atomically, lands on
-    `current_v014`, and append-only UPDATE/DELETE still abort;
+    `current_v020`, and append-only UPDATE/DELETE still abort;
   - exact current schema → rerunning `WARD_AUDIT_SCHEMA_SQL` is idempotent and
     preserves rows/objects;
   - file-backed two-connection concurrent init with `busy_timeout` and repeated
     synchronized starts → both callers complete successfully because
     `BEGIN IMMEDIATE` serializes before guard reads, with no locked/schema-locked
-    errors and exact final `current_v014`;
+    errors and exact final `current_v020`;
   - exact legacy schema → `WARD_AUDIT_SCHEMA_SQL` rejects, requires explicit
     `ROLLBACK`, and preserves state/data;
   - exact current `main.ward_audit` + TEMP shadow clone → init rejects,
     explicit rollback preserves both main and temp rows, and dropping the TEMP
-    shadow restores `current_v014`;
+    shadow restores `current_v020`;
   - missing main + TEMP `ward_audit` / reserved `ward_audit_*` temp object →
     init rejects and never creates `main.ward_audit`;
   - unknown partial current schema → `WARD_AUDIT_SCHEMA_SQL` rejects and
@@ -103,7 +110,7 @@ files:
   the other waits, then fails only at the legacy guard after seeing exact
   current (never with a lock error), while preserving the legacy row.
 - Add a post-rebuild drift coverage path that reuses
-  `WARD_AUDIT_MIGRATION_V014_SQL`, injects an unexpected durable
+  `WARD_AUDIT_MIGRATION_V020_SQL`, injects an unexpected durable
   `main.ward_audit_*` object immediately before the real postcondition guard,
   requires a guard failure, and proves explicit rollback restores exact legacy
   row/schema/constraints/user_version while removing the injected object.
@@ -115,7 +122,7 @@ files:
   inside the same transaction; require the error, explicit rollback success,
   full row/schema/user_version restoration, and `legacy_v013` classification.
 - Add exact-stored-SQL tests proving fresh current and successfully migrated
-  current both classify `current_v014` while matching only their controlled
+  current both classify `current_v020` while matching only their controlled
   SQLite-emitted table-SQL variants, and that the shipped legacy fixture
   matches `legacy_v013`.
 
@@ -147,16 +154,16 @@ files:
     acquired before any guard read/classification;
   - creates a uniquely named TEMP pre-install guard with `CHECK (ok = 1)`;
   - inserts `1` only when the shared schema-state expression returns
-    `missing` or `current_v014`, otherwise inserts `0` and aborts before any
+    `missing` or `current_v020`, otherwise inserts `0` and aborts before any
     mutation;
   - keeps `CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS` for current daemon
     compatibility while targeting `main` unambiguously wherever SQLite syntax
     allows it;
   - creates a uniquely named TEMP post-install guard that requires exact
-    `current_v014`, aborting on any silent no-op/collision or malformed result;
+    `current_v020`, aborting on any silent no-op/collision or malformed result;
   - commits on success; and
   - requires callers to `ROLLBACK` after any init error.
-- Update `WARD_AUDIT_MIGRATION_V014_SQL` so it:
+- Update `WARD_AUDIT_MIGRATION_V020_SQL` so it:
   - starts with `BEGIN IMMEDIATE` so concurrent migrators serialize before the
     legacy guard read;
   - creates a uniquely named TEMP precondition guard table with `CHECK (ok = 1)`;
@@ -164,7 +171,7 @@ files:
     unexpected durable reserved-name object or temp shadow/reserved temp object
     exists, otherwise inserts `0` and aborts;
   - after the rebuild, creates a distinct TEMP postcondition guard that reruns
-    the shared schema-state CTE/predicates and requires exact `current_v014`
+    the shared schema-state CTE/predicates and requires exact `current_v020`
     before `COMMIT`;
   - drops both guards on the success path;
   - keeps `ALTER ADD detail`, strict replacement-table creation, detail copy,
@@ -174,6 +181,9 @@ files:
 
 ## Task 3: Update the written contract and validate
 
+- Bump `[workspace.package].version` in the root `Cargo.toml` to `0.2.0`, let
+  Cargo refresh the `coven-threads-core` lock entry, and verify
+  `cargo metadata --no-deps --format-version 1` reports `0.2.0`.
 - Update `audit.rs` docs, the design doc, the plan doc, and `CHANGELOG.md` to
   say that the durable audit contract is `main.ward_audit`, exact stored
   `main.sqlite_master.sql` equality covers every declared table-level
@@ -187,13 +197,15 @@ files:
   - query `WARD_AUDIT_SCHEMA_STATE_SQL`;
   - initialize on `missing` only;
   - migrate only `legacy_v013`;
-  - continue on `current_v014`;
+  - continue on `current_v020`;
   - fail closed on `unknown`;
   - `ROLLBACK` after any init or migration error; and
   - rely on the init/migration independent guards as second lines of defense.
 - Run:
   - `cargo fmt`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - focused audit tests
+  - `cargo metadata --no-deps --format-version 1`
   - `cargo test --workspace` if focused tests pass
   - `git diff --check`
   - stale-wording searches for the old partial-gate terminology.
@@ -203,7 +215,7 @@ files:
 Create a new commit (no amend) with:
 
 ```text
-fix(audit): verify migration postcondition
+fix(audit): release ApplyAudit as v0.2.0
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```

@@ -17,19 +17,22 @@
 //!
 //! **Gate-4 applied writes** are also auditable here via
 //! `AuditEventType::ApplyAudit` (see §3.4, coven-threads#5).
+//! Because [`AuditEventType`] and [`WardAuditRecord`] are public exhaustive
+//! surfaces, that new variant plus [`WardAuditRecord::detail`] define the
+//! v0.2.0 contract rather than a v0.1.x-compatible patch.
 //!
 //! ## Schema shape and migration gating
 //!
-//! `WARD_AUDIT_SCHEMA_SQL` initializes or verifies the exact v0.1.4
+//! `WARD_AUDIT_SCHEMA_SQL` initializes or verifies the exact v0.2.0
 //! `main.ward_audit` shape in one `BEGIN IMMEDIATE` transaction, without
 //! mutating database-wide `PRAGMA user_version`. It is safe for the daemon to
 //! execute unconditionally on every store open: a pre-install guard permits
-//! only `missing` or exact `current_v014`, the durable DDL runs explicitly in
+//! only `missing` or exact `current_v020`, the durable DDL runs explicitly in
 //! `main` with `IF NOT EXISTS` compatibility, and a post-install guard requires
-//! exact `current_v014` before `COMMIT`. The IMMEDIATE reservation means
+//! exact `current_v020` before `COMMIT`. The IMMEDIATE reservation means
 //! concurrent initializers serialize before any guard/classification read, so a
 //! second caller waits, re-runs the guard against the winner's committed
-//! schema, and then idempotently sees `current_v014`. If either guard fails,
+//! schema, and then idempotently sees `current_v020`. If either guard fails,
 //! callers must explicitly `ROLLBACK` before continuing.
 //! `WARD_AUDIT_SCHEMA_STATE_SQL` is the reusable, table-local fingerprint query
 //! that returns one of four stable tags:
@@ -40,8 +43,8 @@
 //! - `legacy_v013` — `main.ward_audit` exactly matches the v0.1.3 legacy
 //!   fingerprint, the durable reserved namespace contains only the expected
 //!   table/index/trigger objects attached to `main.ward_audit`, and no temp
-//!   shadow exists; run `WARD_AUDIT_MIGRATION_V014_SQL`;
-//! - `current_v014` — `main.ward_audit` exactly matches the v0.1.4 current
+//!   shadow exists; run `WARD_AUDIT_MIGRATION_V020_SQL`;
+//! - `current_v020` — `main.ward_audit` exactly matches the v0.2.0 current
 //!   fingerprint, the durable reserved namespace contains only the expected
 //!   table/index/trigger objects attached to `main.ward_audit`, and no temp
 //!   shadow exists; continue without schema work;
@@ -55,19 +58,19 @@
 //! table, explicit durable indexes, and append-only durable triggers, plus
 //! ordered `pragma_table_info('ward_audit', 'main')` metadata and
 //! `pragma_index_list('ward_audit', 'main')` for explicit index discovery. It
-//! does **not** normalize whitespace: the only accepted `current_v014`
+//! does **not** normalize whitespace: the only accepted `current_v020`
 //! table-SQL variants are the fresh `CREATE TABLE ward_audit` form and the
 //! quoted `CREATE TABLE "ward_audit"` form SQLite stores after the exact legacy
 //! migration path, and the `legacy_v013` fingerprint includes the inline
 //! comments preserved from the shipped v0.1.3 DDL.
-//! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact `legacy_v013`
+//! `WARD_AUDIT_MIGRATION_V020_SQL` exists only for the exact `legacy_v013`
 //! fingerprint with no unexpected durable reserved-namespace object and no temp
 //! shadow. It independently re-checks that fingerprint inside one
 //! `BEGIN IMMEDIATE` transaction before any `ALTER`, then adds `detail` and
 //! rebuilds `main.ward_audit` so the current CHECK set is installed and every
 //! existing row is preserved. Before `COMMIT`, a distinct TEMP postcondition
 //! guard reruns the shared schema-state CTE/predicates and requires exact
-//! `current_v014`, so callers cannot durably commit a rebuilt-but-self-unknown
+//! `current_v020`, so callers cannot durably commit a rebuilt-but-self-unknown
 //! namespace if extra `ward_audit` / `ward_audit_*` objects appear mid-transaction.
 //! The IMMEDIATE reservation means concurrent migrators serialize before any
 //! legacy-guard read: the winner upgrades first, and a second caller waits,
@@ -358,9 +361,9 @@ pub const WARD_AUDIT_SCHEMA_STATE_MISSING: &str = "missing";
 /// durable reserved-namespace object and no temp shadow.
 pub const WARD_AUDIT_SCHEMA_STATE_LEGACY_V013: &str = "legacy_v013";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for the exact
-/// `main.ward_audit` v0.1.4 current schema fingerprint, with no unexpected
+/// `main.ward_audit` v0.2.0 current schema fingerprint, with no unexpected
 /// durable reserved-namespace object and no temp shadow.
-pub const WARD_AUDIT_SCHEMA_STATE_CURRENT_V014: &str = "current_v014";
+pub const WARD_AUDIT_SCHEMA_STATE_CURRENT_V020: &str = "current_v020";
 /// Stable tag returned by [`WARD_AUDIT_SCHEMA_STATE_SQL`] for every other
 /// `main.ward_audit` shape, plus any unexpected durable reserved-namespace
 /// object or any temp-schema `ward_audit` / `ward_audit_*` shadow object.
@@ -631,7 +634,7 @@ macro_rules! ward_audit_schema_state_case_sql {
             r#" THEN 'legacy_v013'
     WHEN "#,
             ward_audit_exact_current_predicate_sql!(),
-            r#" THEN 'current_v014'
+            r#" THEN 'current_v020'
     ELSE 'unknown'
 END"#
         )
@@ -647,8 +650,8 @@ END"#
 ///   `ward_audit_*` exists, and no temp shadow/reserved object exists;
 ///   initialize with [`WARD_AUDIT_SCHEMA_SQL`];
 /// - [`WARD_AUDIT_SCHEMA_STATE_LEGACY_V013`] — run
-///   [`WARD_AUDIT_MIGRATION_V014_SQL`];
-/// - [`WARD_AUDIT_SCHEMA_STATE_CURRENT_V014`] — continue without schema work;
+///   [`WARD_AUDIT_MIGRATION_V020_SQL`];
+/// - [`WARD_AUDIT_SCHEMA_STATE_CURRENT_V020`] — continue without schema work;
 /// - [`WARD_AUDIT_SCHEMA_STATE_UNKNOWN`] — fail closed and investigate the
 ///   table manually.
 ///
@@ -672,7 +675,7 @@ END"#
 /// `ward_audit_` also returns `unknown`, even when `main.ward_audit` itself is
 /// exact current or legacy, so callers cannot treat a shadowed namespace as
 /// healthy durable state. No whitespace-destroying normalization is applied:
-/// the only accepted `current_v014` table SQL variants are the fresh
+/// the only accepted `current_v020` table SQL variants are the fresh
 /// `CREATE TABLE ward_audit (...)` form and SQLite's quoted
 /// `CREATE TABLE "ward_audit" (...)` form produced by the exact legacy
 /// migration path, while the `legacy_v013` fingerprint intentionally includes
@@ -707,11 +710,11 @@ FROM ward_audit_shape;
 /// 6. re-creates the exact explicit main indexes and append-only main triggers;
 ///    and
 /// 7. re-runs the shared schema-state expression in a distinct TEMP
-///    postcondition guard and requires exact `current_v014` before `COMMIT`.
+///    postcondition guard and requires exact `current_v020` before `COMMIT`.
 ///
 /// Callers should still branch on [`WARD_AUDIT_SCHEMA_STATE_SQL`] first:
 /// initialize when the state is `missing`, migrate only `legacy_v013`,
-/// continue on `current_v014`, and fail closed on `unknown`. This migration
+/// continue on `current_v020`, and fail closed on `unknown`. This migration
 /// independently guards the same `legacy_v013` fingerprint, durable
 /// reserved-namespace whitelist, temp-shadow rejection, and exact-current
 /// postcondition so callers cannot mutate a partial, already-current,
@@ -724,7 +727,7 @@ FROM ward_audit_shape;
 /// `ROLLBACK` the failed transaction before continuing so SQLite restores the
 /// untouched legacy table. This SQL does not read or write database-wide
 /// `PRAGMA user_version`.
-pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = concat!(
+pub const WARD_AUDIT_MIGRATION_V020_SQL: &str = concat!(
     r#"
 BEGIN IMMEDIATE;
 
@@ -811,7 +814,7 @@ INSERT INTO coven_threads_ward_audit_migration_post_guard (ok)
 SELECT CASE
     WHEN ("#,
     ward_audit_schema_state_case_sql!(),
-    r#") = 'current_v014' THEN 1
+    r#") = 'current_v020' THEN 1
     ELSE 0
 END
 FROM ward_audit_shape;
@@ -822,7 +825,7 @@ COMMIT;
 "#,
 );
 
-// Shared durable-main current-v0.1.4 DDL body used by the guarded init SQL and
+// Shared durable-main current-v0.2.0 DDL body used by the guarded init SQL and
 // drift tests.
 macro_rules! ward_audit_current_objects_sql {
     () => {
@@ -872,14 +875,14 @@ END;
 ///
 /// See module docs for the full schema-state contract. This `BEGIN IMMEDIATE`
 /// transaction is safe to run unconditionally on every store open: it permits
-/// only exact `missing` or `current_v014` before any mutation, uses idempotent
+/// only exact `missing` or `current_v020` before any mutation, uses idempotent
 /// `IF NOT EXISTS` DDL for daemon compatibility, then requires exact
-/// `current_v014` before `COMMIT`. Exact `legacy_v013`, every drifted
+/// `current_v020` before `COMMIT`. Exact `legacy_v013`, every drifted
 /// `unknown` shape, every unexpected durable reserved-namespace object, and
 /// every temp shadow/reserved temp object fail closed. The IMMEDIATE
 /// reservation serializes concurrent initializers before any guard read so the
 /// loser waits, re-runs the guard against committed state, and sees exact
-/// `current_v014` rather than racing into `sqlite_master` lock errors. Durable
+/// `current_v020` rather than racing into `sqlite_master` lock errors. Durable
 /// schema objects are explicitly created in `main`; the temp guard tables live
 /// in `temp` under unique non-reserved names. If this SQL errors, callers must
 /// explicitly `ROLLBACK` before continuing so SQLite discards any uncommitted
@@ -899,7 +902,7 @@ INSERT INTO coven_threads_ward_audit_schema_pre_guard (ok)
 SELECT CASE
     WHEN ("#,
     ward_audit_schema_state_case_sql!(),
-    r#") IN ('missing', 'current_v014') THEN 1
+    r#") IN ('missing', 'current_v020') THEN 1
     ELSE 0
 END
 FROM ward_audit_shape;
@@ -919,7 +922,7 @@ INSERT INTO coven_threads_ward_audit_schema_post_guard (ok)
 SELECT CASE
     WHEN ("#,
     ward_audit_schema_state_case_sql!(),
-    r#") = 'current_v014' THEN 1
+    r#") = 'current_v020' THEN 1
     ELSE 0
 END
 FROM ward_audit_shape;
@@ -1268,7 +1271,7 @@ END;
 
     fn migration_sql_with_durable_drift_before_post_guard(drift_sql: &str) -> String {
         inject_sql_before_anchor(
-            WARD_AUDIT_MIGRATION_V014_SQL,
+            WARD_AUDIT_MIGRATION_V020_SQL,
             "CREATE TEMP TABLE coven_threads_ward_audit_migration_post_guard (",
             drift_sql,
         )
@@ -1440,7 +1443,7 @@ END;
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
 
         assert_eq!(user_version(&conn), initial_version);
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         let row_id = insert_current_apply_audit_row(&conn);
         let row = load_audit_row(&conn, row_id);
@@ -1462,7 +1465,7 @@ END;
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
 
         let err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("drifted legacy schema must fail at the migration guard");
         assert!(
             err.to_string().contains("CHECK constraint failed"),
@@ -1611,7 +1614,7 @@ END;
                 "apply_audit",
                 Some("proposal-current"),
                 "familiar-current",
-                Some("0.1.4"),
+                Some("0.2.0"),
                 FIXED_WARD_HASH.as_ref(),
                 Some("tier_2"),
                 "applied",
@@ -1651,7 +1654,7 @@ END;
                 "apply_audit",
                 Some("proposal-current"),
                 "familiar-current",
-                Some("0.1.4"),
+                Some("0.2.0"),
                 FIXED_WARD_HASH.as_ref(),
                 Some("tier_2"),
                 "applied",
@@ -1842,7 +1845,7 @@ END;
     fn schema_and_migration_sql_use_begin_immediate() {
         for (label, sql) in [
             ("schema", WARD_AUDIT_SCHEMA_SQL),
-            ("migration", WARD_AUDIT_MIGRATION_V014_SQL),
+            ("migration", WARD_AUDIT_MIGRATION_V020_SQL),
         ] {
             assert!(
                 sql.trim_start().starts_with("BEGIN IMMEDIATE;"),
@@ -1853,16 +1856,16 @@ END;
 
     #[test]
     fn migration_sql_uses_distinct_pre_and_post_guards_before_commit() {
-        let pre_guard_offset = WARD_AUDIT_MIGRATION_V014_SQL
+        let pre_guard_offset = WARD_AUDIT_MIGRATION_V020_SQL
             .find("CREATE TEMP TABLE coven_threads_ward_audit_migration_guard (")
             .expect("migration SQL must define a precondition guard");
-        let post_guard_offset = WARD_AUDIT_MIGRATION_V014_SQL
+        let post_guard_offset = WARD_AUDIT_MIGRATION_V020_SQL
             .find("CREATE TEMP TABLE coven_threads_ward_audit_migration_post_guard (")
             .expect("migration SQL must define a postcondition guard");
-        let post_guard_drop_offset = WARD_AUDIT_MIGRATION_V014_SQL
+        let post_guard_drop_offset = WARD_AUDIT_MIGRATION_V020_SQL
             .find("DROP TABLE coven_threads_ward_audit_migration_post_guard;")
             .expect("migration SQL must drop the postcondition guard before commit");
-        let commit_offset = WARD_AUDIT_MIGRATION_V014_SQL
+        let commit_offset = WARD_AUDIT_MIGRATION_V020_SQL
             .rfind("COMMIT;")
             .expect("migration SQL must commit on success");
 
@@ -2019,7 +2022,7 @@ END;
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
 
         let migration_err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("temp shadow must make migration fail closed");
         assert!(
             migration_err
@@ -2041,7 +2044,7 @@ END;
 
         conn.execute_batch("DROP TABLE temp.ward_audit;").unwrap();
         assert!(!temp_schema_object_exists(&conn, "table", "ward_audit"));
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(load_audit_row(&conn, main_row_id), main_before);
     }
 
@@ -2142,7 +2145,7 @@ END;
 
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
 
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(user_version(&conn), 11);
         assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
         assert_eq!(trigger_names(&conn), expected_trigger_names());
@@ -2186,10 +2189,10 @@ END;
     }
 
     #[test]
-    fn exact_current_schema_returns_current_v014() {
+    fn exact_current_schema_returns_current_v020() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(
             reserved_main_namespace_objects(&conn),
             expected_reserved_main_namespace_objects()
@@ -2226,7 +2229,7 @@ END;
         assert_eq!(explicit_index_names(&conn), before_indexes);
         assert_eq!(trigger_names(&conn), before_triggers);
         assert_eq!(user_version(&conn), 29);
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
     }
 
     #[test]
@@ -2239,11 +2242,11 @@ END;
             .execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL)
             .unwrap();
         migrated
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .unwrap();
 
-        assert_schema_state(&fresh, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
-        assert_schema_state(&migrated, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&fresh, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
+        assert_schema_state(&migrated, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(
             stored_table_sql(&fresh),
             sql_literal_value(&fresh, ward_audit_exact_current_fresh_table_sql_sql!())
@@ -2312,7 +2315,7 @@ END;
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
 
         let err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("temp shadow must make legacy migration fail before mutation");
         assert!(
             err.to_string().contains("CHECK constraint failed"),
@@ -2403,7 +2406,7 @@ END;
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
 
         let err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("partial legacy schema must fail at the migration guard");
         assert!(
             err.to_string().contains("CHECK constraint failed"),
@@ -2485,7 +2488,7 @@ END;
     fn current_schema_missing_append_only_trigger_is_unknown_and_update_succeeds() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         let row_id = insert_current_apply_audit_row(&conn);
 
         conn.execute_batch("DROP TRIGGER ward_audit_append_only_update;")
@@ -2504,7 +2507,7 @@ END;
     fn current_schema_with_extra_index_is_unknown() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         conn.execute_batch("CREATE INDEX ward_audit_decision_idx ON ward_audit (decision);")
             .unwrap();
@@ -2516,7 +2519,7 @@ END;
     fn current_schema_with_desc_index_is_unknown() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         conn.execute_batch(
             "DROP INDEX ward_audit_event_idx;
@@ -2536,7 +2539,7 @@ END;
     fn current_schema_with_collated_index_is_unknown() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         conn.execute_batch(
             "DROP INDEX ward_audit_event_idx;
@@ -2628,7 +2631,7 @@ END;
     fn current_schema_with_altered_trigger_error_literal_is_unknown() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         conn.execute_batch(
             "DROP TRIGGER ward_audit_append_only_update;
@@ -2652,7 +2655,7 @@ END;
     fn current_schema_with_altered_trigger_body_is_unknown() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         conn.execute_batch(
             "DROP TRIGGER ward_audit_append_only_delete;
@@ -2800,10 +2803,10 @@ END;
         let before = load_audit_row(&conn, row_id);
         let before_version = user_version(&conn);
 
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
 
         let err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("current schema migration must fail at the legacy guard");
         assert!(
             err.to_string().contains("CHECK constraint failed"),
@@ -2812,7 +2815,7 @@ END;
         conn.execute_batch("ROLLBACK;").unwrap();
 
         assert_eq!(load_audit_row(&conn, row_id), before);
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(user_version(&conn), before_version);
     }
 
@@ -2846,7 +2849,7 @@ END;
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
 
         let err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("preexisting ward_audit_new must make migration fail before ALTER");
         assert!(
             err.to_string().contains("CHECK constraint failed"),
@@ -2874,9 +2877,9 @@ END;
         assert_eq!(user_version(&conn), 37);
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
 
-        conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
+        conn.execute_batch(WARD_AUDIT_MIGRATION_V020_SQL).unwrap();
 
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(user_version(&conn), 37);
         assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
         assert_eq!(trigger_names(&conn), expected_trigger_names());
@@ -2974,8 +2977,8 @@ END;
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
         let legacy_row_id = insert_legacy_ward_updated_row(&conn);
 
-        conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        conn.execute_batch(WARD_AUDIT_MIGRATION_V020_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(user_version(&conn), 37);
 
         let apply_row_id = insert_current_apply_audit_row(&conn);
@@ -2983,7 +2986,7 @@ END;
         let apply_before = load_audit_row(&conn, apply_row_id);
 
         let err = conn
-            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .execute_batch(WARD_AUDIT_MIGRATION_V020_SQL)
             .expect_err("rerunning the migration must fail at the legacy guard");
         assert!(
             err.to_string().contains("CHECK constraint failed"),
@@ -2993,7 +2996,7 @@ END;
 
         assert_eq!(load_audit_row(&conn, legacy_row_id), legacy_before);
         assert_eq!(load_audit_row(&conn, apply_row_id), apply_before);
-        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
         assert_eq!(user_version(&conn), 37);
     }
 
@@ -3018,7 +3021,7 @@ END;
                 {
                     let final_conn = open_file_backed_connection(db.path());
                     assert_eq!(user_version(&final_conn), 41);
-                    assert_schema_state(&final_conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+                    assert_schema_state(&final_conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
                     assert_eq!(
                         explicit_index_names(&final_conn),
                         expected_explicit_index_names()
@@ -3049,7 +3052,7 @@ END;
                     (row_id, before)
                 };
 
-                let outcomes = run_concurrent_sql(db.path(), WARD_AUDIT_MIGRATION_V014_SQL);
+                let outcomes = run_concurrent_sql(db.path(), WARD_AUDIT_MIGRATION_V020_SQL);
                 let success_count = outcomes.iter().filter(|result| result.is_ok()).count();
                 let errors: Vec<_> = outcomes
                     .iter()
@@ -3079,7 +3082,7 @@ END;
                 {
                     let final_conn = open_file_backed_connection(db.path());
                     assert_eq!(user_version(&final_conn), 37);
-                    assert_schema_state(&final_conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+                    assert_schema_state(&final_conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
                     assert_eq!(ward_audit_row_count(&final_conn, "main"), 1);
                     assert_eq!(load_audit_row(&final_conn, row_id), before);
                     assert_eq!(
