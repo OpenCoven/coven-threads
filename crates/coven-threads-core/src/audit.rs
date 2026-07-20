@@ -32,6 +32,13 @@
 //!   fingerprint; continue without schema work;
 //! - `unknown` — every other shape, including any extra or missing declared
 //!   table constraint, column, index, or trigger; fail closed.
+//! The fingerprint uses exact `sqlite_master.sql` text for the table, explicit
+//! indexes, and append-only triggers, plus ordered `pragma_table_info`
+//! metadata. It does **not** normalize whitespace: the only accepted
+//! `current_v014` table-SQL variants are the fresh `CREATE TABLE ward_audit`
+//! form and the quoted `CREATE TABLE "ward_audit"` form SQLite stores after
+//! the exact legacy migration path, and the `legacy_v013` fingerprint includes
+//! the inline comments preserved from the shipped v0.1.3 DDL.
 //! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact `legacy_v013`
 //! fingerprint. It independently re-checks that fingerprint inside the
 //! transaction before any `ALTER`, then adds `detail` and rebuilds `ward_audit`
@@ -328,21 +335,7 @@ macro_rules! ward_audit_schema_state_ctes_sql {
         r#"
 WITH
     ward_audit_table AS (
-        SELECT
-            sql,
-            replace(
-                replace(
-                    replace(
-                        replace(replace(sql, '"', ''), ' ', ''),
-                        char(10),
-                        ''
-                    ),
-                    char(13),
-                    ''
-                ),
-                char(9),
-                ''
-            ) AS normalized_sql
+        SELECT sql
         FROM sqlite_master
         WHERE type = 'table' AND name = 'ward_audit'
     ),
@@ -371,53 +364,19 @@ WITH
             ORDER BY cid
         )
     ),
-    ward_audit_explicit_indexes AS (
-        SELECT name, "unique", origin, partial
-        FROM pragma_index_list('ward_audit')
-        WHERE origin = 'c' AND name NOT LIKE 'sqlite_autoindex_%'
-    ),
     ward_audit_index_fingerprint AS (
         SELECT COALESCE(group_concat(item, '||'), '') AS fp
         FROM (
-            SELECT printf(
-                '%s|%d|%s|%d|%s',
-                idx.name,
-                idx."unique",
-                idx.origin,
-                idx.partial,
-                COALESCE((
-                    SELECT group_concat(printf('%d:%s', seqno, name), ',')
-                    FROM (
-                        SELECT seqno, name
-                        FROM pragma_index_info(idx.name)
-                        ORDER BY seqno
-                    )
-                ), '')
-            ) AS item
-            FROM ward_audit_explicit_indexes AS idx
-            ORDER BY idx.name
+            SELECT printf('%s|%s', name, COALESCE(sql, '<null>')) AS item
+            FROM sqlite_master
+            WHERE type = 'index' AND tbl_name = 'ward_audit' AND sql IS NOT NULL
+            ORDER BY name
         )
     ),
     ward_audit_trigger_fingerprint AS (
         SELECT COALESCE(group_concat(item, '||'), '') AS fp
         FROM (
-            SELECT printf(
-                '%s|%s',
-                name,
-                replace(
-                    replace(
-                        replace(
-                            replace(replace(COALESCE(sql, ''), '"', ''), ' ', ''),
-                            char(10),
-                            ''
-                        ),
-                        char(13),
-                        ''
-                    ),
-                    char(9),
-                    ''
-                )
-            ) AS item
+            SELECT printf('%s|%s', name, COALESCE(sql, '<null>')) AS item
             FROM sqlite_master
             WHERE type = 'trigger' AND tbl_name = 'ward_audit'
             ORDER BY name
@@ -426,7 +385,7 @@ WITH
     ward_audit_shape AS (
         SELECT
             (SELECT ok FROM ward_audit_exists) AS table_exists,
-            COALESCE((SELECT normalized_sql FROM ward_audit_table), '') AS normalized_table_sql,
+            COALESCE((SELECT sql FROM ward_audit_table), '') AS table_sql,
             (SELECT fp FROM ward_audit_column_fingerprint) AS column_fp,
             (SELECT fp FROM ward_audit_index_fingerprint) AS index_fp,
             (SELECT fp FROM ward_audit_trigger_fingerprint) AS trigger_fp
@@ -435,27 +394,145 @@ WITH
     };
 }
 
+macro_rules! ward_audit_exact_legacy_table_sql_sql {
+    () => {
+        r#"'CREATE TABLE ward_audit (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type    TEXT    NOT NULL CHECK (event_type IN (
+                      ''proposal_submitted'',''proposal_approved'',''proposal_rejected'',
+                      ''proposal_vetoed'',''ward_updated'',''validation_verdict'',
+                      ''compaction_ledger'')),
+    proposal_id   TEXT,
+    familiar_id   TEXT    NOT NULL,
+    ward_version  TEXT,
+    ward_hash     BLOB    NOT NULL,
+    tier          TEXT,
+    decision      TEXT    NOT NULL,
+    approver      TEXT,
+    diff_hash     BLOB,
+    files_touched TEXT    NOT NULL, -- JSON array of surface ids
+    channel       TEXT,
+    thread_id     TEXT,
+    submitted_at  TEXT    NOT NULL, -- RFC 3339
+    decided_at    TEXT    NOT NULL, -- RFC 3339
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now''))
+)'"#
+    };
+}
+
+macro_rules! ward_audit_exact_current_fresh_table_sql_sql {
+    () => {
+        r#"'CREATE TABLE ward_audit (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type    TEXT    NOT NULL CHECK (event_type IN (
+                      ''proposal_submitted'',''proposal_approved'',''proposal_rejected'',
+                      ''proposal_vetoed'',''ward_updated'',''validation_verdict'',
+                      ''compaction_ledger'',''apply_audit'')),
+    proposal_id   TEXT,
+    familiar_id   TEXT    NOT NULL,
+    ward_version  TEXT,
+    ward_hash     BLOB    NOT NULL,
+    tier          TEXT,
+    decision      TEXT    NOT NULL,
+    approver      TEXT,
+    diff_hash     BLOB,
+    detail        TEXT,
+    files_touched TEXT    NOT NULL,
+    channel       TEXT,
+    thread_id     TEXT,
+    submitted_at  TEXT    NOT NULL,
+    decided_at    TEXT    NOT NULL,
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now''))
+)'"#
+    };
+}
+
+macro_rules! ward_audit_exact_current_migrated_table_sql_sql {
+    () => {
+        r#"'CREATE TABLE "ward_audit" (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type    TEXT    NOT NULL CHECK (event_type IN (
+                      ''proposal_submitted'',''proposal_approved'',''proposal_rejected'',
+                      ''proposal_vetoed'',''ward_updated'',''validation_verdict'',
+                      ''compaction_ledger'',''apply_audit'')),
+    proposal_id   TEXT,
+    familiar_id   TEXT    NOT NULL,
+    ward_version  TEXT,
+    ward_hash     BLOB    NOT NULL,
+    tier          TEXT,
+    decision      TEXT    NOT NULL,
+    approver      TEXT,
+    diff_hash     BLOB,
+    detail        TEXT,
+    files_touched TEXT    NOT NULL,
+    channel       TEXT,
+    thread_id     TEXT,
+    submitted_at  TEXT    NOT NULL,
+    decided_at    TEXT    NOT NULL,
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now''))
+)'"#
+    };
+}
+
+macro_rules! ward_audit_exact_explicit_index_fp_sql {
+    () => {
+        r#"'ward_audit_event_idx|CREATE INDEX ward_audit_event_idx    ON ward_audit (event_type, recorded_at)||ward_audit_familiar_idx|CREATE INDEX ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at)'"#
+    };
+}
+
+macro_rules! ward_audit_exact_trigger_fp_sql {
+    () => {
+        r#"'ward_audit_append_only_delete|CREATE TRIGGER ward_audit_append_only_delete
+BEFORE DELETE ON ward_audit
+BEGIN
+    SELECT RAISE(ABORT, ''ward_audit is append-only (RFC-0001 §5.6)'');
+END||ward_audit_append_only_update|CREATE TRIGGER ward_audit_append_only_update
+BEFORE UPDATE ON ward_audit
+BEGIN
+    SELECT RAISE(ABORT, ''ward_audit is append-only (RFC-0001 §5.6)'');
+END'"#
+    };
+}
+
 macro_rules! ward_audit_exact_legacy_predicate_sql {
     () => {
-        r#"
+        concat!(
+            r#"
 table_exists = 1
-AND normalized_table_sql = 'CREATETABLEward_audit(idINTEGERPRIMARYKEYAUTOINCREMENT,event_typeTEXTNOTNULLCHECK(event_typeIN(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger'')),proposal_idTEXT,familiar_idTEXTNOTNULL,ward_versionTEXT,ward_hashBLOBNOTNULL,tierTEXT,decisionTEXTNOTNULL,approverTEXT,diff_hashBLOB,files_touchedTEXTNOTNULL,channelTEXT,thread_idTEXT,submitted_atTEXTNOTNULL,decided_atTEXTNOTNULL,recorded_atTEXTNOTNULLDEFAULT(strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')))'
+AND table_sql = "#,
+            ward_audit_exact_legacy_table_sql_sql!(),
+            r#"
 AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|files_touched|TEXT|1|<null>|0||11|channel|TEXT|0|<null>|0||12|thread_id|TEXT|0|<null>|0||13|submitted_at|TEXT|1|<null>|0||14|decided_at|TEXT|1|<null>|0||15|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
-AND index_fp = 'ward_audit_event_idx|0|c|0|0:event_type,1:recorded_at||ward_audit_familiar_idx|0|c|0|0:familiar_id,1:recorded_at'
-AND trigger_fp = 'ward_audit_append_only_delete|CREATETRIGGERward_audit_append_only_deleteBEFOREDELETEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END||ward_audit_append_only_update|CREATETRIGGERward_audit_append_only_updateBEFOREUPDATEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END'
+AND index_fp = "#,
+            ward_audit_exact_explicit_index_fp_sql!(),
+            r#"
+AND trigger_fp = "#,
+            ward_audit_exact_trigger_fp_sql!(),
+            r#"
 "#
+        )
     };
 }
 
 macro_rules! ward_audit_exact_current_predicate_sql {
     () => {
-        r#"
+        concat!(
+            r#"
 table_exists = 1
-AND normalized_table_sql = 'CREATETABLEward_audit(idINTEGERPRIMARYKEYAUTOINCREMENT,event_typeTEXTNOTNULLCHECK(event_typeIN(''proposal_submitted'',''proposal_approved'',''proposal_rejected'',''proposal_vetoed'',''ward_updated'',''validation_verdict'',''compaction_ledger'',''apply_audit'')),proposal_idTEXT,familiar_idTEXTNOTNULL,ward_versionTEXT,ward_hashBLOBNOTNULL,tierTEXT,decisionTEXTNOTNULL,approverTEXT,diff_hashBLOB,detailTEXT,files_touchedTEXTNOTNULL,channelTEXT,thread_idTEXT,submitted_atTEXTNOTNULL,decided_atTEXTNOTNULL,recorded_atTEXTNOTNULLDEFAULT(strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')))'
+AND table_sql IN ("#,
+            ward_audit_exact_current_fresh_table_sql_sql!(),
+            r#", "#,
+            ward_audit_exact_current_migrated_table_sql_sql!(),
+            r#")
 AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|detail|TEXT|0|<null>|0||11|files_touched|TEXT|1|<null>|0||12|channel|TEXT|0|<null>|0||13|thread_id|TEXT|0|<null>|0||14|submitted_at|TEXT|1|<null>|0||15|decided_at|TEXT|1|<null>|0||16|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
-AND index_fp = 'ward_audit_event_idx|0|c|0|0:event_type,1:recorded_at||ward_audit_familiar_idx|0|c|0|0:familiar_id,1:recorded_at'
-AND trigger_fp = 'ward_audit_append_only_delete|CREATETRIGGERward_audit_append_only_deleteBEFOREDELETEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END||ward_audit_append_only_update|CREATETRIGGERward_audit_append_only_updateBEFOREUPDATEONward_auditBEGINSELECTRAISE(ABORT,''ward_auditisappend-only(RFC-0001§5.6)'');END'
+AND index_fp = "#,
+            ward_audit_exact_explicit_index_fp_sql!(),
+            r#"
+AND trigger_fp = "#,
+            ward_audit_exact_trigger_fp_sql!(),
+            r#"
 "#
+        )
     };
 }
 
@@ -471,14 +548,18 @@ AND trigger_fp = 'ward_audit_append_only_delete|CREATETRIGGERward_audit_append_o
 /// - [`WARD_AUDIT_SCHEMA_STATE_UNKNOWN`] — fail closed and investigate the
 ///   table manually.
 ///
-/// The fingerprint is strict: the full normalized `CREATE TABLE` definition,
-/// ordered column metadata (including `recorded_at`'s default and primary-key
-/// flags), the exact explicit index set, and the exact append-only trigger set
-/// must all match. Full table-SQL equality covers every declared table-level
-/// constraint (`CHECK`, `UNIQUE`, foreign-key clauses, and the `event_type`
-/// list), so any extra or missing column, constraint, index, or trigger
-/// returns `unknown`. Normalization removes whitespace and SQLite's renamed-
-/// table double quotes without weakening literal or constraint equality.
+/// The fingerprint is strict: the exact `sqlite_master.sql` stored for
+/// `ward_audit`, ordered column metadata (including `recorded_at`'s default and
+/// primary-key flags), the exact explicit index SQL set, and the exact
+/// append-only trigger SQL set must all match. Full stored-table-SQL equality
+/// covers every declared table-level constraint (`CHECK`, `UNIQUE`, foreign-key
+/// clauses, and the `event_type` list), so any extra or missing column,
+/// constraint, index, or trigger returns `unknown`. No whitespace-destroying
+/// normalization is applied: the only accepted `current_v014` table SQL
+/// variants are the fresh `CREATE TABLE ward_audit (...)` form and SQLite's
+/// quoted `CREATE TABLE "ward_audit" (...)` form produced by the exact legacy
+/// migration path, while the `legacy_v013` fingerprint intentionally includes
+/// the inline comments preserved from the shipped v0.1.3 DDL.
 pub const WARD_AUDIT_SCHEMA_STATE_SQL: &str = concat!(
     ward_audit_schema_state_ctes_sql!(),
     r#"
@@ -504,7 +585,7 @@ FROM ward_audit_shape;
 /// SQLite cannot `ALTER` a CHECK constraint on an existing table, so this
 /// transaction:
 /// 1. re-checks the exact legacy fingerprint in SQL before any mutation,
-///    including full normalized `CREATE TABLE` equality plus column/index/
+///    including exact stored `sqlite_master.sql` equality plus column/index/
 ///    trigger fingerprints;
 /// 2. adds the legacy `detail` column so the old table matches the copy shape;
 /// 3. creates `ward_audit_new` with the updated CHECK;
@@ -661,8 +742,9 @@ mod tests {
     const FIXED_PREV_DETAIL: &str = r#"{"prev_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","bytes_written":42}"#;
     const FIXED_FILES_TOUCHED: &str = r#"["SOUL.md"]"#;
 
-    /// Representative v0.1.3 `ward_audit` schema: no `detail` column and no
-    /// `apply_audit` event tag, but still append-only.
+    /// Exact shipped v0.1.3 `ward_audit` DDL from `origin/main` / the PR base.
+    /// Keep the inline comments: SQLite preserves them in `sqlite_master.sql`,
+    /// and the legacy fingerprint intentionally matches that stored text.
     const LEGACY_WARD_AUDIT_SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS ward_audit (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -678,11 +760,11 @@ CREATE TABLE IF NOT EXISTS ward_audit (
     decision      TEXT    NOT NULL,
     approver      TEXT,
     diff_hash     BLOB,
-    files_touched TEXT    NOT NULL,
+    files_touched TEXT    NOT NULL, -- JSON array of surface ids
     channel       TEXT,
     thread_id     TEXT,
-    submitted_at  TEXT    NOT NULL,
-    decided_at    TEXT    NOT NULL,
+    submitted_at  TEXT    NOT NULL, -- RFC 3339
+    decided_at    TEXT    NOT NULL, -- RFC 3339
     recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -748,15 +830,48 @@ END;
         assert_eq!(ward_audit_schema_state(conn), expected);
     }
 
-    fn normalized_table_sql(conn: &Connection) -> String {
+    fn sql_literal_value(conn: &Connection, literal_sql: &str) -> String {
+        conn.query_row(&format!("SELECT {literal_sql};"), [], |row| row.get(0))
+            .unwrap()
+    }
+
+    fn stored_table_sql(conn: &Connection) -> String {
         conn.query_row(
-            concat!(
-                ward_audit_schema_state_ctes_sql!(),
-                r#"
-SELECT normalized_table_sql
-FROM ward_audit_shape;
-"#
-            ),
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'ward_audit';",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn explicit_index_sql_fingerprint(conn: &Connection) -> String {
+        conn.query_row(
+            r#"
+            SELECT COALESCE(group_concat(item, '||'), '')
+            FROM (
+                SELECT printf('%s|%s', name, sql) AS item
+                FROM sqlite_master
+                WHERE type = 'index' AND tbl_name = 'ward_audit' AND sql IS NOT NULL
+                ORDER BY name
+            );
+            "#,
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn trigger_sql_fingerprint(conn: &Connection) -> String {
+        conn.query_row(
+            r#"
+            SELECT COALESCE(group_concat(item, '||'), '')
+            FROM (
+                SELECT printf('%s|%s', name, sql) AS item
+                FROM sqlite_master
+                WHERE type = 'trigger' AND tbl_name = 'ward_audit'
+                ORDER BY name
+            );
+            "#,
             [],
             |row| row.get(0),
         )
@@ -783,6 +898,21 @@ FROM ward_audit_shape;
 
     fn current_schema_with_extra_table_constraint(constraint_sql: &str) -> String {
         schema_sql_with_extra_table_constraint(WARD_AUDIT_SCHEMA_SQL, constraint_sql)
+    }
+
+    fn drift_event_type_literal(
+        schema_sql: &str,
+        exact_literal: &str,
+        drifted_literal: &str,
+    ) -> String {
+        let exact = format!("'{exact_literal}'");
+        let drifted = format!("'{drifted_literal}'");
+        let drifted_schema_sql = schema_sql.replacen(&exact, &drifted, 1);
+        assert_ne!(
+            drifted_schema_sql, schema_sql,
+            "expected to drift {exact_literal} to {drifted_literal}"
+        );
+        drifted_schema_sql
     }
 
     fn expected_explicit_index_names() -> BTreeSet<String> {
@@ -847,14 +977,13 @@ FROM ward_audit_shape;
         assert_eq!(row.detail.as_deref(), Some(FIXED_PREV_DETAIL));
     }
 
-    fn assert_legacy_drift_guard_rollback_preserves_state(
-        constraint_sql: &str,
+    fn assert_legacy_schema_guard_rollback_preserves_state(
+        schema_sql: &str,
         after_rollback: impl FnOnce(&Connection),
     ) {
         let conn = Connection::open_in_memory().unwrap();
         set_user_version(&conn, 37);
-        conn.execute_batch(&legacy_schema_with_extra_table_constraint(constraint_sql))
-            .unwrap();
+        conn.execute_batch(schema_sql).unwrap();
         let row_id = insert_legacy_ward_updated_row(&conn);
         let before = load_legacy_audit_row(&conn, row_id);
         let before_version = user_version(&conn);
@@ -878,6 +1007,14 @@ FROM ward_audit_shape;
         assert_eq!(trigger_names(&conn), expected_trigger_names());
 
         after_rollback(&conn);
+    }
+
+    fn assert_legacy_drift_guard_rollback_preserves_state(
+        constraint_sql: &str,
+        after_rollback: impl FnOnce(&Connection),
+    ) {
+        let schema_sql = legacy_schema_with_extra_table_constraint(constraint_sql);
+        assert_legacy_schema_guard_rollback_preserves_state(&schema_sql, after_rollback);
     }
 
     fn load_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
@@ -1222,6 +1359,18 @@ FROM ward_audit_shape;
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_LEGACY_V013);
+        assert_eq!(
+            stored_table_sql(&conn),
+            sql_literal_value(&conn, ward_audit_exact_legacy_table_sql_sql!())
+        );
+        assert_eq!(
+            explicit_index_sql_fingerprint(&conn),
+            sql_literal_value(&conn, ward_audit_exact_explicit_index_fp_sql!())
+        );
+        assert_eq!(
+            trigger_sql_fingerprint(&conn),
+            sql_literal_value(&conn, ward_audit_exact_trigger_fp_sql!())
+        );
     }
 
     #[test]
@@ -1229,10 +1378,22 @@ FROM ward_audit_shape;
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+        assert_eq!(
+            stored_table_sql(&conn),
+            sql_literal_value(&conn, ward_audit_exact_current_fresh_table_sql_sql!())
+        );
+        assert_eq!(
+            explicit_index_sql_fingerprint(&conn),
+            sql_literal_value(&conn, ward_audit_exact_explicit_index_fp_sql!())
+        );
+        assert_eq!(
+            trigger_sql_fingerprint(&conn),
+            sql_literal_value(&conn, ward_audit_exact_trigger_fp_sql!())
+        );
     }
 
     #[test]
-    fn fresh_and_migrated_current_schemas_share_the_same_normalized_table_sql() {
+    fn fresh_and_migrated_current_schemas_use_controlled_exact_sql_variants() {
         let fresh = Connection::open_in_memory().unwrap();
         fresh.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
 
@@ -1247,9 +1408,62 @@ FROM ward_audit_shape;
         assert_schema_state(&fresh, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_schema_state(&migrated, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
         assert_eq!(
-            normalized_table_sql(&fresh),
-            normalized_table_sql(&migrated)
+            stored_table_sql(&fresh),
+            sql_literal_value(&fresh, ward_audit_exact_current_fresh_table_sql_sql!())
         );
+        assert_eq!(
+            stored_table_sql(&migrated),
+            sql_literal_value(
+                &migrated,
+                ward_audit_exact_current_migrated_table_sql_sql!()
+            )
+        );
+        assert_ne!(stored_table_sql(&fresh), stored_table_sql(&migrated));
+        assert_eq!(
+            explicit_index_sql_fingerprint(&fresh),
+            sql_literal_value(&fresh, ward_audit_exact_explicit_index_fp_sql!())
+        );
+        assert_eq!(
+            explicit_index_sql_fingerprint(&migrated),
+            sql_literal_value(&migrated, ward_audit_exact_explicit_index_fp_sql!())
+        );
+        assert_eq!(
+            trigger_sql_fingerprint(&fresh),
+            sql_literal_value(&fresh, ward_audit_exact_trigger_fp_sql!())
+        );
+        assert_eq!(
+            trigger_sql_fingerprint(&migrated),
+            sql_literal_value(&migrated, ward_audit_exact_trigger_fp_sql!())
+        );
+    }
+
+    #[test]
+    fn current_schema_with_spaced_event_type_literal_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(&drift_event_type_literal(
+            WARD_AUDIT_SCHEMA_SQL,
+            "apply_audit",
+            "apply_ audit",
+        ))
+        .unwrap();
+
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+        assert!(stored_table_sql(&conn).contains("'apply_ audit'"));
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn legacy_schema_with_spaced_event_type_literal_is_unknown_and_guard_preserves_state() {
+        let schema_sql = drift_event_type_literal(
+            LEGACY_WARD_AUDIT_SCHEMA_SQL,
+            "compaction_ledger",
+            "compaction_ ledger",
+        );
+        assert_legacy_schema_guard_rollback_preserves_state(&schema_sql, |conn| {
+            assert!(stored_table_sql(conn).contains("'compaction_ ledger'"));
+            assert!(!stored_table_sql(conn).contains("'compaction_ledger'"));
+        });
     }
 
     #[test]
@@ -1383,6 +1597,95 @@ FROM ward_audit_shape;
         conn.execute_batch("CREATE INDEX ward_audit_decision_idx ON ward_audit (decision);")
             .unwrap();
 
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn current_schema_with_desc_index_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+
+        conn.execute_batch(
+            "DROP INDEX ward_audit_event_idx;
+             CREATE INDEX ward_audit_event_idx ON ward_audit (event_type, recorded_at DESC);",
+        )
+        .unwrap();
+
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert!(
+            explicit_index_sql_fingerprint(&conn).contains("recorded_at DESC"),
+            "expected DESC drift in index SQL"
+        );
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn current_schema_with_collated_index_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+
+        conn.execute_batch(
+            "DROP INDEX ward_audit_event_idx;
+             CREATE INDEX ward_audit_event_idx ON ward_audit (event_type COLLATE NOCASE, recorded_at);",
+        )
+        .unwrap();
+
+        assert_eq!(explicit_index_names(&conn), expected_explicit_index_names());
+        assert!(
+            explicit_index_sql_fingerprint(&conn).contains("COLLATE NOCASE"),
+            "expected collation drift in index SQL"
+        );
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn current_schema_with_altered_trigger_error_literal_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+
+        conn.execute_batch(
+            "DROP TRIGGER ward_audit_append_only_update;
+             CREATE TRIGGER ward_audit_append_only_update
+             BEFORE UPDATE ON ward_audit
+             BEGIN
+                 SELECT RAISE(ABORT, 'ward_audit is append-only (drifted)');
+             END;",
+        )
+        .unwrap();
+
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+        assert!(
+            trigger_sql_fingerprint(&conn).contains("drifted"),
+            "expected trigger-literal drift in trigger SQL"
+        );
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
+    }
+
+    #[test]
+    fn current_schema_with_altered_trigger_body_is_unknown() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V014);
+
+        conn.execute_batch(
+            "DROP TRIGGER ward_audit_append_only_delete;
+             CREATE TRIGGER ward_audit_append_only_delete
+             BEFORE DELETE ON ward_audit
+             BEGIN
+                 SELECT 1;
+                 SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
+             END;",
+        )
+        .unwrap();
+
+        assert_eq!(trigger_names(&conn), expected_trigger_names());
+        assert!(
+            trigger_sql_fingerprint(&conn).contains("SELECT 1;"),
+            "expected trigger-body drift in trigger SQL"
+        );
         assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_UNKNOWN);
     }
 

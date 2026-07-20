@@ -23,16 +23,24 @@ callers run before touching `ward_audit`. It returns one stable tag:
 
 The fingerprint is exact and table-local:
 
-- full normalized `CREATE TABLE ward_audit (...)` equality;
+- exact stored `sqlite_master.sql` for the `ward_audit` table;
 - ordered column metadata from `pragma_table_info('ward_audit')`, including
   name, type, `NOT NULL`, `DEFAULT`, and primary-key metadata;
-- exact explicit index set (excluding SQLite internal autoindexes); and
-- exact append-only trigger set.
+- exact stored `sqlite_master.sql` for each explicit index (ordered by name and
+  fingerprinted as `name|sql`, excluding SQLite internal autoindexes); and
+- exact stored `sqlite_master.sql` for each append-only trigger (ordered by
+  name and fingerprinted as `name|sql`).
 
-The full normalized table definition covers every declared table-level
-constraint — the `event_type` CHECK list, extra `CHECK` clauses, `UNIQUE`
-clauses, and foreign-key clauses — so any extra or missing constraint, column,
-index, or trigger classifies as `unknown`.
+The full stored table definition covers every declared table-level constraint —
+the `event_type` CHECK list, extra `CHECK` clauses, `UNIQUE` clauses, and
+foreign-key clauses — so any extra or missing constraint, column, index, or
+trigger classifies as `unknown`. No whitespace-destroying normalization is
+applied: only the exact stored SQL variants SQLite emits for the shipped
+schemas are accepted. For `current_v014`, that means the fresh
+`CREATE TABLE ward_audit (...)` form and the quoted
+`CREATE TABLE "ward_audit" (...)` form produced by the legacy rename path. For
+`legacy_v013`, the fingerprint intentionally includes the inline comments
+preserved from the shipped v0.1.3 DDL.
 
 ## Migration design
 
@@ -68,12 +76,17 @@ Executable rusqlite tests cover:
 3. legacy/current drift caused by extra table-level `CHECK` or `UNIQUE`
    constraints classifying as `unknown`, with legacy guard failures requiring
    explicit `ROLLBACK` and preserving the original constraint behavior;
-4. current drift cases such as a missing append-only trigger or an extra index
-   classifying as `unknown`;
-5. exact current/rerun guard failures requiring explicit `ROLLBACK`;
-6. successful exact-legacy upgrade landing in `current_v014`, with fresh and
-   migrated current schemas sharing the same normalized table definition; and
-7. post-`ALTER` failure rollback restoring the full legacy table state.
+4. current/legacy `event_type` CHECK drift where a quoted literal gains an
+   internal space (for example `apply_ audit`) classifying as `unknown`, with
+   the legacy guard rejecting before mutation and rollback preserving data;
+5. current drift cases such as a missing append-only trigger, an extra index, a
+   `recorded_at DESC` index, a `COLLATE NOCASE` index, or altered append-only
+   trigger SQL classifying as `unknown`;
+6. exact current/rerun guard failures requiring explicit `ROLLBACK`;
+7. successful exact-legacy upgrade landing in `current_v014`, with fresh and
+   migrated current schemas both classifying `current_v014` while matching only
+   their controlled exact stored SQL variants; and
+8. post-`ALTER` failure rollback restoring the full legacy table state.
 
 ## Scope
 
