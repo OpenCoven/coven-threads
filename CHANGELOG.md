@@ -13,9 +13,9 @@ All notable changes to `coven-threads-core` are documented here.
 - `WardAuditRecord::for_apply(...)` constructor — builds the audit row for a Gate-4 applied write.
 - `WardAuditRecord::apply_prev_sha256_hex()` / `apply_bytes_written()` — decode helpers for `ApplyAudit` detail.
 - `APPLY_AUDIT_DETAIL_KEY_PREV` / `APPLY_AUDIT_DETAIL_KEY_BYTES` — stable JSON key constants.
-- `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL to rebuild `ward_audit` for stores created against v0.1.3 (which lacked the `apply_audit` CHECK entry and the `detail` column). Future daemon integration must gate this SQL by exact `ward_audit` table shape: legacy means the table exists, `detail` is absent, and the CHECK does not contain `apply_audit`; current means `detail` exists and `apply_audit` is accepted. The SQL preserves database-wide `PRAGMA user_version`.
+- `WARD_AUDIT_MIGRATION_V014_SQL` — transaction SQL to rebuild `ward_audit` for stores created against v0.1.3 (which lacked the `apply_audit` CHECK entry and the `detail` column). Bumps `PRAGMA user_version = 14` inside the transaction so future migrations can gate on `user_version < N` instead of substring-sniffing `sqlite_master` DDL. The daemon should run this migration when `PRAGMA user_version < 14`.
 - Exhaustiveness test `schema_names_all_event_tags` extended to cover `ApplyAudit`.
-- New tests: `for_apply_produces_correct_shape`, `for_apply_roundtrips_json`, `fresh_schema_preserves_user_version_zero_and_creates_current_shape`, `fresh_schema_preserves_user_version_ninety_nine_and_creates_current_shape`, `migration_rejects_current_schema_rows_with_detail_and_preserves_state`, `legacy_schema_upgrades_and_preserves_append_only_behavior`, and `rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows`.
+- New tests: `for_apply_produces_correct_shape`, `for_apply_roundtrips_json`, `migration_sql_contains_apply_audit_and_detail_column`.
 
 ### Design notes
 

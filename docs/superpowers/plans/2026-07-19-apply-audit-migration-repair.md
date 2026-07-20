@@ -15,7 +15,6 @@
 - Modify `crates/coven-threads-core/src/audit.rs` to repair the migration SQL, document exact-shape gating, and add executable migration tests.
 - Modify `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md` to document exact table-shape gating and database-wide version preservation.
 - Modify `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md` to align the implementation plan with the approved table-local versioning revision.
-- Modify `CHANGELOG.md` to describe table-local migration gating and the updated regression coverage.
 
 ### Task 1: Add executable migration regressions
 
@@ -268,8 +267,7 @@ Expected: all audit tests pass.
 - [ ] **Step 7: Commit the repair**
 
 ```bash
-git add CHANGELOG.md \
-  crates/coven-threads-core/src/audit.rs \
+git add crates/coven-threads-core/src/audit.rs \
   docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md \
   docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md
 git commit -m "fix(audit): keep migration versioning table-local" \
