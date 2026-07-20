@@ -18,14 +18,20 @@
 //! **Gate-4 applied writes** are also auditable here via
 //! `AuditEventType::ApplyAudit` (see §3.4, coven-threads#5).
 //!
-//! ## Schema versioning and migration
+//! ## Schema shape and migration gating
 //!
-//! `WARD_AUDIT_SCHEMA_SQL` creates the fresh v0.1.4 shape and stamps
-//! `PRAGMA user_version = 14`, so new empty stores are versioned immediately.
+//! `WARD_AUDIT_SCHEMA_SQL` creates the fresh v0.1.4 `ward_audit` shape without
+//! mutating database-wide `PRAGMA user_version`.
 //! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact v0.1.3 legacy
-//! shape (no `detail` column, no `apply_audit` CHECK tag). It first adds
-//! `detail`, then rebuilds `ward_audit` in one transaction so the current
-//! CHECK set is installed and any existing `detail` values are preserved.
+//! shape. Callers must inspect the `ward_audit` table itself before execution:
+//! - exact legacy v0.1.3: the table exists, `detail` is absent, and the table
+//!   CHECK does not contain `apply_audit`;
+//! - current v0.1.4: `detail` exists and the table CHECK accepts
+//!   `apply_audit`;
+//! - partial/unknown shapes: fail closed and do not run the migration.
+//! The migration first adds `detail`, then rebuilds `ward_audit` in one
+//! transaction so the current CHECK set is installed and every existing row is
+//! preserved.
 //! Running that migration against a current schema, or rerunning it after a
 //! successful upgrade, fails before destructive work; callers must explicitly
 //! roll back the failed transaction before continuing.
@@ -317,9 +323,11 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
 /// 5. Renames the new table into place.
 /// 6. Re-creates indexes and append-only triggers.
 ///
-/// **Run condition:** execute this only for the exact v0.1.3 legacy shape.
-/// Fresh v0.1.4 schemas already stamp `PRAGMA user_version = 14`; legacy
-/// v0.1.3 stores start at `0` and are stamped `14` only after this rebuild.
+/// **Caller gate:** inspect `ward_audit` itself before executing this SQL.
+/// Run it only when the table exists, `detail` is absent, and the table CHECK
+/// does not contain `apply_audit`. If `detail` exists and the table accepts
+/// `apply_audit`, the schema is already current. Any partial/unknown shape
+/// must fail closed instead of running the migration.
 ///
 /// Current-schema invocation and post-upgrade reruns fail before any
 /// destructive step: a current schema aborts on `ALTER TABLE ... ADD COLUMN
@@ -327,7 +335,8 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
 /// upgrade fails on the same `ALTER TABLE` because the column already exists.
 /// Callers must `ROLLBACK` failed migration transactions before continuing;
 /// the migration remains fail-closed because no later step can run after that
-/// early abort.
+/// early abort. This SQL does not read or write database-wide
+/// `PRAGMA user_version`.
 pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = r#"
 BEGIN;
 
@@ -385,15 +394,14 @@ BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
 
-PRAGMA user_version = 14;
-
 COMMIT;
 "#;
 
 /// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
 ///
-/// See module docs for migration notes. Fresh schemas stamp
-/// `PRAGMA user_version = 14`.
+/// See module docs for shape detection and migration gating. This DDL creates
+/// the current `ward_audit` shape without mutating database-wide
+/// `PRAGMA user_version`.
 pub const WARD_AUDIT_SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS ward_audit (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -432,8 +440,6 @@ BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
-
-PRAGMA user_version = 14;
 "#;
 
 #[cfg(test)]
@@ -512,15 +518,72 @@ END;
         recorded_at: String,
     }
 
-    fn open_conn(schema_sql: &str) -> Connection {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(schema_sql).unwrap();
-        conn
-    }
-
     fn user_version(conn: &Connection) -> i64 {
         conn.query_row("PRAGMA user_version;", [], |row| row.get(0))
             .unwrap()
+    }
+
+    fn set_user_version(conn: &Connection, version: i64) {
+        conn.pragma_update(None, "user_version", version).unwrap();
+    }
+
+    fn ward_audit_table_sql(conn: &Connection) -> String {
+        conn.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'ward_audit';",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn ward_audit_has_detail_column(conn: &Connection) -> bool {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('ward_audit') WHERE name = 'detail');",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+            == 1
+    }
+
+    fn ward_audit_accepts_apply_audit(conn: &Connection) -> bool {
+        ward_audit_table_sql(conn).contains("'apply_audit'")
+    }
+
+    fn assert_legacy_ward_audit_shape(conn: &Connection) {
+        assert!(
+            !ward_audit_has_detail_column(conn),
+            "legacy schema must not expose detail"
+        );
+        assert!(
+            !ward_audit_accepts_apply_audit(conn),
+            "legacy schema CHECK must not mention apply_audit"
+        );
+    }
+
+    fn assert_current_ward_audit_shape(conn: &Connection) {
+        assert!(
+            ward_audit_has_detail_column(conn),
+            "current schema must expose detail"
+        );
+        assert!(
+            ward_audit_accepts_apply_audit(conn),
+            "current schema CHECK must accept apply_audit"
+        );
+    }
+
+    fn assert_fresh_schema_preserves_user_version(initial_version: i64) {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, initial_version);
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        assert_eq!(user_version(&conn), initial_version);
+        assert_current_ward_audit_shape(&conn);
+
+        let row_id = insert_current_apply_audit_row(&conn);
+        let row = load_audit_row(&conn, row_id);
+        assert_eq!(row.event_type, "apply_audit");
+        assert_eq!(row.detail.as_deref(), Some(FIXED_PREV_DETAIL));
     }
 
     fn load_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
@@ -794,18 +857,25 @@ END;
     }
 
     #[test]
-    fn fresh_schema_stamps_user_version_14() {
-        let conn = open_conn(WARD_AUDIT_SCHEMA_SQL);
-        assert_eq!(user_version(&conn), 14);
+    fn fresh_schema_preserves_user_version_zero_and_creates_current_shape() {
+        assert_fresh_schema_preserves_user_version(0);
     }
 
     #[test]
-    fn migration_rejects_current_schema_rows_with_detail() {
-        let conn = open_conn(WARD_AUDIT_SCHEMA_SQL);
+    fn fresh_schema_preserves_user_version_ninety_nine_and_creates_current_shape() {
+        assert_fresh_schema_preserves_user_version(99);
+    }
+
+    #[test]
+    fn migration_rejects_current_schema_rows_with_detail_and_preserves_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_current_ward_audit_shape(&conn);
         let row_id = insert_current_apply_audit_row(&conn);
         let before = load_audit_row(&conn, row_id);
         let before_version = user_version(&conn);
-        assert_eq!(before_version, 14);
+        assert_eq!(before_version, 37);
 
         let err = conn
             .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
@@ -818,20 +888,25 @@ END;
 
         let after = load_audit_row(&conn, row_id);
         assert_eq!(after, before);
+        assert_current_ward_audit_shape(&conn);
         assert_eq!(user_version(&conn), before_version);
     }
 
     #[test]
     fn legacy_schema_upgrades_and_preserves_append_only_behavior() {
-        let conn = open_conn(LEGACY_WARD_AUDIT_SCHEMA_SQL);
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_legacy_ward_audit_shape(&conn);
         let row_id = insert_legacy_ward_updated_row(&conn);
         let before = load_legacy_audit_row(&conn, row_id);
         assert_eq!(before.event_type, "ward_updated");
         assert_eq!(before.decision, "updated");
-        assert_eq!(user_version(&conn), 0);
+        assert_eq!(user_version(&conn), 37);
 
         conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
-        assert_eq!(user_version(&conn), 14);
+        assert_current_ward_audit_shape(&conn);
+        assert_eq!(user_version(&conn), 37);
 
         let after = load_audit_row(&conn, row_id);
         assert_eq!(after.id, row_id);
@@ -873,11 +948,15 @@ END;
 
     #[test]
     fn rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows() {
-        let conn = open_conn(LEGACY_WARD_AUDIT_SCHEMA_SQL);
+        let conn = Connection::open_in_memory().unwrap();
+        set_user_version(&conn, 37);
+        conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
+        assert_legacy_ward_audit_shape(&conn);
         let legacy_row_id = insert_legacy_ward_updated_row(&conn);
 
         conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
-        assert_eq!(user_version(&conn), 14);
+        assert_current_ward_audit_shape(&conn);
+        assert_eq!(user_version(&conn), 37);
 
         let apply_row_id = insert_current_apply_audit_row(&conn);
         let legacy_before = load_audit_row(&conn, legacy_row_id);
@@ -896,6 +975,7 @@ END;
         let apply_after = load_audit_row(&conn, apply_row_id);
         assert_eq!(legacy_after, legacy_before);
         assert_eq!(apply_after, apply_before);
-        assert_eq!(user_version(&conn), 14);
+        assert_current_ward_audit_shape(&conn);
+        assert_eq!(user_version(&conn), 37);
     }
 }

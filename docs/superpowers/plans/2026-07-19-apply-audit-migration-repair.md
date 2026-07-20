@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the v0.1.4 `ward_audit` migration preserve immutable evidence and fail closed when invoked against an already-current schema.
+**Goal:** Make the v0.1.4 `ward_audit` migration preserve immutable evidence, preserve database-wide version state, and fail closed when invoked outside the exact legacy schema shape.
 
-**Architecture:** Keep migration ownership in `audit.rs`. The legacy migration adds `detail` before rebuilding and copies that column verbatim; the current schema stamps version 14. In-memory SQLite tests execute both schema paths and verify data preservation, append-only enforcement, versioning, and safe failure.
+**Architecture:** Keep migration ownership in `audit.rs`. The legacy migration adds `detail` before rebuilding and copies that column verbatim; callers gate execution by exact `ward_audit` table shape instead of `PRAGMA user_version` or a separate marker. In-memory SQLite tests execute both schema paths and verify data preservation, append-only enforcement, database-wide `user_version` preservation, and safe failure.
 
 **Tech Stack:** Rust 2021, SQLite, `rusqlite` test dependency, Cargo test.
 
@@ -12,25 +12,20 @@
 
 ## File Map
 
-- Modify `crates/coven-threads-core/Cargo.toml` to add bundled SQLite for tests only.
-- Modify `crates/coven-threads-core/src/audit.rs` to repair the migration SQL, stamp fresh schemas, and add executable migration tests.
-- Modify `Cargo.lock` through Cargo after adding the test dependency.
+- Modify `crates/coven-threads-core/src/audit.rs` to repair the migration SQL, document exact-shape gating, and add executable migration tests.
+- Modify `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md` to document exact table-shape gating and database-wide version preservation.
+- Modify `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md` to align the implementation plan with the approved table-local versioning revision.
+- Modify `CHANGELOG.md` to describe table-local migration gating and the updated regression coverage.
 
 ### Task 1: Add executable migration regressions
 
 **Files:**
-- Modify: `crates/coven-threads-core/Cargo.toml`
 - Modify: `crates/coven-threads-core/src/audit.rs:435-590`
-- Modify: `Cargo.lock`
 
-- [ ] **Step 1: Add the test-only SQLite dependency**
+- [ ] **Step 1: Reuse the existing test-only SQLite dependency**
 
-Append this section to `crates/coven-threads-core/Cargo.toml`:
-
-```toml
-[dev-dependencies]
-rusqlite = { version = "0.31", features = ["bundled"] }
-```
+Use the existing bundled `rusqlite` dev-dependency already present for audit
+tests; no production dependency or extra migration metadata is needed.
 
 - [ ] **Step 2: Add a representative legacy schema fixture**
 
@@ -96,20 +91,36 @@ fn insert_audit_row(connection: &Connection, event_type: &str, detail: Option<&s
 For the legacy test, insert its pre-migration row with a dedicated statement
 that omits `detail`, because the v0.1.3 table does not have that column.
 
-- [ ] **Step 3: Add the failing fresh-schema version test**
+- [ ] **Step 3: Add failing fresh-schema preservation tests**
 
 ```rust
 #[test]
-fn fresh_schema_is_stamped_v014() {
+fn fresh_schema_preserves_user_version_zero() {
     let connection = Connection::open_in_memory().unwrap();
+    connection.execute_batch("PRAGMA user_version = 0;").unwrap();
     connection.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
 
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 14);
+    assert_eq!(version, 0);
+}
+
+#[test]
+fn fresh_schema_preserves_user_version_ninety_nine() {
+    let connection = Connection::open_in_memory().unwrap();
+    connection.execute_batch("PRAGMA user_version = 99;").unwrap();
+    connection.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, 99);
 }
 ```
+
+Each test should also assert the resulting table exposes `detail` and accepts
+`apply_audit`.
 
 - [ ] **Step 4: Add the failing current-schema preservation test**
 
@@ -117,6 +128,7 @@ fn fresh_schema_is_stamped_v014() {
 #[test]
 fn legacy_migration_rejects_current_schema_without_erasing_detail() {
     let connection = Connection::open_in_memory().unwrap();
+    connection.execute_batch("PRAGMA user_version = 37;").unwrap();
     connection.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
     let detail = r#"{"prev_sha256":"abcd","bytes_written":42}"#;
     let id = insert_audit_row(&connection, "apply_audit", Some(detail));
@@ -135,6 +147,11 @@ fn legacy_migration_rejects_current_schema_without_erasing_detail() {
         )
         .unwrap();
     assert_eq!(preserved, detail);
+
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, 37);
 }
 ```
 
@@ -143,16 +160,20 @@ fn legacy_migration_rejects_current_schema_without_erasing_detail() {
 The legacy-upgrade test must:
 
 1. Execute `LEGACY_WARD_AUDIT_SCHEMA_SQL`.
-2. Insert a fully populated legacy row without `detail`.
-3. Execute `WARD_AUDIT_MIGRATION_V014_SQL`.
-4. Assert the row's original values remain unchanged and `detail IS NULL`.
-5. Assert `PRAGMA user_version = 14`.
-6. Insert an `apply_audit` row with populated `detail`.
-7. Assert both append-only triggers reject `UPDATE` and `DELETE`.
+2. Preset an unrelated database-wide `PRAGMA user_version` value (for example
+   `37`).
+3. Insert a fully populated legacy row without `detail`.
+4. Execute `WARD_AUDIT_MIGRATION_V014_SQL`.
+5. Assert the row's original values remain unchanged and `detail IS NULL`.
+6. Assert the rebuilt table now exposes `detail`, accepts `apply_audit`, and
+   preserves `PRAGMA user_version = 37`.
+7. Insert an `apply_audit` row with populated `detail`.
+8. Assert both append-only triggers reject `UPDATE` and `DELETE`.
 
 The rerun test must execute the migration successfully once, invoke it again,
 assert the duplicate-`detail` error, roll back the failed transaction, and
-confirm the original migrated row still exists unchanged.
+confirm the original migrated row and preserved database-wide `user_version`
+still exist unchanged.
 
 - [ ] **Step 6: Run the focused tests and confirm the regression**
 
@@ -162,10 +183,10 @@ Run:
 cargo test -p coven-threads-core audit::tests -- --nocapture
 ```
 
-Expected before the SQL repair: `fresh_schema_is_stamped_v014` fails with
-`left: 0, right: 14`, and
-`legacy_migration_rejects_current_schema_without_erasing_detail` fails because
-the migration succeeds and replaces `detail` with `NULL`.
+Expected before the SQL repair: the fresh-schema preservation tests fail because
+`WARD_AUDIT_SCHEMA_SQL` overwrites the pre-set database-wide `user_version`,
+and the current/legacy/rerun migration tests fail because
+`WARD_AUDIT_MIGRATION_V014_SQL` rewrites the same unrelated value to `14`.
 
 ### Task 2: Make the migration preserve evidence and fail closed
 
@@ -213,21 +234,24 @@ to:
 tier, decision, approver, diff_hash, detail, files_touched, channel,
 ```
 
-- [ ] **Step 4: Stamp fresh v0.1.4 schemas**
+- [ ] **Step 4: Preserve database-wide version state**
 
-Append this statement to `WARD_AUDIT_SCHEMA_SQL`, after trigger creation:
-
-```sql
-PRAGMA user_version = 14;
-```
+Remove any `PRAGMA user_version = 14;` statements from
+`WARD_AUDIT_SCHEMA_SQL` and `WARD_AUDIT_MIGRATION_V014_SQL`.
 
 - [ ] **Step 5: Correct the migration documentation**
 
 Update the module and constant comments to state:
 
-- New stores receive current DDL and `user_version = 14`.
-- The legacy migration is only for the exact v0.1.3 shape.
-- It adds `detail`, copies every row including `detail`, and stamps version 14.
+- New stores receive the current DDL without mutating database-wide
+  `user_version`.
+- The legacy migration is only for the exact v0.1.3 shape: `ward_audit`
+  exists, `detail` is absent, and the table CHECK does not contain
+  `apply_audit`.
+- Current v0.1.4 or partial/unknown shapes fail closed rather than running the
+  migration.
+- The migration adds `detail`, copies every row including `detail`, and
+  preserves database-wide `user_version`.
 - Current-schema invocation or rerun fails before destructive work.
 - Callers must roll back a failed migration transaction.
 
@@ -244,9 +268,11 @@ Expected: all audit tests pass.
 - [ ] **Step 7: Commit the repair**
 
 ```bash
-git add crates/coven-threads-core/Cargo.toml \
-  crates/coven-threads-core/src/audit.rs Cargo.lock
-git commit -m "fix(audit): preserve detail during v0.1.4 migration" \
+git add CHANGELOG.md \
+  crates/coven-threads-core/src/audit.rs \
+  docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md \
+  docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md
+git commit -m "fix(audit): keep migration versioning table-local" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
 
@@ -262,11 +288,10 @@ Run:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test -p coven-threads-core audit::tests -- --nocapture
 ```
 
-Expected: all commands exit successfully with no warnings.
+Expected: both commands exit successfully.
 
 - [ ] **Step 2: Review the final diff**
 
@@ -278,8 +303,8 @@ git diff origin/cody/apply-audit-v014...HEAD --stat
 git status --short --branch
 ```
 
-Expected: only the design, plan, manifest/lockfile, and audit migration files
-are changed; the worktree is clean after commits.
+Expected: only the changelog, design, plan, and audit migration files are
+changed; the worktree is clean after commits.
 
 - [ ] **Step 3: Record verification in Beads**
 
