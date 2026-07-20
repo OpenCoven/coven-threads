@@ -20,14 +20,15 @@
 //!
 //! ## Schema versioning and migration
 //!
-//! `WARD_AUDIT_SCHEMA_SQL` uses `CREATE TABLE IF NOT EXISTS`, so new empty
-//! stores automatically receive the current DDL including the `apply_audit`
-//! CHECK tag. Stores created against v0.1.3 (which lacked the `apply_audit`
-//! CHECK entry) must be rebuilt: the daemon should run
-//! `WARD_AUDIT_MIGRATION_V014_SQL` once at startup when it detects the old
-//! CHECK text is still in the schema. That migration rebuilds `ward_audit`
-//! in a single transaction (create, copy, drop, rename) — SQLite cannot
-//! `ALTER` a CHECK constraint.
+//! `WARD_AUDIT_SCHEMA_SQL` creates the fresh v0.1.4 shape and stamps
+//! `PRAGMA user_version = 14`, so new empty stores are versioned immediately.
+//! `WARD_AUDIT_MIGRATION_V014_SQL` exists only for the exact v0.1.3 legacy
+//! shape (no `detail` column, no `apply_audit` CHECK tag). It first adds
+//! `detail`, then rebuilds `ward_audit` in one transaction so the current
+//! CHECK set is installed and any existing `detail` values are preserved.
+//! Running that migration against a current schema, or rerunning it after a
+//! successful upgrade, fails before destructive work; callers must explicitly
+//! roll back the failed transaction before continuing.
 //!
 //! ## Where content hashes ride for applied writes
 //!
@@ -301,35 +302,36 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
 
 /// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
 ///
-/// Idempotent (`IF NOT EXISTS` throughout) so the daemon can apply it at
-/// startup. Append-only is enforced *in the store*: UPDATE and DELETE abort via
+/// Append-only is enforced *in the store*: UPDATE and DELETE abort via
 /// triggers (RFC-0001 §5.6: entries MUST NOT be deleted or modified).
-/// DDL migration for v0.1.3 → v0.1.4: rebuilds `ward_audit` so its CHECK
-/// constraint includes the new `apply_audit` tag.
+/// DDL migration for v0.1.3 → v0.1.4: rebuilds `ward_audit` from the exact
+/// legacy shape so its CHECK constraint includes `apply_audit` and its copy
+/// path preserves `detail`.
 ///
 /// SQLite cannot `ALTER` a CHECK constraint on an existing table. This SQL
 /// performs a safe swap in one transaction:
-/// 1. Creates `ward_audit_new` with the updated CHECK (plus `detail` column).
-/// 2. Copies all existing rows (NULLing `detail` for old rows).
-/// 3. Drops the old table.
-/// 4. Renames the new table into place.
-/// 5. Re-creates indexes and append-only triggers.
+/// 1. Adds the legacy `detail` column so the old table matches the copy shape.
+/// 2. Creates `ward_audit_new` with the updated CHECK.
+/// 3. Copies all existing rows, preserving `detail`.
+/// 4. Drops the old table.
+/// 5. Renames the new table into place.
+/// 6. Re-creates indexes and append-only triggers.
 ///
-/// **Run condition:** execute this only when `PRAGMA user_version` returns a
-/// value less than `14` — i.e. the store was created before this migration.
-/// `PRAGMA user_version` is `0` for stores that predate any explicit versioning
-/// (all v0.1.3 stores). After this migration runs, `user_version` is `14`
-/// (matching `0.1.4`), giving future migrations a clean integer ladder to gate
-/// on instead of substring-sniffing `sqlite_master` DDL.
+/// **Run condition:** execute this only for the exact v0.1.3 legacy shape.
+/// Fresh v0.1.4 schemas already stamp `PRAGMA user_version = 14`; legacy
+/// v0.1.3 stores start at `0` and are stamped `14` only after this rebuild.
 ///
-/// Idempotent in the sense that if `user_version >= 14` the daemon must not
-/// re-run it; the `ward_audit_new` table name is not guarded with `IF NOT
-/// EXISTS`, so a double-run would fail on the `CREATE` step (intentional:
-/// prevents silent data loss from a buggy migration controller).
+/// Current-schema invocation and post-upgrade reruns fail before any
+/// destructive step: a current schema aborts on `ALTER TABLE ... ADD COLUMN
+/// detail`, while a rerun after a successful upgrade aborts on
+/// `CREATE TABLE ward_audit_new`. Callers must `ROLLBACK` failed migration
+/// transactions before continuing.
 pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = r#"
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS ward_audit_new (
+ALTER TABLE ward_audit ADD COLUMN detail TEXT;
+
+CREATE TABLE ward_audit_new (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type    TEXT    NOT NULL CHECK (event_type IN (
                       'proposal_submitted','proposal_approved','proposal_rejected',
@@ -359,7 +361,7 @@ INSERT INTO ward_audit_new (
 )
 SELECT
     id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
-    tier, decision, approver, diff_hash, NULL, files_touched, channel,
+    tier, decision, approver, diff_hash, detail, files_touched, channel,
     thread_id, submitted_at, decided_at, recorded_at
 FROM ward_audit;
 
@@ -381,9 +383,6 @@ BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
 
--- Stamp schema version so future migrations can gate on `PRAGMA user_version`
--- instead of substring-sniffing the CHECK DDL. Gate rule for callers:
---   run this migration when `PRAGMA user_version < 14`.
 PRAGMA user_version = 14;
 
 COMMIT;
@@ -391,7 +390,8 @@ COMMIT;
 
 /// DDL for the `ward.audit` table inside `coven.sqlite3` (§3.4).
 ///
-/// See module docs for migration notes.
+/// See module docs for migration notes. Fresh schemas stamp
+/// `PRAGMA user_version = 14`.
 pub const WARD_AUDIT_SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS ward_audit (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -430,12 +430,237 @@ BEFORE DELETE ON ward_audit
 BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
+
+PRAGMA user_version = 14;
 "#;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ids::{SurfaceId, WriterId};
+    use rusqlite::{params, Connection};
+
+    const FIXED_SUBMITTED_AT: &str = "2026-07-19T00:00:00.000Z";
+    const FIXED_DECIDED_AT: &str = "2026-07-19T00:01:00.000Z";
+    const FIXED_RECORDED_AT: &str = "2026-07-19T00:02:00.000Z";
+    const FIXED_WARD_HASH: [u8; 32] = *b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const FIXED_DIFF_HASH: [u8; 32] = *b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const FIXED_PREV_DETAIL: &str = r#"{"prev_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","bytes_written":42}"#;
+    const FIXED_FILES_TOUCHED: &str = r#"["SOUL.md"]"#;
+
+    /// Representative v0.1.3 `ward_audit` schema: no `detail` column and no
+    /// `apply_audit` event tag, but still append-only.
+    const LEGACY_WARD_AUDIT_SCHEMA_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS ward_audit (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type    TEXT    NOT NULL CHECK (event_type IN (
+                      'proposal_submitted','proposal_approved','proposal_rejected',
+                      'proposal_vetoed','ward_updated','validation_verdict',
+                      'compaction_ledger')),
+    proposal_id   TEXT,
+    familiar_id   TEXT    NOT NULL,
+    ward_version  TEXT,
+    ward_hash     BLOB    NOT NULL,
+    tier          TEXT,
+    decision      TEXT    NOT NULL,
+    approver      TEXT,
+    diff_hash     BLOB,
+    files_touched TEXT    NOT NULL,
+    channel       TEXT,
+    thread_id     TEXT,
+    submitted_at  TEXT    NOT NULL,
+    decided_at    TEXT    NOT NULL,
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
+CREATE INDEX IF NOT EXISTS ward_audit_event_idx    ON ward_audit (event_type, recorded_at);
+
+CREATE TRIGGER IF NOT EXISTS ward_audit_append_only_update
+BEFORE UPDATE ON ward_audit
+BEGIN
+    SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ward_audit_append_only_delete
+BEFORE DELETE ON ward_audit
+BEGIN
+    SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
+END;
+"#;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct StoredAuditRow {
+        id: i64,
+        event_type: String,
+        proposal_id: Option<String>,
+        familiar_id: String,
+        ward_version: Option<String>,
+        ward_hash: Vec<u8>,
+        tier: Option<String>,
+        decision: String,
+        approver: Option<String>,
+        diff_hash: Option<Vec<u8>>,
+        detail: Option<String>,
+        files_touched: String,
+        channel: Option<String>,
+        thread_id: Option<String>,
+        submitted_at: String,
+        decided_at: String,
+        recorded_at: String,
+    }
+
+    fn open_conn(schema_sql: &str) -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(schema_sql).unwrap();
+        conn
+    }
+
+    fn user_version(conn: &Connection) -> i64 {
+        conn.query_row("PRAGMA user_version;", [], |row| row.get(0))
+            .unwrap()
+    }
+
+    fn load_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
+        conn.query_row(
+            r#"
+            SELECT id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
+                   tier, decision, approver, diff_hash, detail, files_touched,
+                   channel, thread_id, submitted_at, decided_at, recorded_at
+            FROM ward_audit
+            WHERE id = ?1
+            "#,
+            params![id],
+            |row| {
+                Ok(StoredAuditRow {
+                    id: row.get(0)?,
+                    event_type: row.get(1)?,
+                    proposal_id: row.get(2)?,
+                    familiar_id: row.get(3)?,
+                    ward_version: row.get(4)?,
+                    ward_hash: row.get(5)?,
+                    tier: row.get(6)?,
+                    decision: row.get(7)?,
+                    approver: row.get(8)?,
+                    diff_hash: row.get(9)?,
+                    detail: row.get(10)?,
+                    files_touched: row.get(11)?,
+                    channel: row.get(12)?,
+                    thread_id: row.get(13)?,
+                    submitted_at: row.get(14)?,
+                    decided_at: row.get(15)?,
+                    recorded_at: row.get(16)?,
+                })
+            },
+        )
+        .unwrap()
+    }
+
+    fn load_legacy_audit_row(conn: &Connection, id: i64) -> StoredAuditRow {
+        conn.query_row(
+            r#"
+            SELECT id, event_type, proposal_id, familiar_id, ward_version, ward_hash,
+                   tier, decision, approver, diff_hash, files_touched, channel,
+                   thread_id, submitted_at, decided_at, recorded_at
+            FROM ward_audit
+            WHERE id = ?1
+            "#,
+            params![id],
+            |row| {
+                Ok(StoredAuditRow {
+                    id: row.get(0)?,
+                    event_type: row.get(1)?,
+                    proposal_id: row.get(2)?,
+                    familiar_id: row.get(3)?,
+                    ward_version: row.get(4)?,
+                    ward_hash: row.get(5)?,
+                    tier: row.get(6)?,
+                    decision: row.get(7)?,
+                    approver: row.get(8)?,
+                    diff_hash: row.get(9)?,
+                    detail: None,
+                    files_touched: row.get(10)?,
+                    channel: row.get(11)?,
+                    thread_id: row.get(12)?,
+                    submitted_at: row.get(13)?,
+                    decided_at: row.get(14)?,
+                    recorded_at: row.get(15)?,
+                })
+            },
+        )
+        .unwrap()
+    }
+
+    fn insert_current_apply_audit_row(conn: &Connection) -> i64 {
+        conn.execute(
+            r#"
+            INSERT INTO ward_audit (
+                event_type, proposal_id, familiar_id, ward_version, ward_hash,
+                tier, decision, approver, diff_hash, detail, files_touched,
+                channel, thread_id, submitted_at, decided_at, recorded_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5,
+                ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, ?13, ?14, ?15, ?16
+            )
+            "#,
+            params![
+                "apply_audit",
+                Some("proposal-current"),
+                "familiar-current",
+                Some("0.1.4"),
+                FIXED_WARD_HASH.as_ref(),
+                Some("tier_2"),
+                "applied",
+                Option::<String>::None,
+                Some(FIXED_DIFF_HASH.as_ref()),
+                FIXED_PREV_DETAIL,
+                FIXED_FILES_TOUCHED,
+                Some("mutation"),
+                Option::<String>::None,
+                FIXED_SUBMITTED_AT,
+                FIXED_DECIDED_AT,
+                FIXED_RECORDED_AT,
+            ],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    fn insert_legacy_ward_updated_row(conn: &Connection) -> i64 {
+        conn.execute(
+            r#"
+            INSERT INTO ward_audit (
+                event_type, proposal_id, familiar_id, ward_version, ward_hash,
+                tier, decision, approver, diff_hash, files_touched, channel,
+                thread_id, submitted_at, decided_at, recorded_at
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5,
+                ?6, ?7, ?8, ?9, ?10, ?11,
+                ?12, ?13, ?14, ?15
+            )
+            "#,
+            params![
+                "ward_updated",
+                Some("proposal-legacy"),
+                "familiar-legacy",
+                Some("0.1.3"),
+                FIXED_WARD_HASH.as_ref(),
+                Some("tier_1"),
+                "updated",
+                Some("writer:legacy"),
+                Some(FIXED_DIFF_HASH.as_ref()),
+                FIXED_FILES_TOUCHED,
+                Some("mutation"),
+                Some("thread-legacy"),
+                FIXED_SUBMITTED_AT,
+                FIXED_DECIDED_AT,
+                FIXED_RECORDED_AT,
+            ],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
 
     fn request() -> MutationRequest {
         MutationRequest {
@@ -519,15 +744,12 @@ mod tests {
     #[test]
     fn for_apply_produces_correct_shape() {
         let now = OffsetDateTime::now_utc();
-        let familiar_id = FamiliarId::new();
-        let surface = SurfaceId::new("SOUL.md");
         let prev = [0xaa_u8; 32];
         let next = [0xbb_u8; 32];
-
         let record = WardAuditRecord::for_apply(
-            familiar_id,
+            FamiliarId::new(),
             &[0xcc; 32],
-            surface.clone(),
+            SurfaceId::new("SOUL.md"),
             "tier_2",
             Some(&prev),
             Some(&next),
@@ -539,8 +761,8 @@ mod tests {
         assert_eq!(record.event_type, AuditEventType::ApplyAudit);
         assert_eq!(record.decision, "applied");
         assert_eq!(record.tier.as_deref(), Some("tier_2"));
-        assert_eq!(record.diff_hash, Some(next.to_vec()));
-        assert_eq!(record.files_touched, vec![surface]);
+        assert_eq!(record.diff_hash, Some(vec![0xbb; 32]));
+        assert_eq!(record.files_touched, vec![SurfaceId::new("SOUL.md")]);
 
         // detail decoding helpers
         let prev_hex = record.apply_prev_sha256_hex().unwrap();
@@ -570,22 +792,108 @@ mod tests {
     }
 
     #[test]
-    fn migration_sql_contains_apply_audit_and_detail_column() {
+    fn fresh_schema_stamps_user_version_14() {
+        let conn = open_conn(WARD_AUDIT_SCHEMA_SQL);
+        assert_eq!(user_version(&conn), 14);
+    }
+
+    #[test]
+    fn migration_rejects_current_schema_rows_with_detail() {
+        let conn = open_conn(WARD_AUDIT_SCHEMA_SQL);
+        let row_id = insert_current_apply_audit_row(&conn);
+        let before = load_audit_row(&conn, row_id);
+        let before_version = user_version(&conn);
+        assert_eq!(before_version, 14);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("current-schema migration must fail on duplicate detail");
         assert!(
-            WARD_AUDIT_MIGRATION_V014_SQL.contains("'apply_audit'"),
-            "migration CHECK must contain apply_audit tag"
+            err.to_string().contains("duplicate column name: detail"),
+            "unexpected migration error: {err}"
         );
+        let _ = conn.execute_batch("ROLLBACK;");
+
+        let after = load_audit_row(&conn, row_id);
+        assert_eq!(after, before);
+        assert_eq!(user_version(&conn), before_version);
+    }
+
+    #[test]
+    fn legacy_schema_upgrades_and_preserves_append_only_behavior() {
+        let conn = open_conn(LEGACY_WARD_AUDIT_SCHEMA_SQL);
+        let row_id = insert_legacy_ward_updated_row(&conn);
+        let before = load_legacy_audit_row(&conn, row_id);
+        assert_eq!(before.event_type, "ward_updated");
+        assert_eq!(before.decision, "updated");
+        assert_eq!(user_version(&conn), 0);
+
+        conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
+        assert_eq!(user_version(&conn), 14);
+
+        let after = load_audit_row(&conn, row_id);
+        assert_eq!(after.id, row_id);
+        assert_eq!(after.event_type, "ward_updated");
+        assert_eq!(after.proposal_id.as_deref(), Some("proposal-legacy"));
+        assert_eq!(after.familiar_id, "familiar-legacy");
+        assert_eq!(after.ward_version.as_deref(), Some("0.1.3"));
+        assert_eq!(after.ward_hash, FIXED_WARD_HASH.to_vec());
+        assert_eq!(after.tier.as_deref(), Some("tier_1"));
+        assert_eq!(after.decision, "updated");
+        assert_eq!(after.approver.as_deref(), Some("writer:legacy"));
+        assert_eq!(after.diff_hash, Some(FIXED_DIFF_HASH.to_vec()));
+        assert_eq!(after.detail, None);
+        assert_eq!(after.files_touched, FIXED_FILES_TOUCHED);
+        assert_eq!(after.channel.as_deref(), Some("mutation"));
+        assert_eq!(after.thread_id.as_deref(), Some("thread-legacy"));
+        assert_eq!(after.submitted_at, FIXED_SUBMITTED_AT);
+        assert_eq!(after.decided_at, FIXED_DECIDED_AT);
+        assert_eq!(after.recorded_at, FIXED_RECORDED_AT);
+
+        let apply_row_id = insert_current_apply_audit_row(&conn);
+        let apply_row = load_audit_row(&conn, apply_row_id);
+        assert_eq!(apply_row.event_type, "apply_audit");
+        assert_eq!(apply_row.detail.as_deref(), Some(FIXED_PREV_DETAIL));
+
+        let update_err = conn
+            .execute(
+                "UPDATE ward_audit SET decision = 'changed' WHERE id = ?1",
+                params![row_id],
+            )
+            .unwrap_err();
+        assert!(update_err.to_string().contains("append-only"));
+
+        let delete_err = conn
+            .execute("DELETE FROM ward_audit WHERE id = ?1", params![row_id])
+            .unwrap_err();
+        assert!(delete_err.to_string().contains("append-only"));
+    }
+
+    #[test]
+    fn rerunning_migration_after_legacy_upgrade_errors_and_preserves_rows() {
+        let conn = open_conn(LEGACY_WARD_AUDIT_SCHEMA_SQL);
+        let legacy_row_id = insert_legacy_ward_updated_row(&conn);
+
+        conn.execute_batch(WARD_AUDIT_MIGRATION_V014_SQL).unwrap();
+        assert_eq!(user_version(&conn), 14);
+
+        let apply_row_id = insert_current_apply_audit_row(&conn);
+        let legacy_before = load_audit_row(&conn, legacy_row_id);
+        let apply_before = load_audit_row(&conn, apply_row_id);
+
+        let err = conn
+            .execute_batch(WARD_AUDIT_MIGRATION_V014_SQL)
+            .expect_err("rerunning the migration must fail on duplicate detail");
         assert!(
-            WARD_AUDIT_MIGRATION_V014_SQL.contains("detail"),
-            "migration must add detail column"
+            err.to_string().contains("duplicate column name: detail"),
+            "unexpected migration error: {err}"
         );
-        assert!(
-            WARD_AUDIT_MIGRATION_V014_SQL.contains("BEGIN;"),
-            "migration must be a transaction"
-        );
-        assert!(
-            WARD_AUDIT_MIGRATION_V014_SQL.contains("COMMIT;"),
-            "migration must be a transaction"
-        );
+        let _ = conn.execute_batch("ROLLBACK;");
+
+        let legacy_after = load_audit_row(&conn, legacy_row_id);
+        let apply_after = load_audit_row(&conn, apply_row_id);
+        assert_eq!(legacy_after, legacy_before);
+        assert_eq!(apply_after, apply_before);
+        assert_eq!(user_version(&conn), 14);
     }
 }
