@@ -14,6 +14,7 @@
 
 - Modify `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md` to document exact `ward_audit` shape gating and explicit preservation of unrelated database-wide `user_version`.
 - Modify `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md` to mirror the landed migration design, exact test names, and final diff expectations.
+- Modify `CHANGELOG.md` to align the v0.1.4 migration notes with the repaired implementation and executable migration regressions.
 - Modify `crates/coven-threads-core/Cargo.toml` to add bundled `rusqlite` under `[dev-dependencies]` for executable SQLite migration tests.
 - Modify `Cargo.lock` to resolve that test-only dependency.
 - Modify `crates/coven-threads-core/src/audit.rs` to repair the migration SQL, document fail-closed table-shape gating, and add executable migration tests.
@@ -195,6 +196,7 @@ coverage tests above.
 ### Task 2: Make the migration preserve evidence and fail closed
 
 **Files:**
+- Modify: `CHANGELOG.md`
 - Modify: `crates/coven-threads-core/src/audit.rs:309-430`
 - Modify: `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`
 - Modify: `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`
@@ -275,7 +277,8 @@ Expected: all audit tests pass.
 - [ ] **Step 7: Commit the repair**
 
 ```bash
-git add docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md \
+git add CHANGELOG.md \
+  docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md \
   docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md \
   crates/coven-threads-core/Cargo.toml \
   Cargo.lock \
@@ -287,6 +290,7 @@ git commit -m "fix(audit): keep migration versioning table-local" \
 ### Task 3: Validate and prepare PR #7 update
 
 **Files:**
+- Verify: `CHANGELOG.md`
 - Verify: `docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`
 - Verify: `docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`
 - Verify: `crates/coven-threads-core/Cargo.toml`
@@ -309,14 +313,17 @@ Expected: both commands exit successfully.
 Run:
 
 ```bash
-git diff origin/main...HEAD --check
-git diff origin/main...HEAD --stat
+git diff origin/cody/apply-audit-v014...HEAD --check
+git diff origin/cody/apply-audit-v014...HEAD --stat
 git status --short --branch
 ```
 
-Expected: only the design doc, plan doc, `crates/coven-threads-core/Cargo.toml`,
-`Cargo.lock`, and `crates/coven-threads-core/src/audit.rs` are changed; the
-worktree is clean after commits.
+Expected: only `CHANGELOG.md`,
+`docs/superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md`,
+`docs/superpowers/plans/2026-07-19-apply-audit-migration-repair.md`,
+`crates/coven-threads-core/Cargo.toml`, `Cargo.lock`, and
+`crates/coven-threads-core/src/audit.rs` are changed; the worktree is clean
+after commits.
 
 - [ ] **Step 3: Re-check remote branch drift**
 
