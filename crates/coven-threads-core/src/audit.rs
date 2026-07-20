@@ -42,6 +42,7 @@
 //!   table constraint, column, index, or trigger, any reserved durable-name
 //!   collision, and any temp-schema table/view/index/trigger named
 //!   `ward_audit` or `ward_audit_*`; fail closed.
+//!
 //! The fingerprint uses exact `main.sqlite_master.sql` text for the durable
 //! table, explicit durable indexes, and append-only durable triggers, plus
 //! ordered `pragma_table_info('ward_audit', 'main')` metadata and
