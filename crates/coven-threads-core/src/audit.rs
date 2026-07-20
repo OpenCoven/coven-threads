@@ -323,9 +323,11 @@ fn reject_tag(reason: &RejectReason) -> &'static str {
 ///
 /// Current-schema invocation and post-upgrade reruns fail before any
 /// destructive step: a current schema aborts on `ALTER TABLE ... ADD COLUMN
-/// detail`, while a rerun after a successful upgrade aborts on
-/// `CREATE TABLE ward_audit_new`. Callers must `ROLLBACK` failed migration
-/// transactions before continuing.
+/// detail` with a duplicate-column error, while a rerun after a successful
+/// upgrade fails on the same `ALTER TABLE` because the column already exists.
+/// Callers must `ROLLBACK` failed migration transactions before continuing;
+/// the migration remains fail-closed because no later step can run after that
+/// early abort.
 pub const WARD_AUDIT_MIGRATION_V014_SQL: &str = r#"
 BEGIN;
 
