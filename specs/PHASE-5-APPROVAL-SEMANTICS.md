@@ -397,6 +397,12 @@ Phase 5 opened 2026-07-18 (Val + Nova decision). Beads are live.
   migration coverage, and fidelity coverage proving the retired name, person,
   pronouns, purpose, and Coven-membership invariant shapes are either compiled
   deterministically or rejected explicitly.
+- `threads-uqx.13` — Public synthetic retired-Ward corpus: a repository-authored,
+  digest-pinned generator covers the five normative identity fields, all four
+  approval labels, veto settings, built-in harness regions, and fail-closed
+  unsupported cases without using historical or private Ward data. Generate it
+  with `cargo run -q -p coven-threads-core --example
+  generate_phase5_retired_ward_corpus`.
 - `threads-uqx.9` — Nova sign-off: RFC round-trip, Gate-4 fail-closed proof,
   descriptor-not-authority review.
 - `threads-uqx.10` — Val freeze: Phase-5 design frozen or rejected.
