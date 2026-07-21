@@ -86,6 +86,13 @@ pub enum ApprovalPath {
     AutoRegression {
         /// Optional veto window. `None` means: apply as soon as regression gates
         /// clear, with no veto period (emergency / unattended automation path).
+        ///
+        /// The wire key MUST be present (`"veto": null` for the no-window
+        /// path). A payload with the key absent is rejected: because `None` is
+        /// the *most permissive* configuration, a truncated or hand-built
+        /// payload must not silently resolve to it. The daemon always emits
+        /// the key (serde serializes `None` as `null`).
+        #[serde(deserialize_with = "deserialize_required_veto")]
         veto: Option<VetoWindow>,
     },
 
@@ -147,6 +154,7 @@ impl ApprovalPath {
     }
 
     /// Returns the higher-ceremony path of `self` and `other`.
+    #[must_use]
     pub fn highest(self, other: ApprovalPath) -> ApprovalPath {
         match (self, other) {
             (
@@ -162,10 +170,26 @@ impl ApprovalPath {
                 veto: left.strongest(right),
             },
             (left, right) => {
-                if right.ceremony_ordinal() > left.ceremony_ordinal() {
-                    right
+                let (winner, loser) = if right.ceremony_ordinal() > left.ceremony_ordinal() {
+                    (right, left)
                 } else {
-                    left
+                    (left, right)
+                };
+                // Elevating ceremony must not shrink a veto window a lower
+                // path demanded: a FamiliarCoherence winner merges with the
+                // loser's window, mirroring the equal-variant arms. Human
+                // paths carry no window — blocked-until-explicit-approval is
+                // strictly stronger than any veto period, so nothing is lost.
+                match (winner, loser) {
+                    (
+                        ApprovalPath::FamiliarCoherence { veto },
+                        ApprovalPath::AutoRegression {
+                            veto: Some(other_window),
+                        },
+                    ) => ApprovalPath::FamiliarCoherence {
+                        veto: veto.strongest(other_window),
+                    },
+                    (winner, _) => winner,
                 }
             }
         }
@@ -351,6 +375,19 @@ impl TryFrom<VetoWindowWire> for VetoWindow {
     fn try_from(value: VetoWindowWire) -> Result<Self, Self::Error> {
         Self::try_new(value.duration, value.min_visible)
     }
+}
+
+/// Field-level deserializer that makes the `veto` key REQUIRED on
+/// [`ApprovalPath::AutoRegression`] while still accepting an explicit `null`.
+///
+/// serde's derive treats `Option` fields as implicitly optional; here an
+/// absent key would resolve to the most permissive no-window path, so absence
+/// must reject instead (fail-closed).
+fn deserialize_required_veto<'de, D>(deserializer: D) -> Result<Option<VetoWindow>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<VetoWindow>::deserialize(deserializer)
 }
 
 // ---------------------------------------------------------------------------
@@ -737,6 +774,84 @@ mod tests {
         };
 
         assert_eq!(shorter.highest(stronger.clone()), stronger);
+    }
+
+    #[test]
+    fn cross_variant_highest_merges_the_losing_paths_veto_window() {
+        // Elevating AutoRegression{long window} to FamiliarCoherence{short
+        // window} must not shrink the window a touched surface demanded.
+        let auto_long = ApprovalPath::AutoRegression {
+            veto: Some(VetoWindow::new(
+                Duration::from_secs(7 * 24 * 3600),
+                Duration::from_secs(24 * 3600),
+            )),
+        };
+        let familiar_short = ApprovalPath::FamiliarCoherence {
+            veto: VetoWindow::new(Duration::from_secs(300), Duration::from_secs(60)),
+        };
+        let merged = ApprovalPath::FamiliarCoherence {
+            veto: VetoWindow::new(
+                Duration::from_secs(7 * 24 * 3600),
+                Duration::from_secs(24 * 3600),
+            ),
+        };
+
+        assert_eq!(auto_long.clone().highest(familiar_short.clone()), merged);
+        // Symmetric.
+        assert_eq!(familiar_short.highest(auto_long), merged);
+    }
+
+    #[test]
+    fn human_paths_drop_lower_windows_by_design() {
+        // Blocked-until-explicit-approval is strictly stronger than any veto
+        // period; the window is dropped, not merged, when a human path wins.
+        let auto_with_window = ApprovalPath::AutoRegression {
+            veto: Some(VetoWindow::new(
+                Duration::from_secs(3600),
+                Duration::from_secs(600),
+            )),
+        };
+        let familiar = ApprovalPath::FamiliarCoherence {
+            veto: VetoWindow::new(Duration::from_secs(3600), Duration::from_secs(600)),
+        };
+
+        assert_eq!(
+            auto_with_window.highest(ApprovalPath::HumanApproval),
+            ApprovalPath::HumanApproval
+        );
+        assert_eq!(
+            familiar.highest(ApprovalPath::HumanApprovalWithRationale),
+            ApprovalPath::HumanApprovalWithRationale
+        );
+    }
+
+    #[test]
+    fn auto_regression_requires_the_veto_key_on_the_wire() {
+        // Absent key must reject: None is the MOST permissive configuration,
+        // so a truncated payload must not silently resolve to it.
+        assert!(serde_json::from_str::<ApprovalPath>(r#"{"kind":"auto_regression"}"#).is_err());
+
+        // Explicit null is the valid spelling of the no-window path.
+        let none: ApprovalPath =
+            serde_json::from_str(r#"{"kind":"auto_regression","veto":null}"#).unwrap();
+        assert_eq!(none, ApprovalPath::AutoRegression { veto: None });
+
+        // A full window still round-trips.
+        let some: ApprovalPath = serde_json::from_str(
+            r#"{"kind":"auto_regression","veto":{"duration":{"secs":3600,"nanos":0},"min_visible":{"secs":600,"nanos":0}}}"#,
+        )
+        .unwrap();
+        assert!(some.has_veto_window());
+    }
+
+    #[test]
+    fn auto_regression_serialization_always_emits_the_veto_key() {
+        // The daemon serializes through this type, so every emitted payload
+        // carries the key — which is what lets deserialization require it.
+        let json = serde_json::to_string(&ApprovalPath::AutoRegression { veto: None }).unwrap();
+        assert!(json.contains("\"veto\":null"), "{json}");
+        let back: ApprovalPath = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ApprovalPath::AutoRegression { veto: None });
     }
 
     // ---- VetoWindow ----

@@ -13,7 +13,12 @@ All notable changes to `coven-threads-core` are documented here.
 - `WardAuditRecord::for_apply(...)` constructor — builds the audit row for a Gate-4 applied write.
 - `WardAuditRecord::apply_prev_sha256_hex()` / `apply_bytes_written()` — decode helpers for `ApplyAudit` detail.
 - `APPLY_AUDIT_DETAIL_KEY_PREV` / `APPLY_AUDIT_DETAIL_KEY_BYTES` — stable JSON key constants.
-- Phase 5 approval paths, veto windows, semantic surface regions, full-diff replay commitments, and validated daemon-to-client wire envelopes.
+- Phase 5 approval semantics (spec: `specs/PHASE-5-APPROVAL-SEMANTICS.md`):
+  - **Approval paths** — the typed promotion ceremony for a proposal: auto / familiar-review / human / human-with-rationale.
+  - **Veto windows** — delayed-apply with a minimum-visible duration; proposals stay pending-visible until the window closes.
+  - **Semantic surface regions** — daemon-replayable semantic regions extracted from diffs.
+  - **Evidence replay hash** — the Gate-4 commitment revalidated at the veto-window deadline.
+  - **Wire envelope** — validated daemon-to-client label round-trip.
 - Deterministic compilation of the retired Ward identity declarations for name, person, pronouns, purpose, and Coven membership.
 - RFC-0001 provenance events with persistence-level required-detail constraints.
 - `ward_audit_migration_sql` — transaction SQL builder that preserves existing detail payloads while also supporting pre-detail legacy tables. Schema ownership is tracked in `ward_schema_meta`, not SQLite's database-global `PRAGMA user_version`.

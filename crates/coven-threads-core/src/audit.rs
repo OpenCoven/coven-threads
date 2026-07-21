@@ -503,7 +503,56 @@ impl WardAuditRecord {
                     return Err("authorized Ward writes require principal_authorization".into());
                 }
             }
-            _ => {}
+            AuditEventType::ApplyAudit => {
+                let detail: serde_json::Value = serde_json::from_str(
+                    self.detail
+                        .as_deref()
+                        .ok_or("apply_audit requires detail")?,
+                )
+                .map_err(|error| format!("invalid apply_audit detail: {error}"))?;
+                let object = detail
+                    .as_object()
+                    .ok_or("apply_audit detail must be a JSON object")?;
+                if object.len() != 2
+                    || !object.contains_key(APPLY_AUDIT_DETAIL_KEY_PREV)
+                    || !object.contains_key(APPLY_AUDIT_DETAIL_KEY_BYTES)
+                {
+                    return Err(format!(
+                        "apply_audit detail must contain exactly \
+                         {APPLY_AUDIT_DETAIL_KEY_PREV} and {APPLY_AUDIT_DETAIL_KEY_BYTES}"
+                    ));
+                }
+                let prev_is_valid = match &object[APPLY_AUDIT_DETAIL_KEY_PREV] {
+                    serde_json::Value::Null => true,
+                    serde_json::Value::String(hex) => {
+                        hex.len() == 64
+                            && hex
+                                .bytes()
+                                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+                    }
+                    _ => false,
+                };
+                if !prev_is_valid {
+                    return Err(format!(
+                        "apply_audit {APPLY_AUDIT_DETAIL_KEY_PREV} must be null or \
+                         64 lower-case hex chars"
+                    ));
+                }
+                if !object[APPLY_AUDIT_DETAIL_KEY_BYTES].is_u64() {
+                    return Err(format!(
+                        "apply_audit {APPLY_AUDIT_DETAIL_KEY_BYTES} must be a u64"
+                    ));
+                }
+            }
+            // No detail contract for these event types: `detail` is optional
+            // freeform. Terminal events reaching here (rejected/vetoed without
+            // detail) already passed the proposal_id check above; when they do
+            // carry detail, the guarded arm above validates it.
+            AuditEventType::ProposalSubmitted
+            | AuditEventType::ProposalRejected
+            | AuditEventType::ProposalVetoed
+            | AuditEventType::ValidationVerdict
+            | AuditEventType::CompactionLedger => {}
         }
         Ok(())
     }
@@ -512,6 +561,9 @@ impl WardAuditRecord {
     ///
     /// Returns `None` for non-`ApplyAudit` events or if the field is missing.
     pub fn apply_prev_sha256_hex(&self) -> Option<String> {
+        if self.event_type != AuditEventType::ApplyAudit {
+            return None;
+        }
         let detail = self.detail.as_deref()?;
         let v: serde_json::Value = serde_json::from_str(detail).ok()?;
         v.get(APPLY_AUDIT_DETAIL_KEY_PREV)
@@ -524,6 +576,9 @@ impl WardAuditRecord {
     ///
     /// Returns `None` for non-`ApplyAudit` events or if the field is missing.
     pub fn apply_bytes_written(&self) -> Option<u64> {
+        if self.event_type != AuditEventType::ApplyAudit {
+            return None;
+        }
         let detail = self.detail.as_deref()?;
         let v: serde_json::Value = serde_json::from_str(detail).ok()?;
         v.get(APPLY_AUDIT_DETAIL_KEY_BYTES).and_then(|x| x.as_u64())
@@ -1180,6 +1235,55 @@ mod tests {
     }
 
     #[test]
+    fn schema_names_all_window_close_reason_tags() {
+        // The trigger SQL literals and the enum must not drift.
+        let migration = ward_audit_migration_sql(true);
+        for sql in [WARD_AUDIT_SCHEMA_SQL, migration.as_str()] {
+            for reason in [
+                WindowCloseReason::Applied,
+                WindowCloseReason::Vetoed,
+                WindowCloseReason::EvidenceDiverged,
+                WindowCloseReason::RevalidationFailed,
+                WindowCloseReason::Superseded,
+            ] {
+                assert!(
+                    sql.contains(&format!("'{}'", reason.tag())),
+                    "trigger SQL is missing window close reason tag {}",
+                    reason.tag()
+                );
+                // serde encoding matches the tag.
+                let json = serde_json::to_string(&reason).unwrap();
+                assert_eq!(json, format!("\"{}\"", reason.tag()));
+            }
+        }
+    }
+
+    #[test]
+    fn schema_names_all_approval_path_labels() {
+        // The trigger SQL literals and the display-label contract must not drift.
+        let migration = ward_audit_migration_sql(true);
+        for sql in [WARD_AUDIT_SCHEMA_SQL, migration.as_str()] {
+            for kind in [
+                ApprovalPathKind::AutoRegression,
+                ApprovalPathKind::FamiliarCoherence,
+                ApprovalPathKind::HumanApproval,
+                ApprovalPathKind::HumanApprovalWithRationale,
+            ] {
+                assert!(
+                    sql.contains(&format!("'{}'", kind.display_label())),
+                    "trigger SQL is missing approval path label {}",
+                    kind.display_label()
+                );
+                // Label round-trips through the wire contract.
+                assert_eq!(
+                    ApprovalPath::from_display_label(kind.display_label()),
+                    Some(kind)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn schema_enforces_append_only() {
         assert!(WARD_AUDIT_SCHEMA_SQL.contains("ward_audit_append_only_update"));
         assert!(WARD_AUDIT_SCHEMA_SQL.contains("ward_audit_append_only_delete"));
@@ -1242,6 +1346,130 @@ mod tests {
             serde_json::from_str(record.detail.as_deref().unwrap()).unwrap();
         assert!(detail[APPLY_AUDIT_DETAIL_KEY_PREV].is_null());
         assert_eq!(record.apply_prev_sha256_hex(), None);
+    }
+
+    #[test]
+    fn apply_audit_constructor_detail_passes_validation() {
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let with_prev = WardAuditRecord::for_apply(
+            FamiliarId::new(),
+            &[1; 32],
+            SurfaceId::new("SOUL.md"),
+            "tier_2",
+            Some(&[0xaa; 32]),
+            Some(&[0xbb; 32]),
+            42,
+            Some(Channel::Mutation),
+            now,
+            now,
+        );
+        assert!(with_prev.validate_event_detail().is_ok());
+
+        let without_prev = WardAuditRecord::for_apply(
+            FamiliarId::new(),
+            &[1; 32],
+            SurfaceId::new("SOUL.md"),
+            "tier_2",
+            None,
+            None,
+            0,
+            None,
+            now,
+            now,
+        );
+        assert!(without_prev.validate_event_detail().is_ok());
+    }
+
+    #[test]
+    fn apply_audit_rejects_missing_or_malformed_detail() {
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let mut record = WardAuditRecord::for_apply(
+            FamiliarId::new(),
+            &[1; 32],
+            SurfaceId::new("SOUL.md"),
+            "tier_2",
+            Some(&[0xaa; 32]),
+            Some(&[0xbb; 32]),
+            42,
+            None,
+            now,
+            now,
+        );
+        assert!(record.validate_event_detail().is_ok());
+
+        // Missing detail entirely.
+        record.detail = None;
+        assert!(record.validate_event_detail().is_err());
+
+        // Not a JSON object.
+        record.detail = Some("[]".into());
+        assert!(record.validate_event_detail().is_err());
+
+        // Missing bytes_written.
+        record.detail = Some(r#"{"prev_sha256":null}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // Missing prev_sha256.
+        record.detail = Some(r#"{"bytes_written":1}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // Extra key.
+        record.detail = Some(r#"{"prev_sha256":null,"bytes_written":1,"extra":true}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // prev_sha256 too short.
+        record.detail = Some(r#"{"prev_sha256":"abcd","bytes_written":1}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // prev_sha256 upper-case hex.
+        record.detail = Some(format!(
+            r#"{{"prev_sha256":"{}","bytes_written":1}}"#,
+            "AB".repeat(32)
+        ));
+        assert!(record.validate_event_detail().is_err());
+
+        // prev_sha256 mistyped.
+        record.detail = Some(r#"{"prev_sha256":42,"bytes_written":1}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // bytes_written negative.
+        record.detail = Some(r#"{"prev_sha256":null,"bytes_written":-1}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // bytes_written mistyped.
+        record.detail = Some(r#"{"prev_sha256":null,"bytes_written":"1"}"#.into());
+        assert!(record.validate_event_detail().is_err());
+
+        // Valid lower-case hex prev restores acceptance.
+        record.detail = Some(format!(
+            r#"{{"prev_sha256":"{}","bytes_written":1}}"#,
+            "ab".repeat(32)
+        ));
+        assert!(record.validate_event_detail().is_ok());
+    }
+
+    #[test]
+    fn apply_detail_helpers_return_none_for_non_apply_events() {
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let mut record = WardAuditRecord::for_apply(
+            FamiliarId::new(),
+            &[1; 32],
+            SurfaceId::new("SOUL.md"),
+            "tier_2",
+            Some(&[0xaa; 32]),
+            Some(&[0xbb; 32]),
+            42,
+            None,
+            now,
+            now,
+        );
+        assert!(record.apply_prev_sha256_hex().is_some());
+        assert_eq!(record.apply_bytes_written(), Some(42));
+
+        // A non-ApplyAudit record carrying the same detail keys decodes nothing.
+        record.event_type = AuditEventType::ValidationVerdict;
+        assert_eq!(record.apply_prev_sha256_hex(), None);
+        assert_eq!(record.apply_bytes_written(), None);
     }
 
     #[test]

@@ -772,6 +772,7 @@ impl PatternPredicate for CompositeIdentityInvariant {
 /// `probes` must not fire on `advisory_probes`, and vice versa. An empty
 /// `advisory_probes` means "no advisory signals ran" — not "no probes at all."
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "AdvisoryProbeResultWire")]
 pub struct AdvisoryProbeResult {
     /// Probe kind identifier (e.g. "semantic_drift", "confidence_score",
     /// "pattern_match"). Not used for gating — for display and audit only.
@@ -787,8 +788,35 @@ pub struct AdvisoryProbeResult {
     /// IMPORTANT: advisory probe results are NEVER gated on directly.
     /// This field is always `false` in a well-formed probe result and is
     /// included here as a documentation anchor.
-    #[serde(default)]
     pub is_authoritative: bool,
+}
+
+#[derive(Deserialize)]
+struct AdvisoryProbeResultWire {
+    kind: String,
+    label: String,
+    confidence: Option<f64>,
+    signal: Option<String>,
+    flagged: bool,
+    #[serde(default)]
+    is_authoritative: bool,
+}
+
+impl TryFrom<AdvisoryProbeResultWire> for AdvisoryProbeResult {
+    type Error = String;
+
+    fn try_from(wire: AdvisoryProbeResultWire) -> Result<Self, Self::Error> {
+        let result = Self {
+            kind: wire.kind,
+            label: wire.label,
+            confidence: wire.confidence,
+            signal: wire.signal,
+            flagged: wire.flagged,
+            is_authoritative: wire.is_authoritative,
+        };
+        result.validate()?;
+        Ok(result)
+    }
 }
 
 impl AdvisoryProbeResult {
@@ -815,8 +843,8 @@ impl AdvisoryProbeResult {
 
     /// Validate that this probe result is structurally well-formed:
     /// - confidence, if present, is in [0.0, 1.0]
-    /// - is_authoritative is false (enforced at construction; checked here for
-    ///   wire-received values)
+    /// - is_authoritative is false (enforced at construction and again at the
+    ///   deserialize boundary — ill-formed wire values never materialize)
     pub fn validate(&self) -> Result<(), String> {
         if self.is_authoritative {
             return Err("AdvisoryProbeResult.is_authoritative must be false — \
@@ -1402,6 +1430,51 @@ mod tests {
             is_authoritative: true, // wire-received violation
         };
         assert!(probe.validate().is_err());
+    }
+
+    #[test]
+    fn advisory_probe_result_roundtrips_json() {
+        let probe = AdvisoryProbeResult::new(
+            "semantic_drift",
+            "Semantic drift detector",
+            Some(0.82),
+            Some("name field appears changed".into()),
+            true,
+        );
+        let json = serde_json::to_string(&probe).unwrap();
+        let back: AdvisoryProbeResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(probe, back);
+    }
+
+    #[test]
+    fn advisory_probe_deserialization_defaults_is_authoritative_false() {
+        let json =
+            r#"{"kind":"test","label":"test","confidence":0.5,"signal":null,"flagged":true}"#;
+        let probe: AdvisoryProbeResult = serde_json::from_str(json).unwrap();
+        assert!(!probe.is_authoritative);
+    }
+
+    #[test]
+    fn advisory_probe_deserialization_rejects_out_of_range_confidence() {
+        // Wire values must not bypass validate() (decision 4 fail-closed).
+        let json =
+            r#"{"kind":"test","label":"test","confidence":9.9,"signal":null,"flagged":false}"#;
+        assert!(serde_json::from_str::<AdvisoryProbeResult>(json).is_err());
+    }
+
+    #[test]
+    fn advisory_probe_deserialization_rejects_authoritative_flag() {
+        let json = r#"{"kind":"test","label":"test","confidence":null,"signal":null,
+            "flagged":false,"is_authoritative":true}"#;
+        assert!(serde_json::from_str::<AdvisoryProbeResult>(json).is_err());
+    }
+
+    #[test]
+    fn advisory_probes_block_deserialization_rejects_ill_formed_result() {
+        // Element-boundary validation covers the block shape too.
+        let json = r#"{"results":[{"kind":"test","label":"test","confidence":null,
+            "signal":null,"flagged":false,"is_authoritative":true}]}"#;
+        assert!(serde_json::from_str::<AdvisoryProbes>(json).is_err());
     }
 
     #[test]

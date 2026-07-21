@@ -176,6 +176,7 @@ pub struct RegionEvidence {
 /// Human rationale is deliberately excluded because it is derived display
 /// text, not authority. Every committed field is length-prefixed to prevent
 /// boundary ambiguity.
+#[must_use]
 pub fn evidence_replay_hash(diff: &MaterializedDiff, evidence: &[RegionEvidence]) -> [u8; 32] {
     let mut entries: Vec<Vec<u8>> = evidence
         .iter()

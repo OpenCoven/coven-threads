@@ -31,7 +31,7 @@ A familiar's identity is not a single object protected by a single gate. It is a
 
 A weave is **coherent** if and only if its pattern predicate holds — which requires, among other things, that every thread the pattern demands is intact. A single snapped thread degrades the weave *at that thread's surface*, and the weave reports **which surface** degraded, not just "something is wrong." The familiar continues operating on its other surfaces; the broken one becomes read-only until repair (design doc §5).
 
-Weaves are the primary object the Coven Cave cockpit will render in Phase 4 `[DEFERRED]`.
+Weaves are the primary object the Coven Cave cockpit renders (Phase 4, `[COMPLETE; FROZEN 2026-07-17]`).
 
 ![Weave, Thread, Strand](diagrams/weave-thread-strand.png)
 
@@ -63,6 +63,15 @@ A **Channel** (*the axis of load a thread must hold under*) names the path by wh
 ![Channel × Strand matrix](diagrams/channel-strand-matrix.png)
 
 *Which strand types must be present under which channel of load. WARD-C1–C6 govern `Forced`; WARD-C7 governs `Serialization`.*
+
+## Channel vs ApprovalPath: two orthogonal axes
+
+Phase 5 (open, not frozen; authoritative record: `specs/PHASE-5-APPROVAL-SEMANTICS.md`) adds a second axis beside Channel, and the distinction is bound here because it is the likeliest conflation for a new contributor:
+
+- **Channel** answers *why a thread is stressed* — the axis of load, exactly as defined above. It is frozen Phase-0 vocabulary and remains a **first-class enforcement axis**: every gate check is still "does thread T hold under channel C?", an unknown channel still rejects, and C7 still requires a `SerializationMarker` under `Channel::Serialization`. Nothing in Phase 5 changes any of this.
+- **ApprovalPath** answers *which ceremony must approve applying a staged proposal* — auto-regression, familiar-coherence review, human approval, or human approval with rationale (the RFC-0001 §5.3 tiers). It is a Phase 5 addition, assigned by daemon-side classification at proposal intake.
+
+The two axes are orthogonal, and each is authoritative in its own dimension. The binding rule (spec decision 1): **never derive ApprovalPath from Channel.** A mutation that requires human rationale is still `Channel::Mutation` — the channel names the load, not the ceremony. And Channel is not a "derived descriptor" of anything; describing it that way would demote frozen enforcement vocabulary, which is exactly the drift the metaphor-referent rule exists to catch.
 
 ## The two-compaction contract
 
