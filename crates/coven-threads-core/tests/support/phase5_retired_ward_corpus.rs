@@ -78,6 +78,24 @@ pub fn synthetic_retired_ward_corpus() -> Value {
                 u8::MAX
             ),
             valid_case(
+                "auto-no-veto",
+                0x55,
+                json!({
+                    "kind": "auto_regression",
+                    "label": "auto",
+                    "veto": null
+                }),
+                json!([
+                    {
+                        "path": "MEMORY.md",
+                        "before": "synthetic memory v2",
+                        "after": "synthetic memory v3"
+                    }
+                ]),
+                json!([]),
+                u8::MAX
+            ),
+            valid_case(
                 "familiar-review",
                 0x22,
                 json!({
