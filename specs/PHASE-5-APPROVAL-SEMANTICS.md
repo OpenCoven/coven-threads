@@ -402,7 +402,12 @@ Phase 5 opened 2026-07-18 (Val + Nova decision). Beads are live.
   approval labels, veto settings, built-in harness regions, and fail-closed
   unsupported cases without using historical or private Ward data. Generate it
   with `cargo run -q -p coven-threads-core --example
-  generate_phase5_retired_ward_corpus`.
+  generate_phase5_retired_ward_corpus`. The pinned SHA-256 of the canonical
+  corpus JSON is
+  `4ebe9d63398e6b14f2a097ce66197c96a577559984515ce03ce4297c0b0c7e10`; the
+  digest covers the single JSON line only, excluding the trailing newline the
+  example's `println!` appends (so `shasum` over the emitted file differs —
+  strip the final newline first, e.g. `... | tr -d '\n' | shasum -a 256`).
 - `threads-uqx.9` — Nova sign-off: RFC round-trip, Gate-4 fail-closed proof,
   descriptor-not-authority review.
 - `threads-uqx.10` — Val freeze: Phase-5 design frozen or rejected.

@@ -93,7 +93,7 @@ fn corpus_documents_synthetic_provenance_without_historical_data() {
 #[test]
 fn valid_cases_cover_identity_approval_veto_and_region_fidelity() {
     let cases = valid_cases();
-    assert_eq!(cases.len(), 4);
+    assert_eq!(cases.len(), 5);
 
     let labels: Vec<_> = cases
         .iter()
@@ -101,8 +101,17 @@ fn valid_cases_cover_identity_approval_veto_and_region_fidelity() {
         .collect();
     assert_eq!(
         labels,
-        ["auto", "familiar_review", "human_review", "human_required"]
+        [
+            "auto",
+            "auto",
+            "familiar_review",
+            "human_review",
+            "human_required"
+        ]
     );
+    // The explicit `veto: null` case pins the hardened wire shape: the key is
+    // required for auto_regression, and a null value resolves to no window.
+    assert!(cases[1]["approval"]["veto"].is_null());
 
     let mut covered_regions = Vec::new();
     for case in cases {
@@ -170,10 +179,15 @@ fn valid_cases_cover_identity_approval_veto_and_region_fidelity() {
 
     covered_regions.sort();
     covered_regions.dedup();
-    assert_eq!(
-        covered_regions,
-        ["execution_prompt", "heartbeat_behavior", "tool_defaults"]
-    );
+    // Derived from the registry so a new built-in region flags corpus
+    // staleness instead of passing silently.
+    let mut built_in_regions: Vec<_> = SurfaceRegionRegistry::default_registry()
+        .descriptors()
+        .iter()
+        .map(|descriptor| descriptor.region_id.as_str().to_string())
+        .collect();
+    built_in_regions.sort();
+    assert_eq!(covered_regions, built_in_regions);
 }
 
 #[test]
@@ -234,6 +248,6 @@ fn canonical_generator_output_has_a_pinned_sha256_digest() {
     let digest = Sha256::digest(corpus::canonical_corpus_json().as_bytes());
     assert_eq!(
         format!("{digest:x}"),
-        "b3c5f156896ed4ef03b3f57bb8e65a33a5cf6fe52582ccd8403972a20299db44"
+        "4ebe9d63398e6b14f2a097ce66197c96a577559984515ce03ce4297c0b0c7e10"
     );
 }
