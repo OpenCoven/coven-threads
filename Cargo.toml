@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/coven-threads-core"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT"
@@ -17,7 +17,7 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 blake3 = "1"
 sha2 = "0.10"
-time = { version = "0.3", features = ["serde", "macros"] }
+time = { version = "0.3", features = ["serde", "serde-well-known", "macros"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -95,6 +95,38 @@ A "policy set" is a *bag*: rules, individually evaluated, individually true or f
 
 The design doc names the failure mode of metaphor-without-referent explicitly — "beautiful language, unclear semantics" — and the answer isn't to retreat to bureaucratic vocabulary, it's to keep the metaphor **only where it carries semantic weight** and bolt every term to a referent. "Weave" survives that test; "policy set" would be both duller *and less accurate*.
 
+## Why is ApprovalPath not derived from Channel?
+
+Because the two axes answer different questions, and both answers are authoritative in their own dimension (Phase-5 spec, decision 1).
+
+`Channel` is the frozen Phase-0 axis of load: *why is this thread stressed* — `Deliberate`, `Forced`, `Serialization`, or `Mutation`. `ApprovalPath` is the Phase-5 promotion-ceremony axis: *which ceremony must clear before the daemon may apply the proposal* — `AutoRegression`, `FamiliarCoherence`, `HumanApproval`, or `HumanApprovalWithRationale`. A mutation that needs human rationale is still `Channel::Mutation`; the ceremony changed, not the load.
+
+Deriving one from the other would collapse *where a write lands* with *which ceremony promotes it* — the same collapse the spec refused when it rejected reusing "Tier" for approval paths (§2.1). The rule is stated in both the decision record (§6, decision 1) and the module header of `crates/coven-threads-core/src/approval.rs`: **never derive ApprovalPath from Channel**. The symmetric mistake is also refused: `Channel` is not a derived descriptor of the approval path — it remains the first-class Phase-0 enforcement axis. The spec is explicit that if this separation ever shifts, all eight Phase-5 decisions must be revisited.
+
+## How do veto windows preserve Gate-4 fail-closed?
+
+By writing nothing before the deadline, and trusting nothing staged before it (decisions 2 and 8).
+
+Phase 5 permits exactly one veto-window semantics: **delayed apply**. A proposal that passes its gates does not get written — it stages *pending-visible* through a `VetoWindow`, which carries both a `duration` and a `min_visible` floor guaranteeing the pending state was actually reachable by a human long enough to act on (same shape as the two-compaction contract's minimum-visibility requirement). At the deadline the daemon applies only if (a) no veto exists and (b) **live evidence replay matches**: it re-materializes the gate evidence and re-derives the classification's `evidence_replay_hash`. If the result differs, the proposal is rejected (`evidence_diverged`); if replay cannot produce authoritative evidence at all, it is rejected fail-closed (`revalidation_failed`). This is WARD-C7 generalized: evidence must survive the time gap, and a proposal whose evidence cannot be replayed at deadline fails closed — Gate 4's "final canonical check before apply" posture is preserved because *every* apply still happens after a live daemon re-materialization, never off a stale snapshot.
+
+Provisional apply — write now, roll back on veto — is explicitly forbidden until Val/Nova accept rollback semantics as a distinct threat model. And the window is a first-class audit interval, not a gap: every close event carries a typed `WindowCloseReason` (`applied | vetoed | evidence_diverged | revalidation_failed | superseded`). Deadline expiry is a trigger for revalidation, not a terminal state — there is no `proposal_expired`.
+
+## Why are surface regions not threads?
+
+Classify first; promote later, and only forward (decision 3).
+
+A `SurfaceRegion` is a typed semantic area — "tool defaults", "heartbeat behavior", "execution prompt" — that may cut across files, or share a file with other regions, which is exactly why Phase 2's path-glob tiers couldn't see it. But naming a region does not grant it authority: a region label is a descriptor unless a predicate maps bytes to that region deterministically, and the daemon can replay that mapping at apply time (the Phase-0 predicate-vs-descriptor discipline, applied above `SurfaceId`). So `SurfaceRegionPredicate::materialize` must be a pure function of the `MaterializedDiff` — no Cave state, no agent self-report, no stale metadata — and its `RegionEvidence` is folded into `evidence_replay_hash` for Gate-4 deadline replay.
+
+Making every region a thread on day one would proliferate threads detached from source-authoritative surfaces — the thing threads exist to be bound to. So threads stay source-bound, and region evidence rides on `ProposalClassification` instead. A region is promoted to thread status only when it has a stable source-authoritative projection, and promotion or reclassification applies **forward only**: retroactive projection would corrupt the authority trail with apparently-authored writes from before the promotion decision.
+
+## Where does the Phase-5 scheduler live?
+
+In the daemon — coven PR https://github.com/OpenCoven/coven/pull/430 — not in this crate.
+
+`coven-threads-core` v0.2.0 ships the types and the contract: `ApprovalPath` with its wire-label round-trip, `VetoWindow`, `ProposalClassification` with `evidence_replay_hash`, `WindowCloseReason`, the surface-region predicates and registry, the identity-invariant compiler, and the canonical evidence-hash function. What it deliberately does not ship is anything with a clock or a side effect: proposal classification at intake, the delayed-apply scheduler, deadline revalidation, and audit appends into `coven.sqlite3` are daemon-owned (spec §7, `threads-uqx.6`). This is the same division of labor as Phase 2: the crate is a pure computation, the daemon is the trust boundary that hosts it — everything that touches time, disk, or `ward.audit` lives behind the daemon boundary, where an untrusted client can't reach it.
+
+One status note for honesty: Phase 5 is **open, not frozen** (opened 2026-07-18 by Val + Nova). The upstream RFC amendments (familiar-contract PR #3), Nova sign-off, and Val's freeze decision all remain gates ahead of any Phase-5 freeze.
+
 ---
 
 *Something unanswered? The frozen design doc (`specs/PHASE-0-DESIGN.md`) is short and readable; RFC-0001 §5 is the upstream source of truth. If those disagree with this FAQ, they win — file an issue against the docs.*

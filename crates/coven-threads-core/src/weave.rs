@@ -10,6 +10,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::identity_invariants::CandidateIdentityContext;
 use crate::ids::{CovenId, FamiliarId, SurfaceId, ThreadId, WeaveId, WriterId};
 use crate::manifest::merkle_root;
 use crate::pattern::{PatternDescriptor, PatternPredicate, WeaveCoherence};
@@ -158,6 +159,14 @@ impl Weave {
     /// question (§2.2). A weave is coherent iff its pattern predicate holds.
     pub fn coherence(&self) -> WeaveCoherence {
         self.pattern.coherent(&self.threads)
+    }
+
+    /// Evaluate the authoritative pattern for a materialized Gate-4 candidate.
+    pub fn coherence_with_context(
+        &self,
+        identity: Option<&CandidateIdentityContext>,
+    ) -> WeaveCoherence {
+        self.pattern.coherent_with_context(&self.threads, identity)
     }
 
     /// The derived, non-authoritative descriptor of this weave's pattern.
