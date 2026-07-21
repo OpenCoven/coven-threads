@@ -111,6 +111,18 @@ impl MaterializedDiff {
                     surface.surface.as_str()
                 ));
             }
+            if surface.before.is_none() && surface.after.is_none() {
+                return Err(format!(
+                    "materialized diff surface {:?} has neither before nor after content",
+                    surface.surface.as_str()
+                ));
+            }
+            if surface.before == surface.after {
+                return Err(format!(
+                    "materialized diff surface {:?} is unchanged",
+                    surface.surface.as_str()
+                ));
+            }
         }
         Ok(Self { surfaces })
     }
@@ -611,6 +623,30 @@ mod tests {
         ];
 
         assert!(MaterializedDiff::try_new(duplicate).is_err());
+    }
+
+    #[test]
+    fn materialized_diff_rejects_absent_before_and_after() {
+        let error = MaterializedDiff::try_new(vec![SurfaceDiff {
+            surface: SurfaceId::new("SOUL.md"),
+            before: None,
+            after: None,
+        }])
+        .unwrap_err();
+
+        assert!(error.contains("neither before nor after content"));
+    }
+
+    #[test]
+    fn materialized_diff_rejects_unchanged_surfaces() {
+        let error = MaterializedDiff::try_new(vec![SurfaceDiff {
+            surface: SurfaceId::new("SOUL.md"),
+            before: Some(b"same".to_vec()),
+            after: Some(b"same".to_vec()),
+        }])
+        .unwrap_err();
+
+        assert!(error.contains("unchanged"));
     }
 
     #[test]
