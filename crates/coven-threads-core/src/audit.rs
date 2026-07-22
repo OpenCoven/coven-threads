@@ -1165,8 +1165,12 @@ FROM ward_audit_shape;
 /// 3. creates `main.ward_audit_new` with the updated CHECK;
 /// 4. copies every existing row, preserving `detail`;
 /// 5. swaps the tables; and
-/// 6. re-creates the exact explicit main indexes and append-only main triggers;
-///    and
+/// 6. re-creates the exact explicit main indexes and all 6 durable main triggers
+///    (2 append-only: `ward_audit_append_only_update`, `ward_audit_append_only_delete`;
+///    4 authority: `ward_audit_require_authorization_insert`,
+///    `ward_audit_require_proposal_approval_detail_insert`,
+///    `ward_audit_require_window_close_detail_insert`,
+///    `ward_audit_require_single_terminal_insert`); and
 /// 7. re-runs the shared schema-state expression in a distinct TEMP
 ///    postcondition guard and requires exact `current_v020` before `COMMIT`.
 ///
