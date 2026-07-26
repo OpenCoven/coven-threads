@@ -62,7 +62,66 @@ The rationale stacks three facts:
 - RFC-0001 §5.6 defines the audit-log entry shape, including `ward_hash`, and requires append-only behavior: entries MUST NOT be deleted or modified.
 - The daemon already owns `coven.sqlite3`, so putting the table there inherits the existing ownership and access boundary for free.
 
-Every gate verdict is auditable, and WARD-C6's compaction ledger rides the same table rather than a second store. The implemented contract (`audit.rs`, `[IMPLEMENTED, NOT ENFORCING]`) mirrors RFC-0001 §5.6's event vocabulary (`proposal_submitted`, `proposal_approved`, `proposal_rejected`, `proposal_vetoed`, `ward_updated`) and adds the coven-threads extensions (gate verdicts, compaction ledger entries). One implementation note: the SQL table is spelled `ward_audit`, because a literal dot in the name would collide with SQLite's attached-database syntax — and an attached `ward.*` database would *be* the forbidden sidecar.
+Every gate verdict is auditable, and WARD-C6's compaction ledger rides the same table rather than a second store. The implemented contract (`audit.rs`, `[IMPLEMENTED, NOT ENFORCING]`) mirrors RFC-0001 §5.6's event vocabulary (`proposal_submitted`, `proposal_approved`, `proposal_rejected`, `proposal_vetoed`, `ward_updated`) and adds the coven-threads extensions (gate verdicts, compaction ledger entries, and — with Phase 5 — `proposal_window_opened` plus window-close detail; see below). One implementation note: the SQL table is spelled `ward_audit`, because a literal dot in the name would collide with SQLite's attached-database syntax — and an attached `ward.*` database would *be* the forbidden sidecar.
+
+## Phase 5: approval semantics and delayed apply
+
+> Status: Phase 5 is **open, not frozen** (opened 2026-07-18 by Val + Nova decision; epic `threads-uqx`). The core types shipped in `coven-threads-core` v0.2.0 (`approval.rs`, `identity_invariants.rs`, `surface_regions.rs`, and the audit-detail types in `audit.rs`). The daemon-side classification and delayed-apply scheduler landed in the coven daemon via PR https://github.com/OpenCoven/coven/pull/430. The authoritative decision record is `specs/PHASE-5-APPROVAL-SEMANTICS.md`; this page describes it and does not amend it.
+
+Phase 2 could say a surface was "reviewed" or "logged." Phase 5 restores the distinction RFC-0001 §5.3 still names: *which promotion ceremony* must clear before the daemon applies a staged proposal. It changes nothing in the enforcement flow above — the three verdicts and the gate question are frozen Phase 0. Phase 5 governs what happens *after* a proposal is staged.
+
+### Division of labor: this crate defines the contract, the daemon executes
+
+The placement rule from the top of this page carries straight through. `coven-threads-core` provides the types and the contract:
+
+- **`ApprovalPath`** — the ceremony lattice, mirroring the RFC-0001 §5.3 tiers: `AutoRegression` < `FamiliarCoherence` < `HumanApproval` < `HumanApprovalWithRationale`. The wire display labels (`auto`, `familiar_review`, `human_review`, `human_required`) are a **daemon wire contract**, not a client convention: `ApprovalPathWireEnvelope` validates the variant ↔ label round-trip at load, and an unmappable label rejects at load. Clients render exactly what the daemon sends.
+- **`VetoWindow`** — a duration plus a `min_visible` floor; a window may not close before the proposal has been visibly pending for at least `min_visible`, because a veto window is only fail-closed if a human could actually have acted on it.
+- **`ProposalClassification`** — the append-only record produced at intake: the channel the mutation arrived on, affected surfaces and semantic regions, the floor path tier, the required approval path (highest ceremony of everything touched wins, all-or-nothing — matching existing Ward behavior), and the **`evidence_replay_hash`** committing to the gate evidence evaluated at classification.
+- **`WindowCloseReason`** and the audit-detail shapes for the lifecycle rows below.
+
+The **daemon** owns proposal classification and the delayed-apply scheduler — both landed in the coven daemon (PR #430, bead `threads-uqx.6`). This crate does not ship a scheduler; it defines the record the scheduler must honor.
+
+### The delayed-apply flow
+
+![The Phase 5 delayed-apply lifecycle: a proposal moves from intake through classification into a staged pending state; a veto window opens and stays visibly pending for at least its minimum-visible duration; the deadline fires, the daemon replays the gate evidence by live re-materialization, and the proposal applies on a hash match or rejects on divergence](diagrams/delayed-apply-scheduler.png)
+
+*Intake → classify → stage pending → veto window opens → deadline fires → evidence replay → apply on match, reject on divergence. No path writes before the window closes clean.*
+
+The flow (spec decision 2 — delayed apply *only*):
+
+1. **Intake.** A proposal arrives — for example, via `DegradeToProposal` or the tier-0 protected-surface path.
+2. **Classify.** The daemon produces the `ProposalClassification`, including `evidence_replay_hash`.
+3. **Stage pending.** Nothing is written to any protected surface.
+4. **Window opens.** The proposal becomes pending-visible. The window cannot close before `min_visible` has elapsed.
+5. **Deadline fires.** Deadline expiry is a *trigger for revalidation*, not an outcome by itself.
+6. **Replay.** The daemon re-derives the evidence by live re-materialization. Hash matches → apply. Hash differs → reject.
+
+There is **no provisional apply, ever**: the daemon never applies first and rolls back on veto. And Gate 4 keeps its fail-closed posture unweakened — every path, windowed or not, ends in live daemon re-materialization before apply.
+
+One conflation to refuse, because it was a HIGH finding in the independent coherence review: **Channel and ApprovalPath are orthogonal axes**, both first-class. Channel remains the frozen Phase-0 load/enforcement axis; ApprovalPath is the promotion ceremony; **never derive ApprovalPath from Channel** (spec decision 1). The binding is spelled out in [concepts.md](concepts.md#channel-vs-approvalpath-two-orthogonal-axes).
+
+### The audit lifecycle
+
+The proposal lifecycle rides the same `ward_audit` table — the window is a first-class audit interval, not a gap between rows:
+
+`proposal_submitted` → `proposal_window_opened` → exactly one terminal close event, each close carrying an explicit `WindowCloseReason`:
+
+| Terminal event | Close reason | Meaning |
+|---|---|---|
+| `proposal_approved` | `applied` | Window closed clean, replay matched, write committed |
+| `proposal_vetoed` | `vetoed` | A principal veto closed the window before apply |
+| `proposal_rejected` | `evidence_diverged` | Deadline replay produced a different evidence hash |
+| `proposal_rejected` | `revalidation_failed` | Replay could not produce authoritative evidence |
+| `proposal_rejected` | `superseded` | A newer proposal replaced this one before apply |
+
+There is deliberately no `proposal_expired` event: expiry triggers replay; the replay's outcome is what gets recorded.
+
+### Predicates underneath: identity invariants and surface regions
+
+Two supporting designs feed classification, both under the same descriptor-vs-predicate discipline as `PatternPredicate` ([concepts.md](concepts.md#the-descriptor-vs-predicate-anti-pattern)):
+
+- **Identity invariants** (`identity_invariants.rs`, bead `threads-uqx.4`) — an `IdentityInvariantDeclaration` compiles into typed predicates; the invariant *strings* are never authority. Checks are deterministic where possible and **fail closed on ambiguity** — no silent fallback to model judgment. Advisory probes (model-judgment signals) are non-gating Gate-3 evidence, never sole authority.
+- **Surface regions** (`surface_regions.rs`, bead `threads-uqx.5`) — daemon-replayable semantic regions (e.g. `ExecutionPromptRegion`, `HeartbeatBehaviorRegion`, `ToolDefaultsRegion`) extracted from materialized diffs by pure predicates: no Cave state, no agent self-report, no stale metadata. The `evidence_replay_hash` commits to region evidence, which is what lets Gate 4 replay it at deadline. Region reclassification is forward-only — retroactive projection would corrupt the authority trail.
 
 ## Compatibility contract
 

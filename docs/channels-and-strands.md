@@ -18,6 +18,8 @@ Familiar-initiated, principal-gated compaction: memory promotion, dreaming, deli
 
 Because consent and review are present, `Deliberate` imposes **no structural strand floor** beyond an intact thread: the gate here is the principal's consent path, not a cryptographic survival requirement. That is not laxity — it is a recognition that the protection on this channel is procedural (tiers, review, veto windows per RFC-0001 §5.3) rather than structural.
 
+As of Phase 5 (open, not frozen), "veto window" is no longer just an RFC phrase — it has a typed contract: `VetoWindow` in `coven-threads-core`. The contract is **delayed apply only** — a staged proposal stays visibly pending for at least a minimum-visible duration, and the daemon applies only after the deadline passes clean and the gate evidence replays to the same result; there is no apply-then-rollback. Every window close is audited with an explicit reason. Full flow: [architecture.md — Phase 5](architecture.md#phase-5-approval-semantics-and-delayed-apply).
+
 ### Forced
 
 Runtime-initiated context compaction: the harness rewrites the context window under pressure, with **no familiar cooperation available**. The familiar may not even observe the eviction. This is the *blind* half of the two-compaction contract, and it is the channel **WARD-C1–C6 governs**.

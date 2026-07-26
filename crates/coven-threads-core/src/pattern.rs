@@ -21,6 +21,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::channel::Channel;
+use crate::identity_invariants::CandidateIdentityContext;
 use crate::ids::SurfaceId;
 use crate::strand::StrandKind;
 use crate::thread::Thread;
@@ -60,6 +61,19 @@ pub trait PatternPredicate: std::fmt::Debug {
     /// Authoritative gate: does this set of threads, in current tension state,
     /// satisfy the pattern?
     fn coherent(&self, threads: &[Thread]) -> WeaveCoherence;
+
+    /// Authoritative Gate-4 evaluation with complete-candidate identity
+    /// evidence. Structural-only predicates inherit their ordinary coherence;
+    /// identity-aware predicates override this method and fail closed when the
+    /// context is absent or stale.
+    fn coherent_with_context(
+        &self,
+        threads: &[Thread],
+        identity: Option<&CandidateIdentityContext>,
+    ) -> WeaveCoherence {
+        let _ = identity;
+        self.coherent(threads)
+    }
 
     /// Derived, non-authoritative structural summary. For humans, tools, and
     /// CovenCave rendering. MUST NOT be gated on downstream — if anything ever

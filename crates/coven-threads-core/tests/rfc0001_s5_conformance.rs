@@ -89,6 +89,7 @@ fn request(surface: &str, writer: &str, channel: Channel) -> MutationRequest {
         surface: SurfaceId::new(surface),
         writer: WriterId::new(writer),
         channel,
+        identity_context: None,
     }
 }
 

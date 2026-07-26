@@ -1,6 +1,6 @@
 # Authority model
 
-> Status: `[DESIGNED]` — frozen in `specs/PHASE-0-DESIGN.md` §1, §5 (v0.2, 2026-07-14). The verdict types and tension state machine are mirrored in `coven-threads-core` (`validate.rs`, `thread.rs`) `[IMPLEMENTED, NOT ENFORCING]`; no deployed daemon acts on them yet.
+> Status: `[DESIGNED]` — frozen in `specs/PHASE-0-DESIGN.md` §1, §5 (v0.2, 2026-07-14). The verdict types and tension state machine are mirrored in `coven-threads-core` (`validate.rs`, `thread.rs`), and the daemon-side call site is merged to coven `main` (PR https://github.com/OpenCoven/coven/pull/382) — daemons built from `main` act on these verdicts; no cut release includes them yet.
 
 Vocabulary (bound in [concepts.md](concepts.md)): a **Thread** is an authority relationship *surface → writer*; a **Weave** is the enforced pattern of threads; a **Strand** is a fiber inside a thread; a **Channel** is the axis of load a thread must hold under.
 
@@ -40,6 +40,8 @@ Two properties worth stating plainly:
 
 - Degradation is *graceful refusal*, not partial permission. Nothing is written to the protected surface, ever, on this path.
 - A staged proposal is **data, not authority**. Replaying it later still goes back through `validate` — staging never becomes a bypass around Gate 4. If the thread has snapped in the meantime, the replay is rejected like anything else.
+
+**Phase 5 layers approval semantics on this path** (open, not frozen; authoritative record: `specs/PHASE-5-APPROVAL-SEMANTICS.md`). The verdict is unchanged — the three-verdict set is frozen Phase 0 — but what *promotes* a staged proposal is now typed. At intake, daemon-side classification assigns the proposal an **`ApprovalPath`**: the promotion ceremony required before apply (auto-regression with a veto window, familiar-coherence review, human approval, or human approval with rationale — the RFC-0001 §5.3 tiers). The proposal then applies only through the **delayed-apply flow**: it stays visibly pending for at least a minimum duration, and at the deadline the daemon replays the gate evidence by live re-materialization before any write — matching evidence applies, diverging evidence rejects. "A human decides" above is now, precisely, "the ceremony named by the proposal's ApprovalPath decides, and the daemon applies only after the window closes clean." Full flow and audit lifecycle: [architecture.md — Phase 5](architecture.md#phase-5-approval-semantics-and-delayed-apply).
 
 ### Reject
 

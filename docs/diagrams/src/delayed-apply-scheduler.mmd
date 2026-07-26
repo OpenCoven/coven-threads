@@ -1,0 +1,78 @@
+%% delayed-apply-scheduler — the Phase 5 delayed-apply lifecycle: daemon-side
+%% classification assigns an ApprovalPath (never derived from Channel —
+%% decision 1), the veto window is a first-class audit interval (decision 8),
+%% and NO path reaches APPLY without live daemon re-materialization at the
+%% moment of apply (Gate-4 fail-closed; delayed apply ONLY — no provisional
+%% apply exists, decision 2). Deadline expiry is a trigger for revalidation,
+%% not a terminal state: there is no proposal_expired event (§4).
+%% The scheduler is daemon-owned (coven PR #430); coven-threads-core ships
+%% the types only.
+%% Source of truth: PHASE-5-APPROVAL-SEMANTICS.md §4 + decisions 1, 2, 7, 8;
+%% coven PR #430; crates/coven-threads-core/src/approval.rs (ApprovalPath,
+%% VetoWindow, WindowCloseReason), src/audit.rs (AuditEventType).
+%% Form: decision flowchart with daemon containment + a forbidden
+%% provisional-apply edge — the single audited road to APPLY is the story.
+flowchart TD
+  INTAKE["Proposal intake<br/>(client forwards; untrusted for enforcement)"]
+
+  subgraph DAEMON["coven daemon — owns the delayed-apply scheduler (coven PR #430); coven-threads-core ships the types only"]
+    direction TB
+    CLASSIFY["classification at intake<br/>ProposalClassification — append-only,<br/>evidence_replay_hash sealed here<br/><b>ApprovalPath assigned by daemon policy —<br/>never derived from Channel</b>"]
+    PATH{"ApprovalPath?"}
+    STAGE["stage pending"]
+    WINDOW["veto window OPEN — proposal pending-visible<br/>opened_at · earliest_close = opened_at + min_visible<br/>(minimum-visible floor) · deadline"]
+    AWAIT["AwaitingHumanApproval<br/>no window — blocked until explicit approval<br/>(human_required: rationale mandatory, audited)"]
+    REVAL["daemon re-materializes the surface diff and<br/>replays evidence_replay_hash<br/><i>live Gate-4 re-materialization —<br/>the only road to apply</i>"]
+    MATCH{"replayed hash matches<br/>evidence_replay_hash?"}
+    APPLY["APPLY — closed: applied<br/>the write commits only here"]
+    VETOED["closed: vetoed"]
+    SUPER["REJECT — closed:<br/>superseded"]
+    DIVERGED["REJECT — closed:<br/>evidence diverged"]
+    RFAIL["REJECT — closed:<br/>revalidation failed (fail closed)"]
+    AUDIT[("ward.audit<br/>in coven.sqlite3<br/>append-only")]
+  end
+
+  INTAKE -->|"POST proposal"| CLASSIFY
+  CLASSIFY --> PATH
+  PATH -->|"AutoRegression (auto) ·<br/>FamiliarCoherence (familiar_review)<br/>— veto-window paths"| STAGE
+  PATH -->|"HumanApproval (human_review) ·<br/>HumanApprovalWithRationale (human_required)<br/>— human-ceremony paths"| AWAIT
+  STAGE --> WINDOW
+
+  WINDOW -->|"principal veto<br/>before apply"| VETOED
+  WINDOW -->|"newer proposal replaces this<br/>pending proposal"| SUPER
+  WINDOW -->|"deadline fires AND minimum-visible<br/>floor elapsed — expiry triggers<br/>revalidation, it is not terminal"| REVAL
+  WINDOW -.-x|"NO provisional apply —<br/>nothing writes while pending<br/>(decision 2: delayed apply only)"| APPLY
+
+  AWAIT -->|"principal veto"| VETOED
+  AWAIT -->|"newer proposal<br/>replaces it"| SUPER
+  AWAIT -->|"explicit human approval<br/>(rationale recorded for human_required)"| REVAL
+
+  REVAL --> MATCH
+  MATCH -->|"matches — and no<br/>veto exists"| APPLY
+  MATCH -->|differs| DIVERGED
+  MATCH -->|"replay could not produce<br/>authoritative evidence"| RFAIL
+
+  CLASSIFY -.->|proposal_submitted| AUDIT
+  WINDOW -.->|"proposal_window_opened<br/>(gate evidence + veto deadline)"| AUDIT
+  APPLY -.->|"proposal_approved<br/>reason: applied"| AUDIT
+  VETOED -.->|"proposal_vetoed<br/>reason: vetoed"| AUDIT
+  SUPER -.->|"proposal_rejected<br/>reason: superseded"| AUDIT
+  DIVERGED -.->|"proposal_rejected<br/>reason: evidence_diverged"| AUDIT
+  RFAIL -.->|"proposal_rejected<br/>reason: revalidation_failed"| AUDIT
+
+  style INTAKE fill:#1A1825,stroke:#C44536,color:#E8E3F5
+  style DAEMON fill:#241B31,stroke:#A8D89A,color:#E8E3F5
+  style CLASSIFY fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  style PATH fill:#1A1825,stroke:#C4A536,color:#E8E3F5
+  style STAGE fill:#4A4A2E,stroke:#C4C46A,color:#FFFFFF
+  style WINDOW fill:#4A4A2E,stroke:#C4C46A,color:#FFFFFF
+  style AWAIT fill:#4A4A2E,stroke:#C4C46A,color:#FFFFFF
+  style REVAL fill:#8B6BA8,stroke:#D4B5FF,color:#FFFFFF
+  style MATCH fill:#1A1825,stroke:#C4A536,color:#E8E3F5
+  style APPLY fill:#2E4A2E,stroke:#A8D89A,color:#FFFFFF
+  style VETOED fill:#5C2E2E,stroke:#C44536,color:#FFFFFF
+  style SUPER fill:#5C2E2E,stroke:#C44536,color:#FFFFFF
+  style DIVERGED fill:#5C2E2E,stroke:#C44536,color:#FFFFFF
+  style RFAIL fill:#5C2E2E,stroke:#C44536,color:#FFFFFF
+  style AUDIT fill:#4A2E5C,stroke:#D4B5FF,color:#FFFFFF
+  linkStyle 8 stroke:#C44536,color:#E8B4B4

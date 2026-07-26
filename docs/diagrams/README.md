@@ -3,8 +3,9 @@
 Source-authoritative diagrams for `coven-threads`. Every rendered artifact
 (`.svg`, `.png`) is generated from a committed source in [`src/`](src/) —
 rendered files are never hand-edited. If a diagram disagrees with
-`specs/PHASE-0-DESIGN.md` (FROZEN v0.2) or the shipped crate, the diagram is
-wrong; recreated 2026-07-15 against both (bead `threads-986.22`).
+`specs/PHASE-0-DESIGN.md` (FROZEN v0.2), `specs/PHASE-5-APPROVAL-SEMANTICS.md`
+(decision record), or the shipped crate, the diagram is wrong; recreated
+2026-07-15 against both (bead `threads-986.22`).
 
 | Diagram | What it shows | Form (why) | Source of truth |
 |---|---|---|---|
@@ -13,6 +14,7 @@ wrong; recreated 2026-07-15 against both (bead `threads-986.22`).
 | `weave-thread-strand.{svg,png}` | Vocabulary as the types relate: Weave carries an authoritative `PatternPredicate` (descriptor derived, **never enforced on** — §2.2 anti-pattern) and threads = `(surface → writer)` pairs, each with `holds_under` channels and a Vec of strands | containment subgraphs; dashed derive edge for the anti-pattern | PHASE-0-DESIGN §2.1–2.3; `src/{weave,thread,strand,pattern}.rs` |
 | `thread-tension-state.{svg,png}` | The tension state machine (`Holds`/`Frayed`/`Snapped`) with the `holds_under(channel)` answer each state produces, incl. the fail-closed `NotCovered` answer | stateDiagram-v2 — a state machine is a state machine; verdicts are answers, not states, so they ride as notes | `src/thread.rs` (`TensionState`, `holds_under`, `fray`, `snap`); `src/fray.rs`; PHASE-0-DESIGN §2.3, §5 |
 | `channel-strand-matrix.{svg,png}` | Exactly which strand kinds each channel's floor requires: Deliberate — none (consent is the gate); Forced — ContentHash + ManifestEntry (WARD-C1–C6); Serialization — SerializationMarker (WARD-C7); Mutation — ContentHash | per-channel grouping (box contents *are* the floor; no cross-arrow spaghetti) | `src/channel.rs` (`Channel::required_strand_kinds`); PHASE-0-DESIGN §2.4 |
+| `delayed-apply-scheduler.{svg,png}` | The Phase 5 delayed-apply lifecycle: daemon classification assigns `ApprovalPath` (never derived from `Channel`), pending-visible veto window (`opened_at` · minimum-visible floor · deadline), veto/supersession closes, deadline-triggered evidence replay deciding apply vs fail-closed reject, the blocked `AwaitingHumanApproval` lane, and a reason-tagged audit row at every transition — no path reaches APPLY without live daemon re-materialization, and no provisional apply exists | decision flowchart with daemon containment + a forbidden provisional-apply edge — the single audited road to APPLY is the story | PHASE-5-APPROVAL-SEMANTICS §4 + decision 2 (also 1, 7, 8); coven PR #430 (daemon-owned scheduler); `src/approval.rs`, `src/audit.rs` |
 
 ## Regenerating
 
