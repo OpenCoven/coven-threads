@@ -241,8 +241,7 @@ impl IdentityInvariantSet {
         for mandatory in [IdentityFact::Name, IdentityFact::Person] {
             if !seen.contains(&mandatory) {
                 return Err(format!(
-                    "missing mandatory {:?} identity invariant declaration",
-                    mandatory
+                    "missing mandatory {mandatory:?} identity invariant declaration"
                 ));
             }
         }
