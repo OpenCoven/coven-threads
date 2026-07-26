@@ -5,7 +5,7 @@ members = ["crates/coven-threads-core"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.88"
 license = "MIT"
 authors = ["Valentina Alexander <val@opencoven.dev>"]
 repository = "https://github.com/OpenCoven/coven-threads"
