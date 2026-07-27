@@ -388,8 +388,17 @@ fn parse_identity_declaration(value: &str) -> Result<IdentityInvariantDeclaratio
         ),
         (None, None) => return Err("expected `==` or `includes` operator".into()),
     };
-    let fact = IdentityFact::from_declaration_name(left.trim())
-        .ok_or_else(|| format!("unsupported identity fact {:?}", left.trim()))?;
+    // Never echo left-of-operator text: a reversed declaration (e.g.
+    // `'<person>' == familiar.person`) would carry principal-adjacent values
+    // into migration reports and stdout. Name the expected grammar instead.
+    let fact = IdentityFact::from_declaration_name(left.trim()).ok_or_else(|| {
+        concat!(
+            "unsupported identity fact left of operator; expected one of: ",
+            "familiar.name, familiar.person, familiar.pronouns, familiar.purpose, ",
+            "familiar.coven"
+        )
+        .to_string()
+    })?;
     let right = right.trim();
     if right.is_empty() {
         return Err("expected value must not be empty".into());
@@ -1043,6 +1052,27 @@ mod tests {
         ])
         .unwrap_err();
         assert!(errors.iter().any(|error| error.contains("Name")));
+    }
+
+    #[test]
+    fn unsupported_fact_rejection_never_echoes_left_of_operator_text() {
+        // Reversed declaration: principal-adjacent text sits left of the
+        // operator. The rejection must name the grammar, never the text.
+        let errors = IdentityInvariantSet::compile([
+            r#"'Val Alexander' == familiar.person"#,
+            r#"familiar.name == "Nova""#,
+            r#"familiar.person == "Val""#,
+        ])
+        .unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0],
+            "invariant[0]: unsupported identity fact left of operator; expected one of: \
+             familiar.name, familiar.person, familiar.pronouns, familiar.purpose, \
+             familiar.coven"
+        );
+        assert!(errors[0].contains("familiar.pronouns"));
+        assert!(!errors[0].contains("Val Alexander"));
     }
 
     #[test]
