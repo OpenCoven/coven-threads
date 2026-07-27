@@ -392,10 +392,12 @@ fn parse_identity_declaration(value: &str) -> Result<IdentityInvariantDeclaratio
     // `'<person>' == familiar.person`) would carry principal-adjacent values
     // into migration reports and stdout. Name the expected grammar instead.
     let fact = IdentityFact::from_declaration_name(left.trim()).ok_or_else(|| {
-        "unsupported identity fact left of operator; expected one of: \
-         familiar.name, familiar.person, familiar.pronouns, familiar.purpose, \
-         familiar.coven"
-            .to_string()
+        concat!(
+            "unsupported identity fact left of operator; expected one of: ",
+            "familiar.name, familiar.person, familiar.pronouns, familiar.purpose, ",
+            "familiar.coven"
+        )
+        .to_string()
     })?;
     let right = right.trim();
     if right.is_empty() {
@@ -1063,7 +1065,12 @@ mod tests {
         ])
         .unwrap_err();
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].starts_with("invariant[0]: unsupported identity fact"));
+        assert_eq!(
+            errors[0],
+            "invariant[0]: unsupported identity fact left of operator; expected one of: \
+             familiar.name, familiar.person, familiar.pronouns, familiar.purpose, \
+             familiar.coven"
+        );
         assert!(errors[0].contains("familiar.pronouns"));
         assert!(!errors[0].contains("Val Alexander"));
     }
