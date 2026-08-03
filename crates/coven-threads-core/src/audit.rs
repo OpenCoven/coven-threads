@@ -612,7 +612,7 @@ fn validate_proposal_approval_detail(
                 || detail
                     .rationale
                     .as_deref()
-                    .map_or(true, |rationale| rationale.trim().is_empty())
+                    .is_none_or(|rationale| rationale.trim().is_empty())
             {
                 return Err("human_required approval requires an approver and rationale".into());
             }
