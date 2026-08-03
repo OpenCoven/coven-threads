@@ -86,7 +86,9 @@
 //! `WardAuditRecord::diff_hash` carries `next_sha256` (the post-write content
 //! hash, matching the RFC-0001 §5.6 `diff_hash` semantic for verdict rows).
 //! The complementary `prev_sha256` and `bytes_written` ride in `detail` as a
-//! compact JSON object `{"prev_sha256":"<hex>","bytes_written":N}`. This
+//! compact JSON object
+//! `{"prev_sha256":"<64-lowercase-hex-or-null>","bytes_written":N}`. The
+//! previous hash is `null` when the pre-write content is unknown. This
 //! choice:
 //! - avoids new columns that would require another SQLite table rebuild;
 //! - keeps `diff_hash` as the canonical single-hash field (consistent with
@@ -1329,6 +1331,11 @@ END;
     };
 }
 
+/// Transactional migration from the exact v0.1.3 fingerprint to v0.2.0.
+///
+/// The SQL revalidates the legacy fingerprint under `BEGIN IMMEDIATE`,
+/// preserves every row, installs the current constraints and authority
+/// triggers, and requires the exact current fingerprint before commit.
 pub const WARD_AUDIT_MIGRATION_V020_SQL: &str = concat!(
     r#"
 BEGIN IMMEDIATE;
@@ -1703,7 +1710,6 @@ mod tests {
     const FIXED_FILES_TOUCHED: &str = r#"["SOUL.md"]"#;
     const CONCURRENT_DB_RUNS: usize = 3;
 
-
     fn request() -> MutationRequest {
         MutationRequest {
             surface: SurfaceId::new("SOUL.md"),
@@ -1827,7 +1833,11 @@ mod tests {
                 );
                 // display_label round-trips through the ApprovalPath parser.
                 let parsed = ApprovalPath::from_display_label(kind.display_label());
-                assert!(parsed.is_some(), "ApprovalPath::from_display_label({}) failed", kind.display_label());
+                assert!(
+                    parsed.is_some(),
+                    "ApprovalPath::from_display_label({}) failed",
+                    kind.display_label()
+                );
             }
         }
     }
@@ -4347,4 +4357,3 @@ END;
         assert_eq!(trigger_names(&conn), expected_legacy_trigger_names());
     }
 }
-
