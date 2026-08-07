@@ -116,6 +116,15 @@ as a promotion outcome.
 Every ambiguity resolves to reject. Never to permit, never to a default surface,
 never to LLM judgment.
 
+Two existing vocabularies cover every edge, at the two stages where a promotion
+write can die. They are distinct types and must not be conflated: `RejectReason`
+(`validate.rs`) is the *admission* vocabulary — the write never enters the
+proposal pipeline; `WindowCloseReason` (audit layer, trigger-enforced) is the
+*lifecycle* vocabulary — the write entered the pipeline and its opened window
+must close with a typed terminal reason (§5.2).
+
+**Admission rejections — `RejectReason`:**
+
 | Condition | Verdict | Existing `RejectReason` |
 | --- | --- | --- |
 | Target surface not registered in the weave | reject | `UnknownSurface` |
@@ -125,10 +134,17 @@ never to LLM judgment.
 | Weave pattern predicate does not hold | reject | `WeaveBroken` |
 | Surface degraded / frayed strand | reject | `SurfaceDegraded` |
 | Validator panicked | reject | `ValidatorPanic` |
-| Materialized target ≠ declared target | reject | Gate-4 divergence |
-| Evidence cannot be re-derived at deadline | reject | `evidence_diverged` |
 
-No new reject reason is required by this contract. That is deliberate — if the
+**Lifecycle terminations — `WindowCloseReason`:**
+
+| Condition | Verdict | Existing `WindowCloseReason` |
+| --- | --- | --- |
+| Materialized target ≠ declared target (Gate-4 replay divergence) | reject | `evidence_diverged` |
+| Evidence cannot be re-derived at deadline | reject | `evidence_diverged` |
+| Live revalidation fails at apply time | reject | `revalidation_failed` |
+| A newer proposal supersedes this one | reject | `superseded` |
+
+No new reason is required in either vocabulary. That is deliberate — if the
 promotion seam needed its own rejection vocabulary, it would be evidence the seam
 had grown policy it should not own.
 
@@ -205,6 +221,11 @@ Items 3 and 4 are inherited, not introduced. This seam does not create those
 gaps; it is blocked behind them, and saying so is the honest version.
 
 ---
+
+_Sage review pass, 2026-08-06: §4 split into the two actual vocabularies —
+`RejectReason` (admission) vs `WindowCloseReason` (lifecycle) — after verifying
+both against `validate.rs` and `audit.rs`. The original table implied one
+rejection vocabulary where the code has two. No semantic change._
 
 _Echo, 2026-08-06. Drafted from the coven-threads side only — `coven-memory` is
 outside this session's filesystem boundary, so every claim about the substrate
