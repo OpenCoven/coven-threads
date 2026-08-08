@@ -59,9 +59,12 @@
 //! ordered `pragma_table_info('ward_audit', 'main')` metadata and
 //! `pragma_index_list('ward_audit', 'main')` for explicit index discovery. It
 //! does **not** normalize whitespace: the only accepted `current_v020`
-//! table-SQL variants are the fresh `CREATE TABLE ward_audit` form and the
-//! quoted `CREATE TABLE "ward_audit"` form SQLite stores after the exact legacy
-//! migration path, and the `legacy_v013` fingerprint includes the inline
+//! table-SQL variants are the fresh `CREATE TABLE ward_audit` form, the quoted
+//! `CREATE TABLE "ward_audit"` form SQLite stores after the exact legacy
+//! migration path, and the comment-free quoted form emitted by the
+//! daemon-pinned predecessor migrator. All retain the Phase-5 proposal-window
+//! and memory-admission table constraints, so deployed exact-current stores
+//! remain `current_v020`. The `legacy_v013` fingerprint includes the inline
 //! comments preserved from the shipped v0.1.3 DDL.
 //! `WARD_AUDIT_MIGRATION_V020_SQL` exists only for the exact `legacy_v013`
 //! fingerprint with no unexpected durable reserved-namespace object and no temp
@@ -836,18 +839,103 @@ macro_rules! ward_audit_exact_current_fresh_table_sql_sql {
     decision      TEXT    NOT NULL,
     approver      TEXT,
     diff_hash     BLOB,
-    detail        TEXT,
-    files_touched TEXT    NOT NULL,
+    detail        TEXT,             -- event-type-specific JSON; see module docs
+    files_touched TEXT    NOT NULL, -- JSON array of surface ids
     channel       TEXT,
     thread_id     TEXT,
-    submitted_at  TEXT    NOT NULL,
-    decided_at    TEXT    NOT NULL,
-    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now''))
+    submitted_at  TEXT    NOT NULL, -- RFC 3339
+    decided_at    TEXT    NOT NULL, -- RFC 3339
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')),
+    CHECK (
+        event_type != ''proposal_window_opened'' OR (
+            proposal_id IS NOT NULL
+            AND detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, ''$.approval_path_label'') IS ''text''
+            AND length(trim(json_extract(detail, ''$.approval_path_label''))) > 0
+            AND json_type(detail, ''$.deadline'') IS ''text''
+            AND julianday(json_extract(detail, ''$.deadline'')) IS NOT NULL
+            AND json_type(detail, ''$.earliest_close'') IS ''text''
+            AND julianday(json_extract(detail, ''$.earliest_close'')) IS NOT NULL
+            AND julianday(json_extract(detail, ''$.earliest_close''))
+                <= julianday(json_extract(detail, ''$.deadline''))
+            AND json_type(detail, ''$.evidence_replay_hash_hex'') IS ''text''
+            AND length(json_extract(detail, ''$.evidence_replay_hash_hex'')) = 64
+            AND json_extract(detail, ''$.evidence_replay_hash_hex'')
+                NOT GLOB ''*[^0-9A-Fa-f]*''
+            AND json_type(detail, ''$.affected_regions'') IS ''array''
+        )
+    ),
+    CHECK (
+        event_type != ''memory_entry_admitted'' OR (
+            detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, ''$.entry_hash'') IS ''array''
+            AND json_array_length(detail, ''$.entry_hash'') = 32
+            AND json_type(detail, ''$.source_attestation'') IS ''text''
+            AND length(trim(json_extract(detail, ''$.source_attestation''))) > 0
+        )
+    )
 )'"#
     };
 }
 
 macro_rules! ward_audit_exact_current_migrated_table_sql_sql {
+    () => {
+        r#"'CREATE TABLE "ward_audit" (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type    TEXT    NOT NULL CHECK (event_type IN (
+                      ''proposal_submitted'',''proposal_window_opened'',
+                      ''proposal_approved'',''proposal_rejected'',
+                      ''proposal_vetoed'',''ward_updated'',''memory_entry_admitted'',
+                      ''principal_authorized_write'',''validation_verdict'',
+                      ''compaction_ledger'',''apply_audit'')),
+    proposal_id   TEXT,
+    familiar_id   TEXT    NOT NULL,
+    ward_version  TEXT,
+    ward_hash     BLOB    NOT NULL,
+    tier          TEXT,
+    decision      TEXT    NOT NULL,
+    approver      TEXT,
+    diff_hash     BLOB,
+    detail        TEXT,             -- event-type-specific JSON; see module docs
+    files_touched TEXT    NOT NULL, -- JSON array of surface ids
+    channel       TEXT,
+    thread_id     TEXT,
+    submitted_at  TEXT    NOT NULL, -- RFC 3339
+    decided_at    TEXT    NOT NULL, -- RFC 3339
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')),
+    CHECK (
+        event_type != ''proposal_window_opened'' OR (
+            proposal_id IS NOT NULL
+            AND detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, ''$.approval_path_label'') IS ''text''
+            AND length(trim(json_extract(detail, ''$.approval_path_label''))) > 0
+            AND json_type(detail, ''$.deadline'') IS ''text''
+            AND julianday(json_extract(detail, ''$.deadline'')) IS NOT NULL
+            AND json_type(detail, ''$.earliest_close'') IS ''text''
+            AND julianday(json_extract(detail, ''$.earliest_close'')) IS NOT NULL
+            AND julianday(json_extract(detail, ''$.earliest_close''))
+                <= julianday(json_extract(detail, ''$.deadline''))
+            AND json_type(detail, ''$.evidence_replay_hash_hex'') IS ''text''
+            AND length(json_extract(detail, ''$.evidence_replay_hash_hex'')) = 64
+            AND json_extract(detail, ''$.evidence_replay_hash_hex'')
+                NOT GLOB ''*[^0-9A-Fa-f]*''
+            AND json_type(detail, ''$.affected_regions'') IS ''array''
+        )
+    ),
+    CHECK (
+        event_type != ''memory_entry_admitted'' OR (
+            detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, ''$.entry_hash'') IS ''array''
+            AND json_array_length(detail, ''$.entry_hash'') = 32
+            AND json_type(detail, ''$.source_attestation'') IS ''text''
+            AND length(trim(json_extract(detail, ''$.source_attestation''))) > 0
+        )
+    )
+)'"#
+    };
+}
+
+macro_rules! ward_audit_exact_pre_fingerprint_migrated_table_sql_sql {
     () => {
         r#"'CREATE TABLE "ward_audit" (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -871,7 +959,35 @@ macro_rules! ward_audit_exact_current_migrated_table_sql_sql {
     thread_id     TEXT,
     submitted_at  TEXT    NOT NULL,
     decided_at    TEXT    NOT NULL,
-    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now''))
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')),
+    CHECK (
+        event_type != ''proposal_window_opened'' OR (
+            proposal_id IS NOT NULL
+            AND detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, ''$.approval_path_label'') IS ''text''
+            AND length(trim(json_extract(detail, ''$.approval_path_label''))) > 0
+            AND json_type(detail, ''$.deadline'') IS ''text''
+            AND julianday(json_extract(detail, ''$.deadline'')) IS NOT NULL
+            AND json_type(detail, ''$.earliest_close'') IS ''text''
+            AND julianday(json_extract(detail, ''$.earliest_close'')) IS NOT NULL
+            AND julianday(json_extract(detail, ''$.earliest_close''))
+                <= julianday(json_extract(detail, ''$.deadline''))
+            AND json_type(detail, ''$.evidence_replay_hash_hex'') IS ''text''
+            AND length(json_extract(detail, ''$.evidence_replay_hash_hex'')) = 64
+            AND json_extract(detail, ''$.evidence_replay_hash_hex'')
+                NOT GLOB ''*[^0-9A-Fa-f]*''
+            AND json_type(detail, ''$.affected_regions'') IS ''array''
+        )
+    ),
+    CHECK (
+        event_type != ''memory_entry_admitted'' OR (
+            detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, ''$.entry_hash'') IS ''array''
+            AND json_array_length(detail, ''$.entry_hash'') = 32
+            AND json_type(detail, ''$.source_attestation'') IS ''text''
+            AND length(trim(json_extract(detail, ''$.source_attestation''))) > 0
+        )
+    )
 )'"#
     };
 }
@@ -1070,6 +1186,8 @@ AND table_sql IN ("#,
             ward_audit_exact_current_fresh_table_sql_sql!(),
             r#", "#,
             ward_audit_exact_current_migrated_table_sql_sql!(),
+            r#", "#,
+            ward_audit_exact_pre_fingerprint_migrated_table_sql_sql!(),
             r#")
 AND column_fp = '0|id|INTEGER|0|<null>|1||1|event_type|TEXT|1|<null>|0||2|proposal_id|TEXT|0|<null>|0||3|familiar_id|TEXT|1|<null>|0||4|ward_version|TEXT|0|<null>|0||5|ward_hash|BLOB|1|<null>|0||6|tier|TEXT|0|<null>|0||7|decision|TEXT|1|<null>|0||8|approver|TEXT|0|<null>|0||9|diff_hash|BLOB|0|<null>|0||10|detail|TEXT|0|<null>|0||11|files_touched|TEXT|1|<null>|0||12|channel|TEXT|0|<null>|0||13|thread_id|TEXT|0|<null>|0||14|submitted_at|TEXT|1|<null>|0||15|decided_at|TEXT|1|<null>|0||16|recorded_at|TEXT|1|strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')|0'
 AND index_fp = "#,
@@ -1376,13 +1494,41 @@ CREATE TABLE main.ward_audit_new (
     decision      TEXT    NOT NULL,
     approver      TEXT,
     diff_hash     BLOB,
-    detail        TEXT,
-    files_touched TEXT    NOT NULL,
+    detail        TEXT,             -- event-type-specific JSON; see module docs
+    files_touched TEXT    NOT NULL, -- JSON array of surface ids
     channel       TEXT,
     thread_id     TEXT,
-    submitted_at  TEXT    NOT NULL,
-    decided_at    TEXT    NOT NULL,
-    recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    submitted_at  TEXT    NOT NULL, -- RFC 3339
+    decided_at    TEXT    NOT NULL, -- RFC 3339
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    CHECK (
+        event_type != 'proposal_window_opened' OR (
+            proposal_id IS NOT NULL
+            AND detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, '$.approval_path_label') IS 'text'
+            AND length(trim(json_extract(detail, '$.approval_path_label'))) > 0
+            AND json_type(detail, '$.deadline') IS 'text'
+            AND julianday(json_extract(detail, '$.deadline')) IS NOT NULL
+            AND json_type(detail, '$.earliest_close') IS 'text'
+            AND julianday(json_extract(detail, '$.earliest_close')) IS NOT NULL
+            AND julianday(json_extract(detail, '$.earliest_close'))
+                <= julianday(json_extract(detail, '$.deadline'))
+            AND json_type(detail, '$.evidence_replay_hash_hex') IS 'text'
+            AND length(json_extract(detail, '$.evidence_replay_hash_hex')) = 64
+            AND json_extract(detail, '$.evidence_replay_hash_hex')
+                NOT GLOB '*[^0-9A-Fa-f]*'
+            AND json_type(detail, '$.affected_regions') IS 'array'
+        )
+    ),
+    CHECK (
+        event_type != 'memory_entry_admitted' OR (
+            detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, '$.entry_hash') IS 'array'
+            AND json_array_length(detail, '$.entry_hash') = 32
+            AND json_type(detail, '$.source_attestation') IS 'text'
+            AND length(trim(json_extract(detail, '$.source_attestation'))) > 0
+        )
+    )
 );
 
 INSERT INTO main.ward_audit_new (
@@ -1461,13 +1607,41 @@ CREATE TABLE IF NOT EXISTS main.ward_audit (
     decision      TEXT    NOT NULL,
     approver      TEXT,
     diff_hash     BLOB,
-    detail        TEXT,
-    files_touched TEXT    NOT NULL,
+    detail        TEXT,             -- event-type-specific JSON; see module docs
+    files_touched TEXT    NOT NULL, -- JSON array of surface ids
     channel       TEXT,
     thread_id     TEXT,
-    submitted_at  TEXT    NOT NULL,
-    decided_at    TEXT    NOT NULL,
-    recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    submitted_at  TEXT    NOT NULL, -- RFC 3339
+    decided_at    TEXT    NOT NULL, -- RFC 3339
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    CHECK (
+        event_type != 'proposal_window_opened' OR (
+            proposal_id IS NOT NULL
+            AND detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, '$.approval_path_label') IS 'text'
+            AND length(trim(json_extract(detail, '$.approval_path_label'))) > 0
+            AND json_type(detail, '$.deadline') IS 'text'
+            AND julianday(json_extract(detail, '$.deadline')) IS NOT NULL
+            AND json_type(detail, '$.earliest_close') IS 'text'
+            AND julianday(json_extract(detail, '$.earliest_close')) IS NOT NULL
+            AND julianday(json_extract(detail, '$.earliest_close'))
+                <= julianday(json_extract(detail, '$.deadline'))
+            AND json_type(detail, '$.evidence_replay_hash_hex') IS 'text'
+            AND length(json_extract(detail, '$.evidence_replay_hash_hex')) = 64
+            AND json_extract(detail, '$.evidence_replay_hash_hex')
+                NOT GLOB '*[^0-9A-Fa-f]*'
+            AND json_type(detail, '$.affected_regions') IS 'array'
+        )
+    ),
+    CHECK (
+        event_type != 'memory_entry_admitted' OR (
+            detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, '$.entry_hash') IS 'array'
+            AND json_array_length(detail, '$.entry_hash') = 32
+            AND json_type(detail, '$.source_attestation') IS 'text'
+            AND length(trim(json_extract(detail, '$.source_attestation'))) > 0
+        )
+    )
 );
 
 CREATE INDEX IF NOT EXISTS main.ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
@@ -2266,6 +2440,81 @@ BEGIN
     SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
 END;
 "#;
+
+    const PRE_FINGERPRINT_MIGRATED_WARD_AUDIT_SCHEMA_SQL: &str = concat!(
+        r#"
+CREATE TABLE ward_audit_new (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type    TEXT    NOT NULL CHECK (event_type IN (
+                      'proposal_submitted','proposal_window_opened',
+                      'proposal_approved','proposal_rejected',
+                      'proposal_vetoed','ward_updated','memory_entry_admitted',
+                      'principal_authorized_write','validation_verdict',
+                      'compaction_ledger','apply_audit')),
+    proposal_id   TEXT,
+    familiar_id   TEXT    NOT NULL,
+    ward_version  TEXT,
+    ward_hash     BLOB    NOT NULL,
+    tier          TEXT,
+    decision      TEXT    NOT NULL,
+    approver      TEXT,
+    diff_hash     BLOB,
+    detail        TEXT,
+    files_touched TEXT    NOT NULL,
+    channel       TEXT,
+    thread_id     TEXT,
+    submitted_at  TEXT    NOT NULL,
+    decided_at    TEXT    NOT NULL,
+    recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    CHECK (
+        event_type != 'proposal_window_opened' OR (
+            proposal_id IS NOT NULL
+            AND detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, '$.approval_path_label') IS 'text'
+            AND length(trim(json_extract(detail, '$.approval_path_label'))) > 0
+            AND json_type(detail, '$.deadline') IS 'text'
+            AND julianday(json_extract(detail, '$.deadline')) IS NOT NULL
+            AND json_type(detail, '$.earliest_close') IS 'text'
+            AND julianday(json_extract(detail, '$.earliest_close')) IS NOT NULL
+            AND julianday(json_extract(detail, '$.earliest_close'))
+                <= julianday(json_extract(detail, '$.deadline'))
+            AND json_type(detail, '$.evidence_replay_hash_hex') IS 'text'
+            AND length(json_extract(detail, '$.evidence_replay_hash_hex')) = 64
+            AND json_extract(detail, '$.evidence_replay_hash_hex')
+                NOT GLOB '*[^0-9A-Fa-f]*'
+            AND json_type(detail, '$.affected_regions') IS 'array'
+        )
+    ),
+    CHECK (
+        event_type != 'memory_entry_admitted' OR (
+            detail IS NOT NULL AND json_valid(detail)
+            AND json_type(detail, '$.entry_hash') IS 'array'
+            AND json_array_length(detail, '$.entry_hash') = 32
+            AND json_type(detail, '$.source_attestation') IS 'text'
+            AND length(trim(json_extract(detail, '$.source_attestation'))) > 0
+        )
+    )
+);
+
+ALTER TABLE ward_audit_new RENAME TO ward_audit;
+
+CREATE INDEX ward_audit_familiar_idx ON ward_audit (familiar_id, recorded_at);
+CREATE INDEX ward_audit_event_idx    ON ward_audit (event_type, recorded_at);
+
+CREATE TRIGGER ward_audit_append_only_update
+BEFORE UPDATE ON ward_audit
+BEGIN
+    SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
+END;
+
+CREATE TRIGGER ward_audit_append_only_delete
+BEFORE DELETE ON ward_audit
+BEGIN
+    SELECT RAISE(ABORT, 'ward_audit is append-only (RFC-0001 §5.6)');
+END;
+"#,
+        ward_audit_authority_triggers_sql!()
+    );
 
     const EXPECTED_EXPLICIT_INDEX_NAMES: &[&str] =
         &["ward_audit_event_idx", "ward_audit_familiar_idx"];
@@ -3355,6 +3604,48 @@ END;
     }
 
     #[test]
+    fn fresh_schema_rejects_invalid_proposal_window_detail() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        let error = conn
+            .execute(
+                "INSERT INTO ward_audit (
+                    event_type, proposal_id, familiar_id, ward_hash, decision, detail,
+                    files_touched, submitted_at, decided_at
+                 ) VALUES (
+                    'proposal_window_opened', 'proposal-1', 'sage', X'00', 'pending', '{}',
+                    '[]', '2026-07-01T00:00:00Z', '2026-07-01T00:00:01Z'
+                 )",
+                [],
+            )
+            .expect_err("invalid proposal window detail must fail at the store boundary");
+
+        assert!(error.to_string().contains("CHECK constraint failed"));
+    }
+
+    #[test]
+    fn fresh_schema_rejects_invalid_memory_admission_detail() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        let error = conn
+            .execute(
+                "INSERT INTO ward_audit (
+                    event_type, familiar_id, ward_hash, decision, detail, files_touched,
+                    submitted_at, decided_at
+                 ) VALUES (
+                    'memory_entry_admitted', 'sage', X'00', 'admitted', '{}', '[]',
+                    '2026-07-01T00:00:00Z', '2026-07-01T00:00:01Z'
+                 )",
+                [],
+            )
+            .expect_err("invalid memory admission detail must fail at the store boundary");
+
+        assert!(error.to_string().contains("CHECK constraint failed"));
+    }
+
+    #[test]
     fn exact_legacy_fixture_returns_legacy_v013() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(LEGACY_WARD_AUDIT_SCHEMA_SQL).unwrap();
@@ -3398,6 +3689,15 @@ END;
             trigger_sql_fingerprint(&conn),
             sql_literal_value(&conn, ward_audit_exact_trigger_fp_sql!())
         );
+    }
+
+    #[test]
+    fn pre_fingerprint_migrated_schema_remains_current_v020() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PRE_FINGERPRINT_MIGRATED_WARD_AUDIT_SCHEMA_SQL)
+            .unwrap();
+
+        assert_schema_state(&conn, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020);
     }
 
     #[test]

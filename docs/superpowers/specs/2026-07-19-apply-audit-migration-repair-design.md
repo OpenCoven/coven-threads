@@ -42,27 +42,33 @@ The fingerprint is exact and table-local to `main.ward_audit`:
   by name and fingerprinted as `name|sql`).
 
 The full stored table definition covers every declared table-level constraint —
-the `event_type` CHECK list, extra `CHECK` clauses, `UNIQUE` clauses, and
-foreign-key clauses — so any extra or missing constraint, column, index, or
-trigger classifies as `unknown`. Across **all** durable states, the reserved
-main-schema namespace is whitelisted to exactly these `main.ward_audit`
-objects: the table itself, indexes `ward_audit_event_idx` and
-`ward_audit_familiar_idx`, and triggers
-`ward_audit_append_only_update` / `ward_audit_append_only_delete`, each attached
-to `main.ward_audit`. Every other main-schema table/view/index/trigger whose
-name is exactly `ward_audit` or begins with `ward_audit_` also classifies as
-`unknown`, including `ward_audit_new`, backup/shadow tables, and reserved-name
-indexes/triggers attached elsewhere. Any temp-schema table/view/index/trigger
-whose name is exactly `ward_audit` or begins with `ward_audit_` likewise
-classifies as `unknown`, even when `main.ward_audit` is otherwise exact current
-or legacy; that fail-closed rule stops TEMP shadows from being mistaken for
-healthy durable state and blocks unqualified daemon writes from proceeding under
-a false `current_v020`. No whitespace-destroying normalization is applied: only
-the exact stored SQL variants SQLite emits for the shipped schemas are
-accepted. For `current_v020`, that means the fresh `CREATE TABLE ward_audit
-(...)` form and the quoted `CREATE TABLE "ward_audit" (...)` form produced by
-the legacy rename path. For `legacy_v013`, the fingerprint intentionally
-includes the inline comments preserved from the shipped v0.1.3 DDL.
+the `event_type` CHECK list, the Phase-5 proposal-window and memory-admission
+CHECK clauses, extra `CHECK` clauses, `UNIQUE` clauses, and foreign-key clauses
+— so any extra or missing constraint, column, index, or trigger classifies as
+`unknown`. The two Phase-5 CHECK clauses remain byte-for-byte compatible with
+the daemon-pinned predecessor revision; exact deployed stores therefore remain
+`current_v020` instead of becoming unknown during adoption. Across **all**
+durable states, the reserved main-schema namespace is whitelisted to exactly
+these `main.ward_audit` objects: the table itself, indexes
+`ward_audit_event_idx` and `ward_audit_familiar_idx`, append-only triggers
+`ward_audit_append_only_update` / `ward_audit_append_only_delete`, and the four
+Phase-5 authority triggers, each attached to `main.ward_audit`. Every other
+main-schema table/view/index/trigger whose name is exactly `ward_audit` or
+begins with `ward_audit_` also classifies as `unknown`, including
+`ward_audit_new`, backup/shadow tables, and reserved-name indexes/triggers
+attached elsewhere. Any temp-schema table/view/index/trigger whose name is
+exactly `ward_audit` or begins with `ward_audit_` likewise classifies as
+`unknown`, even when `main.ward_audit` is otherwise exact current or legacy;
+that fail-closed rule stops TEMP shadows from being mistaken for healthy durable
+state and blocks unqualified daemon writes from proceeding under a false
+`current_v020`. No whitespace-destroying normalization is applied: only the
+exact stored SQL variants SQLite emits for the shipped schemas are accepted.
+For `current_v020`, that means the fresh `CREATE TABLE ward_audit (...)` form,
+the quoted `CREATE TABLE "ward_audit" (...)` form produced by the repaired
+legacy rename path, and the exact comment-free quoted form emitted by the
+daemon-pinned predecessor migrator. For `legacy_v013`, the fingerprint
+intentionally includes the inline comments preserved from the shipped v0.1.3
+DDL.
 
 ## Initialization design
 

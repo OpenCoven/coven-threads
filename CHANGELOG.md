@@ -34,16 +34,19 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   durable column metadata discovered through schema-qualified PRAGMAs.
   Across all durable states, the reserved main-schema `ward_audit` /
   `ward_audit_*` namespace is whitelisted to exactly `main.ward_audit`, its two
-  explicit indexes, and its two append-only triggers attached to
-  `main.ward_audit`; every other reserved main object (including
-  `ward_audit_new`, views, backup/shadow tables, or reserved-name
-  indexes/triggers attached elsewhere) fail-closes as `unknown`. `missing` now
-  means `main.ward_audit` is absent, no unexpected durable reserved object
-  exists, **and** no temp shadow/reserved temp object exists; any temp-schema
-  table/view/index/trigger named `ward_audit` or `ward_audit_*` also
-  fail-closes as `unknown`. Only the controlled fresh/migrated v0.2.0 table SQL
-  variants and the shipped v0.1.3 table SQL are accepted; no
-  whitespace-destroying normalization is applied.
+  explicit indexes, its two append-only triggers, and all four Phase-5
+  authority triggers attached to `main.ward_audit`; every other reserved main
+  object (including `ward_audit_new`, views, backup/shadow tables, or
+  reserved-name indexes/triggers attached elsewhere) fail-closes as `unknown`.
+  `missing` means `main.ward_audit` is absent, no unexpected durable reserved
+  object exists, **and** no temp shadow/reserved temp object exists; any
+  temp-schema table/view/index/trigger named `ward_audit` or `ward_audit_*`
+  also fail-closes as `unknown`. The controlled fresh/repaired-migration
+  v0.2.0 table SQL variants and the exact comment-free quoted variant emitted
+  by the daemon-pinned predecessor preserve the Phase-5 proposal-window and
+  memory-admission CHECK clauses, so exact deployed stores remain current.
+  Those variants and the shipped v0.1.3 table SQL are the only accepted shapes;
+  no whitespace-destroying normalization is applied.
 - `WARD_AUDIT_SCHEMA_SQL` — atomic, self-guarding schema initialization for the
   exact `current_v020` fingerprint. It now begins with `BEGIN IMMEDIATE`, so
   the main-database write reservation is acquired before any guard read or
@@ -79,8 +82,11 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   `for_apply_roundtrips_json`,
   `schema_state_query_returns_missing_on_empty_db`,
   `fresh_schema_sql_initializes_current_schema_atomically_and_enforces_append_only`,
+  `fresh_schema_rejects_invalid_proposal_window_detail`,
+  `fresh_schema_rejects_invalid_memory_admission_detail`,
   `exact_legacy_fixture_returns_legacy_v013`,
   `exact_current_schema_returns_current_v020`,
+  `pre_fingerprint_migrated_schema_remains_current_v020`,
   `current_schema_sql_reruns_idempotently_and_preserves_rows_and_objects`,
   `fresh_and_migrated_current_schemas_use_controlled_exact_sql_variants`,
   `current_schema_with_spaced_event_type_literal_is_unknown`,

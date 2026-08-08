@@ -187,12 +187,14 @@ For this semver-corrected follow-up, the repair delta relative to
 - Update `audit.rs` docs, the design doc, the plan doc, and `CHANGELOG.md` to
   say that the durable audit contract is `main.ward_audit`, exact stored
   `main.sqlite_master.sql` equality covers every declared table-level
-  constraint, schema-qualified PRAGMAs are required for durable column/index
-  inspection, the exact durable namespace whitelist applies in every state,
-  temp shadows/reserved temp objects fail closed, guard reads happen under an
-  IMMEDIATE transaction, concurrent init serializes, concurrent second
-  migration callers must reclassify after the legacy guard rejects current, and
-  no whitespace-destroying normalization is allowed.
+  constraint, the current fingerprint preserves the daemon-pinned predecessor's
+  Phase-5 proposal-window and memory-admission CHECK clauses, schema-qualified
+  PRAGMAs are required for durable column/index inspection, the exact durable
+  namespace whitelist includes both append-only and all four authority triggers
+  in every current state, temp shadows/reserved temp objects fail closed, guard
+  reads happen under an IMMEDIATE transaction, concurrent init serializes,
+  concurrent second migration callers must reclassify after the legacy guard
+  rejects current, and no whitespace-destroying normalization is allowed.
 - Document the caller contract explicitly:
   - query `WARD_AUDIT_SCHEMA_STATE_SQL`;
   - initialize on `missing` only;
