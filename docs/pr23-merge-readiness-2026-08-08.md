@@ -96,17 +96,19 @@ Merging is necessary but **not sufficient**. The bead also requires:
 
 *Second reading (wrong):* I found the `.beads/interactions.jsonl` field change at `08:36:05Z` sitting one second from my own merge-readiness `bd comment` at `08:36`, and concluded the likeliest cause was me.
 
-*Final reading (evidence-backed):* **Cody claimed it and is actively working.** A worktree `.worktrees/threads-3jx` on branch `fix/threads-3jx-audit-schema` was created at `03:36–03:38` local — the same minutes as the status flip — and carries live uncommitted changes:
+*Final reading (evidence-backed):* **Cody claimed it and is actively working.** A worktree `.worktrees/threads-3jx` on branch `fix/threads-3jx-audit-schema` was created at `03:36–03:38` local — the same minutes as the status flip — and carries live uncommitted changes. **This is a moving target**; the diff grew while this document was being written:
 
-```
-CHANGELOG.md                                   |  24 +-
-crates/coven-threads-core/src/audit.rs         | 201 ++++++++++++--
-docs/superpowers/plans/...migration-repair.md  |  14 +-
-docs/superpowers/specs/...repair-design.md     |  46 +--
-4 files changed, 226 insertions(+), 59 deletions(-)
-```
+| observed at | diff |
+|---|---|
+| 03:38 | +226 / −59 |
+| 03:52 | +365 / −55 |
+| 04:08 | +370 / −56 |
 
-The `audit.rs` work adds table-level `CHECK` constraints for `proposal_window_opened` (requiring non-null `proposal_id` and a valid `approval_path_label` in JSON `detail`) and revises the fingerprint module docs to state that both accepted `current_v020` table-SQL variants retain the Phase-5 proposal-window and memory-admission constraints, so deployed exact-current stores stay classified `current_v020`.
+Shape at the last observation — `CHANGELOG.md`, `crates/coven-threads-core/src/audit.rs` (the bulk of it), and the apply-audit migration plan and design spec. Nothing committed to that branch yet; its tip is still `87e944b`.
+
+The `audit.rs` work adds table-level `CHECK` constraints for `proposal_window_opened` (requiring non-null `proposal_id` and a valid `approval_path_label` in JSON `detail`) and revises the fingerprint module docs to state that both accepted `current_v020` table-SQL variants retain the Phase-5 proposal-window and memory-admission constraints, so deployed exact-current stores stay classified `current_v020`. Tests visible by name include `fresh_schema_rejects_invalid_proposal_window_detail`, `fresh_schema_rejects_invalid_memory_admission_detail`, and `pre_fingerprint_migrated_schema_remains_current_v020`.
+
+Read by diff surface and test name only. His tests were not run, his logic was not reviewed, and the worktree was not touched.
 
 The timestamp coincidence with my comment was exactly that — a coincidence, within the same minute. My second reading over-corrected: having been wrong once by pointing away from myself, I swung to assuming I was the cause, and that was also wrong. **The worktree is the load-bearing evidence; the `interactions.jsonl` timestamp alone could not distinguish the two explanations.**
 
@@ -115,5 +117,9 @@ Nothing on the board was changed by this note. No bead was claimed or closed by 
 ## Consequence for this packet
 
 The verified results above describe head `87e944b`. **Cody's in-progress work is not in that head.** Once it lands, this packet's test evidence and the requested attestation both apply to a superseded revision and must be re-run against the new head.
+
+The attestation request posted to PR #23 at `08:41Z` named head `87e944b`. It was **withdrawn and re-scoped at `08:53Z`** to target Cody's head instead, with a sixth criterion added for `pre_fingerprint_migrated_schema_remains_current_v020` — whether it covers every shape a real deployed store could be in after the old migration path, or only the fixture shape. That criterion's failure mode is the worst on the list: a live install silently reclassifying as `unknown` and failing closed at daemon startup. It is a case this packet never examined.
+
+**Read this document as a dated baseline snapshot of `87e944b`, not as a merge recommendation for the current state.**
 
 — Echo 🪞
