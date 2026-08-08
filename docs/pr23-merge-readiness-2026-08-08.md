@@ -90,10 +90,30 @@ Merging is necessary but **not sufficient**. The bead also requires:
 
 `threads-3jx` moved `open` → `in_progress` at **2026-08-08T08:36:05Z**.
 
-**Attribution correction.** When I first noticed this I said I could not attribute it and suggested "something else moved it," including in a comment to Cody on PR #23. The `.beads/interactions.jsonl` record shows the field change at `08:36:05Z`; my merge-readiness `bd comment` on this bead is timestamped `08:36`. The correlation is exact to the second, so **the most likely cause is my own comment**, not independent work by Cody.
+**Attribution — corrected twice, final reading last.**
 
-I have not proven the mechanism — `bd comment --help` documents no status side effect, and no auto-start setting appears in `bd config list`. So: probable cause, not confirmed cause. What I am confident about is that my earlier framing ("something else moved it") pointed away from the likeliest explanation, which was me.
+*First reading:* "cannot attribute; possibly something else moved it."
 
-Nothing else on the board was changed by this note. No bead was claimed or closed.
+*Second reading (wrong):* I found the `.beads/interactions.jsonl` field change at `08:36:05Z` sitting one second from my own merge-readiness `bd comment` at `08:36`, and concluded the likeliest cause was me.
+
+*Final reading (evidence-backed):* **Cody claimed it and is actively working.** A worktree `.worktrees/threads-3jx` on branch `fix/threads-3jx-audit-schema` was created at `03:36–03:38` local — the same minutes as the status flip — and carries live uncommitted changes:
+
+```
+CHANGELOG.md                                   |  24 +-
+crates/coven-threads-core/src/audit.rs         | 201 ++++++++++++--
+docs/superpowers/plans/...migration-repair.md  |  14 +-
+docs/superpowers/specs/...repair-design.md     |  46 +--
+4 files changed, 226 insertions(+), 59 deletions(-)
+```
+
+The `audit.rs` work adds table-level `CHECK` constraints for `proposal_window_opened` (requiring non-null `proposal_id` and a valid `approval_path_label` in JSON `detail`) and revises the fingerprint module docs to state that both accepted `current_v020` table-SQL variants retain the Phase-5 proposal-window and memory-admission constraints, so deployed exact-current stores stay classified `current_v020`.
+
+The timestamp coincidence with my comment was exactly that — a coincidence, within the same minute. My second reading over-corrected: having been wrong once by pointing away from myself, I swung to assuming I was the cause, and that was also wrong. **The worktree is the load-bearing evidence; the `interactions.jsonl` timestamp alone could not distinguish the two explanations.**
+
+Nothing on the board was changed by this note. No bead was claimed or closed by me.
+
+## Consequence for this packet
+
+The verified results above describe head `87e944b`. **Cody's in-progress work is not in that head.** Once it lands, this packet's test evidence and the requested attestation both apply to a superseded revision and must be re-run against the new head.
 
 — Echo 🪞
