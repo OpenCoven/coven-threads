@@ -123,3 +123,67 @@ The attestation request posted to PR #23 at `08:41Z` named head `87e944b`. It wa
 **Read this document as a dated baseline snapshot of `87e944b`, not as a merge recommendation for the current state.**
 
 — Echo 🪞
+
+---
+
+## Re-verification at `c102844` — 2026-08-08 17:23Z
+
+The baseline snapshot above describes `87e944b`, which is **superseded**. Cody
+committed and pushed his in-flight work; PR #23 head is now `c102844`. Re-ran
+the full check set against that SHA.
+
+| Check | `87e944b` (baseline) | `c102844` (current) |
+|---|---|---|
+| `cargo test --workspace` | 211 + 17 + 4 + 14, 0 failed | **214** + 17 + 4 + 14, 0 failed |
+| Doc-tests | 1 declared ignore | 1 declared ignore |
+| `cargo fmt --all --check` | clean | clean |
+| `origin/main` is ancestor | yes | yes |
+| `mergeable` / `mergeable_state` | `true` / `clean` | `true` / `clean` |
+| CI at exact SHA | success | success, 09:12:35Z |
+
+The three added tests pass by name: `fresh_schema_rejects_invalid_proposal_window_detail`,
+`fresh_schema_rejects_invalid_memory_admission_detail`,
+`pre_fingerprint_migrated_schema_remains_current_v020`.
+
+### Schema-variant question: resolved
+
+I had flagged that `audit.rs` carries the trigger set twice. Investigated:
+
+- On `main` the two copies are `WARD_AUDIT_MIGRATION_TEMPLATE_SQL` (L707) and
+  `WARD_AUDIT_SCHEMA_SQL` (L952) — migration path vs fresh-install path. All six
+  trigger bodies compared after normalising SQL quote-escaping: **all six match.**
+  No drift.
+- In `c102844`, current is split into three table-SQL variants (fresh, migrated,
+  pre-fingerprint-migrated). The new `CHECK` constraints are present in **all
+  three** with identical counts; legacy correctly carries none. The variants
+  differ only in table-name quoting (fresh vs migrated) and stripped comments
+  (migrated vs pre-fingerprint).
+
+My original framing — that this was a hazard Cody might have missed — was wrong.
+Recorded here rather than dropped.
+
+### One open item, not blocking
+
+Guard strength is asymmetric across the three variants:
+
+- `fresh_and_migrated_current_schemas_use_controlled_exact_sql_variants` is a
+  genuine round-trip — opens connections, runs the migration, asserts stored SQL
+  equals the literal, asserts fresh ≠ migrated. Cannot silently drift.
+- `pre_fingerprint_migrated_schema_remains_current_v020` is four lines against a
+  hand-written fixture const. It proves the fixture classifies as
+  `current_v020`; it does **not** prove the fixture matches what the historical
+  pre-fingerprint migration actually wrote to disk.
+
+Failure mode if the fixture is inaccurate: green CI while a real already-migrated
+install classifies as `unknown` and fails closed at daemon startup. No evidence
+it *is* inaccurate — raised on `threads-3jx` as a question, not a defect.
+
+### Corrections that still stand
+
+- No `APPROVED` review is structurally possible in this repo. The attestation
+  comment is the gate.
+- `cargo clippy -D warnings` fails at `staging.rs:127` for toolchain drift —
+  pre-existing, unrelated to this PR, tracked as `threads-bnu`.
+
+`threads-uqx.9` and `threads-uqx.10` remain ungranted. This is a verification
+record, not a merge decision.
