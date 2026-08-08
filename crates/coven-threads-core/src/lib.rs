@@ -75,10 +75,11 @@ pub use approval::{
     SurfaceRegionId, VetoWindow, WindowCloseReason,
 };
 pub use audit::{
-    ward_audit_migration_sql, ward_audit_schema_action, AuditEventType,
-    MemoryEntryAdmissionAuditDetail, PrincipalAuthorizedWriteAuditDetail, WardAuditRecord,
-    WardAuditSchemaAction, WARD_AUDIT_SCHEMA_SQL, WARD_AUDIT_SCHEMA_VERSION,
-    WARD_AUDIT_STAMP_V020_SQL,
+    AuditEventType, MemoryEntryAdmissionAuditDetail, PrincipalAuthorizedWriteAuditDetail,
+    WardAuditRecord, APPLY_AUDIT_DETAIL_KEY_BYTES, APPLY_AUDIT_DETAIL_KEY_PREV,
+    WARD_AUDIT_MIGRATION_V020_SQL, WARD_AUDIT_SCHEMA_SQL, WARD_AUDIT_SCHEMA_STATE_CURRENT_V020,
+    WARD_AUDIT_SCHEMA_STATE_LEGACY_V013, WARD_AUDIT_SCHEMA_STATE_MISSING,
+    WARD_AUDIT_SCHEMA_STATE_SQL, WARD_AUDIT_SCHEMA_STATE_UNKNOWN,
 };
 pub use channel::Channel;
 pub use fray::{FrayOrSnap, FrayReason, SnapReason};
