@@ -1,0 +1,10 @@
+# PAIRED PIN — change this file and .github/workflows/ci.yml together.
+#
+# This channel must stay identical to the `dtolnay/rust-toolchain@<version>`
+# pin in .github/workflows/ci.yml, and consistent with `rust-version` in
+# Cargo.toml. If they diverge, local `cargo clippy -- -D warnings` and the CI
+# clippy gate silently produce different verdicts on the same commit, which is
+# harder to detect than having no pin at all.
+[toolchain]
+channel = "1.88.0"
+components = ["rustfmt", "clippy"]
