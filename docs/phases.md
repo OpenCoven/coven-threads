@@ -2,7 +2,7 @@
 
 > This page is the honest status ledger. Labels used throughout: `[FROZEN]` (design complete and change-controlled), `[MERGED]` (landed on the `main` branch of a downstream system that will call this crate at runtime once cut into a release; buildable and integration-tested but **not in a released binary** yet), `[RELEASED]` (in a tagged downstream release users can install), `[ENGINEERING FROZEN]` (code complete, tests green, awaiting one named decision to reach a deployed system), `[ACTIVE]` (open engineering phase with in-flight beads), `[BLOCKED]` (waiting on a named decision), `[NOT STARTED]`.
 >
-> The one-sentence truth: **phases 0–4 are frozen, Phase 5 (approval semantics) is active, everything downstream is merged but not in a released binary — no enforcement exists anywhere in production.** No released daemon in the wild calls this code. If a doc or deck implies otherwise, this page wins.
+> The one-sentence truth: **phases 0–4 are frozen, Phase 5 (approval semantics) is active but its sign-off gate was refused on 2026-07-29 and the four named remediation beads are still open and unclaimed, everything downstream is merged but not in a released binary — no enforcement exists anywhere in production.** No released daemon in the wild calls this code. If a doc or deck implies otherwise, this page wins.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
@@ -60,11 +60,26 @@ Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built f
 - **Classification and scheduling are daemon-owned.** The crate defines the types and predicates; the daemon classifies, schedules, and applies.
 - **Identity invariants are predicate-authoritative** (the descriptor-vs-predicate rule from [concepts.md](concepts.md) applies here too).
 
-**Ledger, as of 2026-07-21:**
+**Ledger, as of 2026-08-09:**
 
-- **Closed:** `.3` core approval types — `ApprovalPath`, `ApprovalPathKind`, `VetoWindow`, `ProposalClassification` (`approval.rs`); `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`); `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`); `.6` delayed-apply scheduler + audit — implemented **daemon-side in coven PR #430** (daemon-owned classification and scheduler, deadline/minimum-visible revalidation, fail-closed committed-evidence replay, cross-platform conditional atomic writes, startup recovery); `.11` authority review findings resolved.
-- **In progress:** `.7` Cave veto-window contract (coven-cave); `.12` RFC-0001 approval-tier alignment (familiar-contract PRs #3/#4 — gated on Nova+Val approval and merge).
-- **Open:** `.2` RFC closure/provenance amendments; `.13` authorized retired-Ward migration fixture; `.8` implementation and migration fidelity; `.9` Nova coherence sign-off gate; `.10` Val freeze gate. Related: `threads-3xd` — RFC-0001 amendments (§5.5 closure precondition + §4.2 predicate (iv) provenance).
+- **Closed:** `.3` core approval types — `ApprovalPath`, `ApprovalPathKind`, `VetoWindow`, `ProposalClassification` (`approval.rs`); `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`); `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`); `.6` delayed-apply scheduler + audit — implemented **daemon-side in coven PR #430** (daemon-owned classification and scheduler, deadline/minimum-visible revalidation, fail-closed committed-evidence replay, cross-platform conditional atomic writes, startup recovery); `.11` authority review findings resolved; `.2` RFC closure/provenance amendments; `.7` Cave veto-window contract; `.8` implementation and migration fidelity; `.12` RFC-0001 approval-tier alignment; `.13` authorized retired-Ward migration fixture. The proposal/decision-record PR #6 merged 2026-07-27 as `091607f`.
+- **Open — and this is the whole of Phase 5's remaining state:** `.9` Nova coherence sign-off gate and `.10` Val freeze gate. Both are human gates that agents must never simulate. Related: `threads-3xd` — RFC-0001 amendments (§5.5 closure precondition + §4.2 predicate (iv) provenance).
+
+**Nova's sign-off is BLOCKED, not pending (2026-07-29).** This is the single most important fact about Phase 5 and it is easy to miss from the bead counts alone. Nova ran independent core and integration reviews against coven `f3cd322`, coven-threads `091607f`, merged coven PRs #430/#464, merged Cave PRs #3581/#3628, and familiar-contract PRs #3/#4, and **refused sign-off**. The design choices were explicitly affirmed as coherent — Channel and `ApprovalPath` remain separate axes, delayed apply is correct, Cave stays thin and fail-closed. What blocks is implementation, in five named beads:
+
+| Bead | Blocking finding | Status |
+|---|---|---|
+| `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
+| `threads-okc` | identity predicates not wired into daemon mutation/replay; accepted migrated invariants remain backup-only | open, unclaimed |
+| `threads-980` | opened veto windows can reach rejection branches with no typed close detail | open, unclaimed |
+| `threads-dgg` | protected `SOUL.md` changes still stage/approve through a proposal route, contrary to RFC-0001 §5.4 | open, unclaimed |
+| `threads-zav` | retired-Ward corpus does not prove end-to-end schedulability | open, unclaimed |
+
+**Re-verified 2026-08-09 (Echo):** all four open blockers are **still true** against current coven `main` `59c5be4` — 129 commits after the commit Nova reviewed. None of the four has been claimed or started, and none of the relevant code paths changed in that range. Nova's findings transfer verbatim to current code; she does not need to re-review. Evidence with file:line is recorded on `threads-uqx.9`. Caveat stated there and repeated here: that was static verification (code read against the recorded claims), not a test run.
+
+So Phase 5 is `[ACTIVE]` in name but **stalled on unclaimed remediation work**, not on either human gate. `.10` cannot ripen until `.9` clears, and `.9` cannot clear until the four beads close.
+
+**Related open beads not in the gate chain** (none block `.9`): `threads-xpo` `Channel::Deliberate` is unreachable from the daemon; `threads-55s` record channel on `memory_entry_admitted` rows (blocked by `xpo`); `threads-ot6` promotion-write ↔ weave seam contract (draft PR #25, awaiting Cody); `threads-76z` schema permits an unapprovable proposal the Rust types forbid (awaiting a Nova ruling); `threads-bnu` unpinned local Rust toolchain; `threads-t6t` no secret-scanning CI; `threads-5rr` familiar inbox + handoff ledger.
 
 ## Summary table
 
@@ -75,7 +90,7 @@ Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built f
 | 2 | Daemon integration | `[MERGED, NOT RELEASED]`, `.14` + `.20` + `.19` closed; PR #382 merged 2026-07-15 as commit `f745117`; next coven release will include it (current release `v0.0.54` predates the merge) | — (release-cut) |
 | 3 | Portability format | `[ENGINEERING FROZEN]`, `.21` + `.16` closed; envelope `[DECIDED: Shape B + lossy .af export]` | follow-up `threads-jq4` (exporter) |
 | 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`, epic `threads-986.17` closed; coven-cave PR #3223 merged (18 checks green, `test:app` 740/740); Charm `.17.7`, Nova `.17.8`, Val `.17.10` + `.17.9` gates passed; post-freeze `threads-k9s` closed (coven PR #422 + coven-cave PR #3415) | follow-up `threads-v3g` (daemon endpoints + adapter flip) |
-| 5 | Approval semantics | `[ACTIVE]` since 2026-07-18, epic `threads-uqx`; `.3`/`.4`/`.5`/`.6` (coven PR #430)/`.11` closed; `.7` + `.12` in progress; `.2`/`.13`/`.8` open | Nova sign-off (`.9`) → Val freeze (`.10`) |
+| 5 | Approval semantics | `[ACTIVE]` since 2026-07-18 — but **sign-off refused 2026-07-29** and no remediation work is claimed. Epic `threads-uqx`; `.2`–`.8`/`.11`/`.12`/`.13` closed; **only `.9` + `.10` remain**. Nova named five implementation blockers; `threads-3jx` closed, and `threads-okc`/`980`/`dgg`/`zav` are open and unclaimed (all four re-verified still true 2026-08-09 vs coven `59c5be4`) | close the four remediation beads → Nova sign-off (`.9`) → Val freeze (`.10`) |
 
 ## Known housekeeping discrepancies
 
@@ -83,3 +98,5 @@ Tracked in `docs/STATUS-2026-07-15.md` and worth knowing when reading the repo:
 
 - **License mismatch:** the design doc and README say *Apache-2.0 (planned)*; the committed `LICENSE` file is MIT (with a separate `PATENTS` file). Needs a deliberate reconciliation; until then, treat the license as unsettled.
 - **`.bak` files in `specs/`:** three pre-freeze backups sit beside the frozen doc; git history already preserves them.
+- **`PHASE-0-DESIGN.md` §9 is headed "Open questions (need resolution before v0.2 freeze)" — but v0.2 froze on 2026-07-14 with all four still listed.** Recorded here rather than fixed, because the design doc is frozen and change-controlled; this page describes it and does not amend it. Three of the four were settled by events after the freeze: §9.2 (Phase 2 daemon-integration ownership) resolved when Phase 2 merged as coven PR #382; §9.3 (portability format Shape A vs B) resolved 2026-07-15 as **Shape B**, recorded in `specs/PHASE-3-PORTABILITY.md` §6; §9.4 (Phase 4 UI/UX) resolved by `specs/PHASE-4-CAVE-SURFACES.md` and the 2026-07-17 Phase 4 freeze. §9.1 (whether federation forces a fourth `fabric` level) is genuinely still open and still correctly deferred. The heading is what is stale, not the content — a reader who trusts it will think four live blockers stand in front of a freeze that already happened.
+- **`Channel::Deliberate` is specified but unreachable.** `PHASE-0-DESIGN.md` §2.4 and non-negotiable #4 (the two-compaction contract) treat `Deliberate` and `Forced` as distinct channels with distinct survival requirements. `Forced` is woven into the daemon's `PROTECTED_CHANNELS`; `Deliberate` is referenced nowhere in coven, and every channel value the daemon constructs is a hardcoded `Channel::Mutation`. Tracked as `threads-xpo`. Relevant when reading §2.4 or the promotion-write seam contract, both of which describe intent that no code path can currently express.
