@@ -1069,7 +1069,9 @@ WHEN NEW.event_type = ''proposal_approved''
             AND json_type(NEW.detail, ''$.window_close'') IS NOT ''object''
         )
         OR (
-            EXISTS (
+            json_extract(NEW.detail, ''$.approval_path_label'')
+                NOT IN (''human_review'',''human_required'')
+            AND EXISTS (
                 SELECT 1 FROM ward_audit
                 WHERE proposal_id = NEW.proposal_id
                   AND event_type = ''proposal_window_opened''
@@ -1377,7 +1379,9 @@ WHEN NEW.event_type = 'proposal_approved'
             AND json_type(NEW.detail, '$.window_close') IS NOT 'object'
         )
         OR (
-            EXISTS (
+            json_extract(NEW.detail, '$.approval_path_label')
+                NOT IN ('human_review','human_required')
+            AND EXISTS (
                 SELECT 1 FROM ward_audit
                 WHERE proposal_id = NEW.proposal_id
                   AND event_type = 'proposal_window_opened'
@@ -1725,7 +1729,9 @@ WHEN NEW.event_type = 'proposal_approved'
             AND json_type(NEW.detail, '$.window_close') IS NOT 'object'
         )
         OR (
-            EXISTS (
+            json_extract(NEW.detail, '$.approval_path_label')
+                NOT IN ('human_review','human_required')
+            AND EXISTS (
                 SELECT 1 FROM ward_audit
                 WHERE proposal_id = NEW.proposal_id
                   AND event_type = 'proposal_window_opened'
@@ -3622,6 +3628,65 @@ END;
             .expect_err("invalid proposal window detail must fail at the store boundary");
 
         assert!(error.to_string().contains("CHECK constraint failed"));
+    }
+
+    #[test]
+    fn human_review_approval_permits_null_window_close_when_window_row_exists() {
+        // Regression test for threads-76z. Before the fix, the window-exists
+        // clause on ward_audit_require_proposal_approval_detail_insert required
+        // window_close to be an object for ANY proposal_approved row once a
+        // proposal_window_opened row existed for that proposal_id, while the
+        // human-path clause immediately above it required window_close to be
+        // null for human_review/human_required. The two clauses were mutually
+        // exclusive for a human-labelled proposal carrying a window row,
+        // making it unapprovable by any detail shape (terminal and silent).
+        // The window-exists clause is now gated on non-human approval paths,
+        // so this insert must succeed.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(WARD_AUDIT_SCHEMA_SQL).unwrap();
+
+        let window_detail = serde_json::json!({
+            "approval_path_label": "human_review",
+            "deadline": "2026-07-01T00:00:01Z",
+            "earliest_close": "2026-07-01T00:00:00Z",
+            "evidence_replay_hash_hex": "a".repeat(64),
+            "affected_regions": Vec::<String>::new(),
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO ward_audit (
+                event_type, proposal_id, familiar_id, ward_hash, decision, detail,
+                files_touched, submitted_at, decided_at
+             ) VALUES (
+                'proposal_window_opened', ?1, 'sage', X'00', 'pending', ?2,
+                '[]', '2026-07-01T00:00:00Z', '2026-07-01T00:00:01Z'
+             )",
+            params!["proposal-1", window_detail],
+        )
+        .unwrap();
+
+        let approval_detail = serde_json::json!({
+            "approval_path_label": "human_review",
+            "rationale": null,
+            "window_close": null,
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO ward_audit (
+                event_type, proposal_id, familiar_id, ward_hash, decision, approver,
+                detail, files_touched, submitted_at, decided_at
+             ) VALUES (
+                'proposal_approved', ?1, 'sage', X'00', 'applied', 'principal:val',
+                ?2, '[]', '2026-07-01T00:00:02Z', '2026-07-01T00:00:03Z'
+             )",
+            params!["proposal-1", approval_detail],
+        )
+        .expect(
+            "human_review approval with window_close=null must succeed even when \
+             a proposal_window_opened row exists for the proposal",
+        );
     }
 
     #[test]
