@@ -1,0 +1,76 @@
+schema_version: opencoven.agent-repo/v1alpha1
+
+repository:
+  role: protected-authority-validator
+  lifecycle: active
+  canonical_for:
+    - threads.protected-mutation-verdict
+    - threads.weave-validation
+    - threads.ward-audit-schema
+    - threads.portability-conformance
+  explicitly_not_canonical_for:
+    - familiar.identity-definition
+    - principal.credential-management
+    - daemon.persistence
+    - orchestration.lifecycle
+    - product.rendering
+  owners:
+    - github: BunsDev
+
+risk:
+  class: R4
+  rationale: >-
+    Changes can alter identity-protection, authorization, audit, migration,
+    portability, or release semantics. Unknown inputs and ambiguous authority
+    must fail closed.
+  protected_paths:
+    - crates/coven-threads-core/src/approval.rs
+    - crates/coven-threads-core/src/audit.rs
+    - crates/coven-threads-core/src/identity_invariants.rs
+    - crates/coven-threads-core/src/portability.rs
+    - crates/coven-threads-core/src/staging.rs
+    - crates/coven-threads-core/src/surface_regions.rs
+    - crates/coven-threads-core/src/validate.rs
+    - specs/**
+    - .github/workflows/**
+    - agent/manifest.yaml
+    - e2e/**
+  generated_paths: []
+  network_policy: bootstrap-only
+  secrets_policy: forbidden-in-repository
+  external_side_effects:
+    - release
+    - downstream-daemon-dispatch
+    - protected-surface-mutation
+
+agent:
+  entrypoint: AGENTS.md
+  bootstrap: bash scripts/agent-bootstrap.sh
+  verify:
+    fast: bash scripts/agent-check.sh fast
+    full: bash scripts/agent-check.sh full
+  completion_evidence:
+    - objective-and-non-goals
+    - exact-files-touched
+    - exact-verification-commands
+    - authority-and-migration-impact
+    - cross-repository-canary-status
+    - rollback-and-residual-risk
+
+contracts:
+  consumes:
+    - familiar-contract/RFC-0001
+  produces:
+    - coven-threads-core/0.2
+    - ward-audit/current_v020
+    - weave-portability/v1
+  runtime_authority:
+    repository: OpenCoven/coven
+    relationship: daemon-imports-validator-and-owns-effects
+  downstream_consumers:
+    - OpenCoven/coven
+    - OpenCoven/coven-cave
+    - OpenCoven/coven-memory
+    - OpenCoven/psyche
+    - OpenCoven/sdk
+  compatibility_manifest: e2e/compatibility.toml
