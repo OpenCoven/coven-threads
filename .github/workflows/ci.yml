@@ -8,19 +8,81 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    name: cargo test (workspace)
+  quality:
+    name: Rust quality and repository contract
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Format check
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - name: Tests
+      - name: Fast agent-ready gate
+        run: bash scripts/agent-check.sh fast
+
+  cargo-test:
+    name: Cargo test (compatibility baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Unit, integration, conformance, and documentation tests
         run: cargo test --locked --workspace
+
+  nextest:
+    name: Nextest telemetry (JUnit, fail on flaky)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+      - name: Run tests with observable retry semantics
+        run: cargo nextest run --locked --workspace --profile ci
+      - name: Upload Nextest JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-junit
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  coverage:
+    name: Coverage baseline (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate LCOV baseline
+        run: >-
+          cargo llvm-cov
+          --locked
+          --workspace
+          --lcov
+          --output-path lcov.info
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage
+          path: lcov.info
+          if-no-files-found: warn
+          retention-days: 14
