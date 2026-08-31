@@ -1,0 +1,16 @@
+# Default accountable maintainer
+* @BunsDev
+
+# R4 authority, identity-protection, audit, migration, and portability surfaces
+/crates/coven-threads-core/src/approval.rs @BunsDev
+/crates/coven-threads-core/src/audit.rs @BunsDev
+/crates/coven-threads-core/src/identity_invariants.rs @BunsDev
+/crates/coven-threads-core/src/portability.rs @BunsDev
+/crates/coven-threads-core/src/staging.rs @BunsDev
+/crates/coven-threads-core/src/surface_regions.rs @BunsDev
+/crates/coven-threads-core/src/validate.rs @BunsDev
+/specs/ @BunsDev
+/.github/workflows/ @BunsDev
+/agent/manifest.yaml @BunsDev
+/e2e/ @BunsDev
+/docs/testing/ @BunsDev
