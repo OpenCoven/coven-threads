@@ -61,6 +61,19 @@ export class AuthorityError extends Error {
   }
 }
 
+function validateGenericEvidenceScopes(capabilities, scopes, principalId, path) {
+  if (!capabilities.includes("evidence.read")) return;
+  for (const [index, scope] of scopes.entries()) {
+    if (scope.kind === "evidence" && scope.principal_id !== principalId) {
+      fail(
+        "evidence_scope_cross_principal_forbidden",
+        "generic evidence.read is self-only; cross-principal reads require AutomationEvidenceRead auditor authority",
+        `${path}[${index}].principal_id`,
+      );
+    }
+  }
+}
+
 function fail(code, message, path = "$") {
   throw new AuthorityError(code, message, path);
 }
@@ -275,8 +288,46 @@ export function canonicalDigest(value, domain) {
 }
 
 function normalizeKeyring(keyring) {
-  if (keyring instanceof Map) return keyring;
-  return new Map(Object.entries(keyring ?? {}));
+  const normalized =
+    keyring instanceof Map ? keyring : new Map(Object.entries(keyring ?? {}));
+  const identityRoles = new Set(["principal", "protected_owner", "auditor"]);
+  for (const [keyId, record] of normalized) {
+    requireString(keyId, "$.keyring.key_id");
+    requireObject(record, `$.keyring.${keyId}`);
+    requireString(record.role, `$.keyring.${keyId}.role`);
+    if (
+      !["threads_authority", ...identityRoles].includes(record.role)
+    ) {
+      fail(
+        "integrity_role_unknown",
+        `unknown keyring role ${record.role}`,
+        `$.keyring.${keyId}.role`,
+      );
+    }
+    if (
+      identityRoles.has(record.role) &&
+      (typeof record.principal_id !== "string" ||
+        record.principal_id.length === 0)
+    ) {
+      fail(
+        "integrity_principal_id_missing",
+        `${record.role} key ${keyId} must bind an exact principal_id`,
+        `$.keyring.${keyId}.principal_id`,
+      );
+    }
+    if (identityRoles.has(record.role)) {
+      ensureUnicodeScalarString(
+        record.principal_id,
+        `$.keyring.${keyId}.principal_id`,
+      );
+    }
+  }
+  return normalized;
+}
+
+export function validateKeyring(keyring) {
+  normalizeKeyring(keyring);
+  return { ok: true };
 }
 
 function keyObject(record) {
@@ -710,6 +761,12 @@ export function validateAuthorizationRequest(value, { keyring } = {}) {
   }
   validateScopes(value.scopes);
   validateCapabilityScopePairing(value.requested_capabilities, value.scopes);
+  validateGenericEvidenceScopes(
+    value.requested_capabilities,
+    value.scopes,
+    value.principal.id,
+    "$.scopes",
+  );
 
   required(value.context, ["project_id", "workspace_id", "runtime"], "$.context");
   closed(value.context, ["project_id", "workspace_id", "runtime"], "$.context");
@@ -760,7 +817,7 @@ export function validateAuthorizationRequest(value, { keyring } = {}) {
   );
   validateIntegrityShape(value.integrity);
   const key = verifySignedArtifact(value, DOMAIN.request, keyring);
-  if (key.principal_id && key.principal_id !== value.principal.id) {
+  if (key.principal_id !== value.principal.id) {
     fail("principal_key_mismatch", "request signing key belongs to another principal");
   }
   if (key.role !== "principal") {
@@ -869,6 +926,12 @@ function validateRecurringGrant(grant, index) {
   );
   validateCapabilities(grant.capabilities, `${path}.capabilities`);
   validateScopes(grant.scopes, `${path}.scopes`);
+  validateGenericEvidenceScopes(
+    grant.capabilities,
+    grant.scopes,
+    grant.principal_id,
+    `${path}.scopes`,
+  );
   requireTimestamp(grant.expires_at, `${path}.expires_at`);
   requireInteger(grant.max_uses, `${path}.max_uses`, 1);
   requireInteger(grant.uses, `${path}.uses`, 0);
@@ -1267,6 +1330,12 @@ export function validateDecision(value, { keyring } = {}) {
     requireString(denial.reason_code, `${path}.reason_code`);
   });
   validateScopesOrEmpty(value.scopes, "$.decision.scopes");
+  validateGenericEvidenceScopes(
+    value.granted_capabilities,
+    value.scopes,
+    value.bindings.principal_id,
+    "$.decision.scopes",
+  );
   required(value.validity, ["not_before", "not_after"], "$.decision.validity");
   closed(value.validity, ["not_before", "not_after"], "$.decision.validity");
   requireTimestamp(value.validity.not_before, "$.decision.validity.not_before");
@@ -1586,6 +1655,12 @@ export function validateApproval(value, { keyring, now } = {}) {
   }
   validateCapabilities(value.capabilities, "$.capabilities");
   validateScopes(value.scopes);
+  validateGenericEvidenceScopes(
+    value.capabilities,
+    value.scopes,
+    value.authorized_principal_id,
+    "$.scopes",
+  );
   requireString(value.project_id, "$.project_id");
   requireString(value.workspace_id, "$.workspace_id");
   requireString(value.runtime_id, "$.runtime_id");
@@ -1654,7 +1729,7 @@ export function validateApproval(value, { keyring, now } = {}) {
   if (!["principal", "protected_owner"].includes(key.role)) {
     fail("integrity_role_mismatch", "approval must be signed by a principal authority key");
   }
-  if (key.principal_id && key.principal_id !== value.approving_principal.id) {
+  if (key.principal_id !== value.approving_principal.id) {
     fail("approval_principal_mismatch", "approval key belongs to another principal");
   }
   if (value.integrity.key_id !== value.approving_principal.key_ref) {

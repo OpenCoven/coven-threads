@@ -1320,6 +1320,42 @@
       }
     },
     {
+      "id": "17-keyring-principal-approval-missing-principal-id",
+      "category": 17,
+      "kind": "negative",
+      "file": "17-keyring-principal-approval-missing-principal-id.json",
+      "operation": "validate_approval",
+      "expected": {
+        "ok": false,
+        "error_code": "integrity_principal_id_missing",
+        "outcome": null
+      }
+    },
+    {
+      "id": "17-keyring-principal-request-missing-principal-id",
+      "category": 17,
+      "kind": "negative",
+      "file": "17-keyring-principal-request-missing-principal-id.json",
+      "operation": "validate_request",
+      "expected": {
+        "ok": false,
+        "error_code": "integrity_principal_id_missing",
+        "outcome": null
+      }
+    },
+    {
+      "id": "17-keyring-protected-owner-missing-principal-id",
+      "category": 17,
+      "kind": "negative",
+      "file": "17-keyring-protected-owner-missing-principal-id.json",
+      "operation": "validate_approval",
+      "expected": {
+        "ok": false,
+        "error_code": "integrity_principal_id_missing",
+        "outcome": null
+      }
+    },
+    {
       "id": "17-lifecycle-summary-cannot-authorize-dispatch",
       "category": 17,
       "kind": "negative",
@@ -1472,6 +1508,30 @@
       "expected": {
         "ok": false,
         "error_code": "evidence_sensitivity_unknown",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-generic-cross-principal-evidence-dispatch",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-generic-cross-principal-evidence-dispatch.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_scope_cross_principal_forbidden",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-keyring-auditor-missing-principal-id",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-keyring-auditor-missing-principal-id.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "integrity_principal_id_missing",
         "outcome": null
       }
     },

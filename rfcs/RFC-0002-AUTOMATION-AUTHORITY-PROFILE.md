@@ -52,6 +52,11 @@ RFC 3339 UTC timestamps are component-validated without calendar
 normalization. Evidence reads reject missing or unknown sensitivity and
 retention metadata before authorization comparisons.
 
+Identity-bearing principal, protected-owner, and auditor keys always carry an
+exact `principal_id`; omission never means wildcard identity. Generic
+`evidence.read` authority is self-only. Cross-principal evidence access is
+available only through the dedicated signed auditor flow.
+
 ## Ownership
 
 Threads owns classification, capability/scope semantics, decision and approval

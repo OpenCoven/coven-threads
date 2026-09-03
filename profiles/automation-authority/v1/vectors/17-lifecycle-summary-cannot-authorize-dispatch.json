@@ -76,7 +76,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
-      "signature_b64": "kDp7Khfz1uMZoIT95tX8GgyJUP5HaNbP3xoTH5z4K/1VkkuCmlM37P0+quHjFj++EBjKDdv+PAeCO3d0zfw7DA=="
+      "signature_b64": "H43pA0VgSgFoO1VE9jOW2gCYUHgZdZgk4wa3G/BbZfyhyyKNf6xDIqd+Ym1cQtDDxrN+uTxJvwE7CN90t8q5CQ=="
     }
   },
   "decision": {
@@ -153,7 +153,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
-      "signature_b64": "1eMx/IGPW1c4shJj/uKf11jSf6M8oWDEg1wAYommLEM4s2PwX1FtVkCMJp71jpf0PvOW+N/tO3UDUVTHEyOfBQ=="
+      "signature_b64": "2+v5xLlZfOaoHwQLBUz8Vt1FOw/SEtfPklYOfZrdwD+g8z/2WLXs8oGnI0aEIC8CntdSnkCFCToVKiCiMDnKDQ=="
     }
   },
   "approval": {
@@ -218,7 +218,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
-      "signature_b64": "aPN/0jXWozdIwrXBromxDjsMkXLhlHLpB6zkl3u6Pc0h4QvyOX9ANxdFLaz7wijhKX0zqPE9Qamts66gUGrXBQ=="
+      "signature_b64": "4IOeEkmzNASmmRLPTLKf33NPZF1pXgnTUy4VFbvKvdkE9bQelaYmo5BwCviLIbSsm6FYycucYzuPenr0/4rwAA=="
     }
   },
   "events": [],
@@ -249,7 +249,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "00b4015ad2bce043719b45c21d2161cfdd8e55b69bcedc3c5ceb0e17c7d50e68",
-      "signature_b64": "mz+fdfglxMes/as6YRUfhhTZ2Rm/VUbjZCHY6sxzcmSHdwy1rL0HQf5bAbGj+48cuOI9S2Df7PzsmFiZcMfrBA=="
+      "signature_b64": "dltt/7AS+5zZar6MEkjJVj82TKAS7rxchYAt5yMfnFxId8aX/SxJwRKfq/gNjOs50iBCcAxY/g3EQT9CeJV3BA=="
     }
   },
   "snapshot": {

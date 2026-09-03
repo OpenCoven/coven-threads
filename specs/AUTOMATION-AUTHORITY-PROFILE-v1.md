@@ -103,6 +103,11 @@ lifecycle events MUST authenticate Threads authority. Approvals MUST
 authenticate the named approving principal/key. The repository keyring is
 synthetic conformance material and contains public keys only.
 
+Every identity-bearing keyring role (`principal`, `protected_owner`, and
+`auditor`) MUST carry a non-empty exact `principal_id`. Its omission is invalid,
+not a wildcard identity. Request, approval, and evidence-read authentication
+compare that keyring identity exactly to the signed artifact.
+
 `signature_b64` is canonical padded Base64: exactly 88 characters for a
 64-byte Ed25519 signature, ending in `==`, with no whitespace or alternate
 encoding. Decoders MUST reject any spelling that does not decode and re-encode
@@ -384,6 +389,12 @@ before any clearance or retention comparison.
 The validator requires trusted `now`; a token is refused before `issued_at` and
 at or after `expires_at`.
 
+The generic `evidence.read` capability is self-only: every evidence scope's
+`principal_id` must equal the authenticated authorization-request principal.
+No approval can widen that scope to another principal. Cross-principal reads
+must use the dedicated signed `AutomationEvidenceRead` flow and an `auditor`
+key whose own `principal_id` is present and exact.
+
 Evidence history is append-only. Revocation or expiry adds evidence; it never
 rewrites or deletes the immutable authorization artifacts. Retention enforcement
 is Coven's storage lane, not a client or Cave decision.
@@ -399,7 +410,7 @@ The reference validator emits stable codes, including:
 - `scope_too_broad`, `scope_kind_unknown`;
 - `integrity_key_unknown`, `integrity_role_mismatch`,
   `integrity_digest_mismatch`, `integrity_signature_invalid`,
-  `integrity_signature_noncanonical`;
+  `integrity_signature_noncanonical`, `integrity_principal_id_missing`;
 - `request_replayed`, `decision_replayed`, `approval_replayed`;
 - `policy_stale`, `manifest_stale`, `previous_approval_stale`;
 - `decision_semantic_mismatch`, `decision_binding_mismatch`,
@@ -420,8 +431,8 @@ The reference validator emits stable codes, including:
   `proposal_success_forged`;
 - `evidence_read_unauthorized`, `evidence_sensitivity_denied`,
   `evidence_retention_denied`, `evidence_sensitivity_unknown`,
-  `evidence_retention_unknown`, `evidence_read_not_yet_valid`,
-  `evidence_read_expired`.
+  `evidence_retention_unknown`, `evidence_scope_cross_principal_forbidden`,
+  `evidence_read_not_yet_valid`, `evidence_read_expired`.
 
 The manifest pins the exact expected code for every negative vector. Consumers
 may add diagnostics, but must not reinterpret a named failure as success.

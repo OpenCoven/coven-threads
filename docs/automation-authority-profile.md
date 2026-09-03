@@ -23,6 +23,9 @@ signed consumption evidence and a bounded usage counter.
 Request, decision, and current runtime capability snapshots must match exactly.
 Evidence with missing or unknown sensitivity/retention metadata fails closed,
 and impossible UTC calendar timestamps are rejected rather than normalized.
+Principal, protected-owner, and auditor keys always bind an exact principal ID.
+Generic `evidence.read` scopes can name only the authenticated request
+principal; cross-principal reads use the dedicated signed auditor flow.
 
 ## Why proposal-only matters
 
@@ -34,7 +37,7 @@ new adoption decision before execution.
 ## Portable artifacts
 
 The versioned schemas, validator, public conformance keyring, exact manifest,
-and 122 vectors are under
+and 127 vectors are under
 [`profiles/automation-authority/v1/`](../profiles/automation-authority/v1/).
 The normative contract is
 [`specs/AUTOMATION-AUTHORITY-PROFILE-v1.md`](../specs/AUTOMATION-AUTHORITY-PROFILE-v1.md).

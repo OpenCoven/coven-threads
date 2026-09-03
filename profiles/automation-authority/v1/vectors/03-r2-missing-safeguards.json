@@ -73,7 +73,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "593e9de13eb6fbfa91ad32d5b9045dae773c0085edc3677b82c49d7b47cd0c26",
-      "signature_b64": "HE2tOlh/GLOiiZ5z8z4hWcMSay2LuIAfSyInY3/rKWrdiqsvTai650SUbPGeETajRbRbUq93tiaPZczXxKhVBA=="
+      "signature_b64": "vqnqgUPpVWtl4Q5ixJaIcZoE+b/AQWZAOgpyKpQCGABzCEmcN6gdLjEMPl9Wbij3RM5VrMcLKuk3DGShYhonBQ=="
     }
   }
 }

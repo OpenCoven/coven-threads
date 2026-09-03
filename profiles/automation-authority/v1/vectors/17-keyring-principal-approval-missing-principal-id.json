@@ -64,5 +64,8 @@
       "signature_b64": "4IOeEkmzNASmmRLPTLKf33NPZF1pXgnTUy4VFbvKvdkE9bQelaYmo5BwCviLIbSsm6FYycucYzuPenr0/4rwAA=="
     }
   },
-  "now": ""
+  "keyring_mutation": {
+    "key_id": "key:principal:alice",
+    "remove": "principal_id"
+  }
 }

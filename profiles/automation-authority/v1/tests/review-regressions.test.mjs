@@ -259,3 +259,69 @@ test("timestamps reject impossible UTC calendar dates", () => {
     );
   }
 });
+
+test("identity-bearing keyring roles require an exact principal_id", () => {
+  assert.equal(typeof profile.validateKeyring, "function");
+  for (const [file, invoke] of [
+    [
+      "vectors/17-keyring-principal-request-missing-principal-id.json",
+      (vector, alteredKeyring) =>
+        profile.validateAuthorizationRequest(vector.request, {
+          keyring: alteredKeyring,
+        }),
+    ],
+    [
+      "vectors/17-keyring-principal-approval-missing-principal-id.json",
+      (vector, alteredKeyring) =>
+        profile.validateApproval(vector.approval, { keyring: alteredKeyring }),
+    ],
+    [
+      "vectors/17-keyring-protected-owner-missing-principal-id.json",
+      (vector, alteredKeyring) =>
+        profile.validateApproval(vector.approval, { keyring: alteredKeyring }),
+    ],
+    [
+      "vectors/18-keyring-auditor-missing-principal-id.json",
+      (vector, alteredKeyring) =>
+        profile.authorizeEvidenceRead(vector.read, vector.evidence, {
+          keyring: alteredKeyring,
+          now: vector.now,
+        }),
+    ],
+  ]) {
+    const vector = read(file);
+    const alteredKeyring = new Map(
+      [...keyring].map(([id, record]) => [id, structuredClone(record)]),
+    );
+    delete alteredKeyring.get(vector.keyring_mutation.key_id).principal_id;
+    assert.throws(
+      () => invoke(vector, alteredKeyring),
+      (error) =>
+        error instanceof profile.AuthorityError &&
+        error.code === "integrity_principal_id_missing",
+    );
+  }
+});
+
+test("generic evidence.read cannot cross principals through approval and dispatch", () => {
+  const vector = read("vectors/18-generic-cross-principal-evidence-dispatch.json");
+  assert.throws(
+    () =>
+      profile.verifyDispatch(
+        {
+          request: vector.request,
+          decision: vector.decision,
+          approval: vector.approval,
+          approval_authorization_request: null,
+          approval_authorization_decision: null,
+          lifecycle_events: vector.events,
+          consumption_snapshot: vector.consumption_snapshot,
+          snapshot: vector.snapshot,
+        },
+        { keyring },
+      ),
+    (error) =>
+      error instanceof profile.AuthorityError &&
+      error.code === "evidence_scope_cross_principal_forbidden",
+  );
+});

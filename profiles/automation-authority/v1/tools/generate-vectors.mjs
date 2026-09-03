@@ -1455,6 +1455,77 @@ add("17-client-forged-lifecycle-state", 17, "negative", "lifecycle", {
   approval: r2Approval,
   events: [resign(forgedEvent, "opencoven:automation-approval-event:v1", "authority")],
 }, { error: "lifecycle_actor_forged" });
+const selfEvidenceRequest = request({
+  id: "generic-evidence-read",
+  action: "analysis.read",
+  risk: "R3",
+  proposalSafe: false,
+  capabilities: ["evidence.read"],
+  scopes: [{
+    kind: "evidence",
+    principal_id: "principal:alice",
+    automation_id: "automation:daily-report",
+    retention_classes: ["authority_evidence_90d"],
+  }],
+});
+const selfEvidencePolicy = policyFor(selfEvidenceRequest, { grant: false });
+const selfEvidenceDecision = decision(selfEvidenceRequest, selfEvidencePolicy);
+const crossEvidenceRequestPayload = structuredClone(selfEvidenceRequest);
+crossEvidenceRequestPayload.scopes[0].principal_id = "principal:bob";
+const crossEvidenceRequest = resign(
+  crossEvidenceRequestPayload,
+  "opencoven:automation-request:v1",
+);
+const crossEvidenceRequestDigest = canonicalDigest(
+  crossEvidenceRequest,
+  "opencoven:automation-request:v1",
+);
+const crossEvidenceDecisionPayload = structuredClone(selfEvidenceDecision);
+crossEvidenceDecisionPayload.decision_id =
+  `decision:${crossEvidenceRequest.request_id}:${crossEvidenceRequestDigest.slice(0, 16)}`;
+crossEvidenceDecisionPayload.request_digest = `sha256:${crossEvidenceRequestDigest}`;
+const crossEvidenceDecision = resign(
+  crossEvidenceDecisionPayload,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+const crossEvidenceApproval = approval(
+  crossEvidenceRequest,
+  crossEvidenceDecision,
+);
+add("18-generic-cross-principal-evidence-dispatch", 18, "negative", "verify_dispatch", {
+  request: crossEvidenceRequest,
+  decision: crossEvidenceDecision,
+  policy_snapshot: selfEvidencePolicy,
+  approval: crossEvidenceApproval,
+  events: lifecycle(crossEvidenceApproval),
+  consumption_snapshot: consumptionSnapshot(
+    crossEvidenceRequest,
+    crossEvidenceDecision,
+  ),
+  snapshot: snapshot(crossEvidenceRequest),
+}, { error: "evidence_scope_cross_principal_forbidden" });
+add("17-keyring-principal-request-missing-principal-id", 17, "negative", "validate_request", {
+  request: r1,
+  keyring_mutation: {
+    key_id: "key:principal:alice",
+    remove: "principal_id",
+  },
+}, { error: "integrity_principal_id_missing" });
+add("17-keyring-principal-approval-missing-principal-id", 17, "negative", "validate_approval", {
+  approval: r2Approval,
+  keyring_mutation: {
+    key_id: "key:principal:alice",
+    remove: "principal_id",
+  },
+}, { error: "integrity_principal_id_missing" });
+add("17-keyring-protected-owner-missing-principal-id", 17, "negative", "validate_approval", {
+  approval: r4OwnerApproval,
+  keyring_mutation: {
+    key_id: "key:protected-owner",
+    remove: "principal_id",
+  },
+}, { error: "integrity_principal_id_missing" });
 
 function evidenceRead(which, requester, subject, signingRole = null) {
   const selectedSigner =
@@ -1499,6 +1570,15 @@ add("18-auditor-cross-principal-evidence-read", 18, "positive", "evidence_read",
   evidence,
   now: "2026-09-03T13:05:00Z",
 });
+add("18-keyring-auditor-missing-principal-id", 18, "negative", "evidence_read", {
+  read: evidenceRead("auditor-missing-id", "principal:auditor", "principal:alice", "auditor"),
+  evidence,
+  now: "2026-09-03T13:05:00Z",
+  keyring_mutation: {
+    key_id: "key:auditor",
+    remove: "principal_id",
+  },
+}, { error: "integrity_principal_id_missing" });
 add("18-evidence-read-not-yet-valid", 18, "negative", "evidence_read", {
   read: evidenceRead("early", "principal:alice", "principal:alice"),
   evidence,

@@ -7,9 +7,11 @@ Portable artifacts for `OpenCoven/coven-threads#29`.
   verifier, reference policy, lifecycle, replay, proposal, dispatch, and
   evidence-read validator.
 - `manifest.json` — exact positive/negative vector inventory and expectations.
-- `vectors/` — 122 signed conformance vectors across all 18 issue categories.
+- `vectors/` — 127 signed conformance vectors across all 18 issue categories.
 - `keyring.json` — synthetic principal, protected-owner, auditor, and Threads
   authority public keys used only by the vectors.
+- `schemas/keyring.schema.json` — closed role/identity contract for the
+  portable public keyring.
 - `run-vectors.mjs` — read-only dependency-free runner.
 - `tools/generate-vectors.mjs` — maintainer tool that replaces the synthetic
   vector keys/signatures; it is not invoked by conformance runs.

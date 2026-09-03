@@ -76,52 +76,8 @@
       "signature_b64": "BePdnkMeqJ5mhQu7kulovny8wvbsL7d124XhCboxaXOOAJ7nyqLmP0D654OIHHLAbWsLQ3mavAcDjq60kWzwCw=="
     }
   },
-  "policy": {
-    "now": "2026-09-03T13:05:00Z",
-    "policy": "policy:2026-09-03",
-    "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
-    "manifest": "manifest:1",
-    "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
-    "recurring_grants": [
-      {
-        "grant_id": "grant:request:r1-recurring",
-        "principal_id": "principal:alice",
-        "familiar_id": "familiar:sage",
-        "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-        "automation_id": "automation:daily-report",
-        "definition_revision": 7,
-        "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-        "action_type": "artifact.create",
-        "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-        "project_id": "project:other",
-        "workspace_id": "workspace:main",
-        "runtime_id": "runtime:node",
-        "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
-        "runtime_capabilities": [
-          "artifact.write"
-        ],
-        "risk_classes": [
-          "R0",
-          "R1"
-        ],
-        "capabilities": [
-          "artifact.write"
-        ],
-        "scopes": [
-          {
-            "kind": "filesystem",
-            "root": "workspace",
-            "path": "reports/2026-09-03.md",
-            "access": "write",
-            "recursive": false
-          }
-        ],
-        "expires_at": "2026-10-01T00:00:00Z",
-        "max_uses": 31,
-        "uses": 1
-      }
-    ],
-    "protected_owner_approval": false,
-    "recurring_approval_allowed": false
+  "keyring_mutation": {
+    "key_id": "key:principal:alice",
+    "remove": "principal_id"
   }
 }

@@ -12,6 +12,7 @@ import {
   consumeDecision,
   evaluateAuthorization,
   strictParseJson,
+  validateKeyring,
   validateApproval,
   validateAuthorizationRequest,
   validateConsumptionSnapshot,
@@ -31,7 +32,9 @@ function loadKeyring() {
   if (document.schema_version !== "opencoven.automation-authority-test-keyring/v1") {
     throw new Error("unknown test keyring version");
   }
-  return new Map(Object.entries(document.keys));
+  const keyring = new Map(Object.entries(document.keys));
+  validateKeyring(keyring);
+  return keyring;
 }
 
 function validateManifest(manifest) {
@@ -116,6 +119,14 @@ function lifecycleState(body, keyring) {
 }
 
 function execute(vector, body, keyring) {
+  if (body.keyring_mutation) {
+    keyring = new Map(
+      [...keyring].map(([id, record]) => [id, structuredClone(record)]),
+    );
+    const record = keyring.get(body.keyring_mutation.key_id);
+    if (!record) throw new Error(`unknown keyring mutation key ${body.keyring_mutation.key_id}`);
+    delete record[body.keyring_mutation.remove];
+  }
   switch (vector.operation) {
     case "strict_parse":
       strictParseJson(body.raw_json);

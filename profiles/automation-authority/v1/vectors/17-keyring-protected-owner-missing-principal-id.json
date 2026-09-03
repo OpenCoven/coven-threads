@@ -1,13 +1,13 @@
 {
   "approval": {
     "schema_version": "opencoven.automation-approval/v1",
-    "approval_id": "approval:request:r2-migration",
+    "approval_id": "approval:request:r4-identity",
     "approving_principal": {
-      "id": "principal:alice",
-      "key_ref": "key:principal:alice"
+      "id": "principal:owner",
+      "key_ref": "key:protected-owner"
     },
-    "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
-    "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
+    "request_digest": "sha256:2f4daeb1453215da3a7cf51d60a2c5d4660ac40ade9ba4f07a5ebdf6247fb1be",
+    "decision_digest": "sha256:3783da7074feaba67469db5da5de31a5c018ba110674cc4ae8007cd0d745ce5f",
     "familiar_id": "familiar:sage",
     "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
     "automation": {
@@ -22,13 +22,13 @@
     "fence_generation": 4,
     "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
     "capabilities": [
-      "state.mutate"
+      "identity.mutate"
     ],
     "scopes": [
       {
         "kind": "filesystem",
         "root": "workspace",
-        "path": "state/schema-v2.sqlite",
+        "path": "identity/SOUL.md",
         "access": "write",
         "recursive": false
       }
@@ -38,7 +38,7 @@
     "runtime_id": "runtime:node",
     "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
     "runtime_capabilities": [
-      "state.mutate"
+      "identity.mutate"
     ],
     "versions": {
       "profile": "1.0.0",
@@ -52,17 +52,20 @@
     },
     "issued_at": "2026-09-03T13:05:00Z",
     "expires_at": "2026-09-03T14:00:00Z",
-    "nonce": "approval-nonce:request:r2-migration",
+    "nonce": "approval-nonce:request:r4-identity",
     "rationale": {
       "text": "Approve this exact operation.",
       "privacy": "internal"
     },
     "integrity": {
       "alg": "ed25519",
-      "key_id": "key:principal:alice",
-      "signed_digest": "954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
-      "signature_b64": "4IOeEkmzNASmmRLPTLKf33NPZF1pXgnTUy4VFbvKvdkE9bQelaYmo5BwCviLIbSsm6FYycucYzuPenr0/4rwAA=="
+      "key_id": "key:protected-owner",
+      "signed_digest": "8b28d6d386d6bf1b05cfc39f34aa9af4879720e1ec1715e0bd4587054321710f",
+      "signature_b64": "tnJgNOYqhhhJakYMuJZU2slwX60iMwsnNoNLrW/pz8aHlNv57zkPthCMKhdI/vuqCNoecf3CItEKidnofFTZCQ=="
     }
   },
-  "now": ""
+  "keyring_mutation": {
+    "key_id": "key:protected-owner",
+    "remove": "principal_id"
+  }
 }

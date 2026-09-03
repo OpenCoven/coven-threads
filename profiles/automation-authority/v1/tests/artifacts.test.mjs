@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { strictParseJson } from "../validator.mjs";
+import { strictParseJson, validateKeyring } from "../validator.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -30,7 +30,7 @@ function assertObjectSchemasAreClosed(schema, path = "$") {
 test("all published JSON Schemas parse and close every object", () => {
   const schemaDirectory = resolve(ROOT, "schemas");
   const schemas = readdirSync(schemaDirectory).filter((name) => name.endsWith(".schema.json"));
-  assert.equal(schemas.length, 10);
+  assert.equal(schemas.length, 11);
   for (const name of schemas) {
     const schema = strictParseJson(readFileSync(resolve(schemaDirectory, name), "utf8"));
     assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
@@ -51,6 +51,7 @@ test("published timestamp schema rejects impossible Gregorian dates", () => {
 
 test("keyring publishes public verification keys only", () => {
   const keyring = strictParseJson(readFileSync(resolve(ROOT, "keyring.json"), "utf8"));
+  assert.deepEqual(validateKeyring(new Map(Object.entries(keyring.keys))), { ok: true });
   for (const key of Object.values(keyring.keys)) {
     assert.match(key.public_key_pem, /^-----BEGIN PUBLIC KEY-----/);
     assert.equal(Object.hasOwn(key, "private_key"), false);
