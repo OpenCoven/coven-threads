@@ -1,0 +1,202 @@
+{
+  "request": {
+    "schema_version": "opencoven.automation-authorization-request/v1",
+    "request_id": "request:partial-grant",
+    "principal": {
+      "id": "principal:alice",
+      "authorization_proof_ref": "proof:partial-grant"
+    },
+    "replay": {
+      "nonce": "nonce:partial-grant",
+      "adoption_key": "adopt:partial-grant",
+      "issued_at": "2026-09-03T13:00:00Z",
+      "expires_at": "2026-09-03T14:00:00Z"
+    },
+    "familiar": {
+      "id": "familiar:sage",
+      "embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "execution": {
+      "occurrence_id": "occ:2026-09-03",
+      "run_id": "run:01",
+      "attempt": 1,
+      "fence_generation": 4
+    },
+    "action": {
+      "type": "artifact.create",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "risk_class": "R1",
+      "proposal_safe": true
+    },
+    "requested_capabilities": [
+      "analysis.read",
+      "artifact.write"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "reports/2026-09-03.md",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "context": {
+      "project_id": "project:coven",
+      "workspace_id": "workspace:main",
+      "runtime": {
+        "id": "runtime:node",
+        "descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "capabilities": [
+          "analysis.read",
+          "artifact.write"
+        ]
+      }
+    },
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "previous_approval_digest": null,
+    "conditions": [],
+    "data": {
+      "sensitivity": "internal",
+      "retention": "authority_evidence_90d"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "c7e48f4f52e1bf13cfaa05bba7c4e550928a2a7e84b74b89f94955b7203e3aeb",
+      "signature_b64": "oxl7IBC/YvAISrYyamYmllBJd2KKVNO6Ouc/7ObkSz95xoifMamgl2YL8lN3Evl/2HOUdMSn0AdJH4IzoWhKBQ=="
+    }
+  },
+  "policy": {
+    "now": "2026-09-03T13:05:00Z",
+    "policy": "policy:2026-09-03",
+    "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest": "manifest:1",
+    "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "recurring_grants": [
+      {
+        "principal_id": "principal:alice",
+        "familiar_id": "familiar:sage",
+        "automation_id": "automation:daily-report",
+        "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "action_type": "artifact.create",
+        "risk_classes": [
+          "R0",
+          "R1"
+        ],
+        "capabilities": [
+          "artifact.write"
+        ],
+        "scopes": [
+          {
+            "kind": "filesystem",
+            "root": "workspace",
+            "path": "reports/2026-09-03.md",
+            "access": "write",
+            "recursive": false
+          }
+        ],
+        "expires_at": "2026-10-01T00:00:00Z",
+        "max_uses": 31,
+        "uses": 1
+      }
+    ],
+    "protected_owner_approval": false
+  },
+  "decision": {
+    "schema_version": "opencoven.automation-authorization-decision/v1",
+    "decision_id": "decision:request:partial-grant:c7e48f4f52e1bf13",
+    "request_id": "request:partial-grant",
+    "request_digest": "sha256:c7e48f4f52e1bf13cfaa05bba7c4e550928a2a7e84b74b89f94955b7203e3aeb",
+    "correlation": {
+      "occurrence_id": "occ:2026-09-03",
+      "run_id": "run:01",
+      "attempt": 1,
+      "fence_generation": 4
+    },
+    "bindings": {
+      "principal_id": "principal:alice",
+      "familiar_id": "familiar:sage",
+      "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "automation_id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "project_id": "project:coven",
+      "workspace_id": "workspace:main",
+      "runtime_id": "runtime:node",
+      "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "runtime_capabilities": [
+        "analysis.read",
+        "artifact.write"
+      ],
+      "previous_approval_digest": null
+    },
+    "outcome": "permit",
+    "granted_capabilities": [
+      "artifact.write"
+    ],
+    "denied_capabilities": [
+      {
+        "capability": "analysis.read",
+        "reason_code": "capability_not_granted"
+      }
+    ],
+    "degraded_capabilities": [],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "reports/2026-09-03.md",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "validity": {
+      "not_before": "2026-09-03T13:05:00Z",
+      "not_after": "2026-09-03T14:00:00Z"
+    },
+    "approval_requirement": null,
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "reason_codes": [
+      "bounded_recurring_grant"
+    ],
+    "producer": {
+      "id": "coven-threads",
+      "verifier_profile": "automation-authority/1.0.0"
+    },
+    "issued_at": "2026-09-03T13:05:00Z",
+    "recorded_at": "2026-09-03T13:05:00Z",
+    "replay": {
+      "dispatches": 1,
+      "consumption_required": true
+    },
+    "privacy": {
+      "sensitivity": "internal",
+      "retention": "authority_evidence_90d"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:threads:test-authority",
+      "signed_digest": "e3da9def0a1390a3acfb5d975e860cb2e31245599e9a8305af48ae40a088902b",
+      "signature_b64": "rSkfr4dLZU6tGYBsrLTQ4DLXmIf/A+l26keceFa1MTSba/9/1B4tgpw634e75hPzSalJt4KyRpxcDYYrijfxAg=="
+    }
+  }
+}

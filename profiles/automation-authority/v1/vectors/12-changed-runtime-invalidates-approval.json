@@ -1,0 +1,289 @@
+{
+  "request": {
+    "schema_version": "opencoven.automation-authorization-request/v1",
+    "request_id": "request:r2-migration",
+    "principal": {
+      "id": "principal:alice",
+      "authorization_proof_ref": "proof:r2-migration"
+    },
+    "replay": {
+      "nonce": "nonce:r2-migration",
+      "adoption_key": "adopt:r2-migration",
+      "issued_at": "2026-09-03T13:00:00Z",
+      "expires_at": "2026-09-03T14:00:00Z"
+    },
+    "familiar": {
+      "id": "familiar:sage",
+      "embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "execution": {
+      "occurrence_id": "occ:2026-09-03",
+      "run_id": "run:01",
+      "attempt": 1,
+      "fence_generation": 4
+    },
+    "action": {
+      "type": "state.migrate",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "risk_class": "R2",
+      "proposal_safe": false
+    },
+    "requested_capabilities": [
+      "state.mutate"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "state/schema-v2.sqlite",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "context": {
+      "project_id": "project:coven",
+      "workspace_id": "workspace:main",
+      "runtime": {
+        "id": "runtime:node",
+        "descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "capabilities": [
+          "state.mutate"
+        ]
+      }
+    },
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "previous_approval_digest": null,
+    "conditions": [
+      "deterministic_validation",
+      "rollback_plan"
+    ],
+    "data": {
+      "sensitivity": "internal",
+      "retention": "authority_evidence_90d"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+      "signature_b64": "X+Tn6C4WkoNSzAx7mtahlFfWOefwSIyba+GCQ5Is8+ekFGf1+ALCeCTFLG+5DbZP43bbLF+VRLJSdhzBo5M8Bw=="
+    }
+  },
+  "decision": {
+    "schema_version": "opencoven.automation-authorization-decision/v1",
+    "decision_id": "decision:request:r2-migration:909d3b4d2ac9f2e5",
+    "request_id": "request:r2-migration",
+    "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+    "correlation": {
+      "occurrence_id": "occ:2026-09-03",
+      "run_id": "run:01",
+      "attempt": 1,
+      "fence_generation": 4
+    },
+    "bindings": {
+      "principal_id": "principal:alice",
+      "familiar_id": "familiar:sage",
+      "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "automation_id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "project_id": "project:coven",
+      "workspace_id": "workspace:main",
+      "runtime_id": "runtime:node",
+      "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "runtime_capabilities": [
+        "state.mutate"
+      ],
+      "previous_approval_digest": null
+    },
+    "outcome": "requires_approval",
+    "granted_capabilities": [],
+    "denied_capabilities": [
+      {
+        "capability": "state.mutate",
+        "reason_code": "capability_not_granted"
+      }
+    ],
+    "degraded_capabilities": [],
+    "scopes": [],
+    "validity": {
+      "not_before": "2026-09-03T13:05:00Z",
+      "not_after": "2026-09-03T14:00:00Z"
+    },
+    "approval_requirement": {
+      "profile": "human_per_run",
+      "recurring_allowed": false
+    },
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "reason_codes": [
+      "risk_r2_per_run_approval"
+    ],
+    "producer": {
+      "id": "coven-threads",
+      "verifier_profile": "automation-authority/1.0.0"
+    },
+    "issued_at": "2026-09-03T13:05:00Z",
+    "recorded_at": "2026-09-03T13:05:00Z",
+    "replay": {
+      "dispatches": 1,
+      "consumption_required": true
+    },
+    "privacy": {
+      "sensitivity": "internal",
+      "retention": "authority_evidence_90d"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:threads:test-authority",
+      "signed_digest": "5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
+      "signature_b64": "kO4Fnyd8Pt4U6oGIUJFw1mPvnN3LVF+epF0APefnE2LhZ/IHrORmGpCwSRrN5YFviA6RVhTJry4hoh0ZUAKYAw=="
+    }
+  },
+  "approval": {
+    "schema_version": "opencoven.automation-approval/v1",
+    "approval_id": "approval:request:r2-migration",
+    "approving_principal": {
+      "id": "principal:alice",
+      "key_ref": "key:principal:alice"
+    },
+    "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+    "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
+    "familiar_id": "familiar:sage",
+    "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "authorized_principal_id": "principal:alice",
+    "occurrence_id": "occ:2026-09-03",
+    "run_id": "run:01",
+    "attempt": 1,
+    "fence_generation": 4,
+    "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "capabilities": [
+      "state.mutate"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "state/schema-v2.sqlite",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "project_id": "project:coven",
+    "workspace_id": "workspace:main",
+    "runtime_id": "runtime:node",
+    "runtime_descriptor_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+    "runtime_capabilities": [
+      "state.mutate"
+    ],
+    "use": {
+      "kind": "single_use"
+    },
+    "issued_at": "2026-09-03T13:05:00Z",
+    "expires_at": "2026-09-03T14:00:00Z",
+    "nonce": "approval-nonce:request:r2-migration",
+    "rationale": {
+      "text": "Approve this exact operation.",
+      "privacy": "internal"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "1726164913968a41a392c4ae79fb0c7394c513d14d11d6c5cef4b18df563b542",
+      "signature_b64": "iSZCAP9ltvrEsU+WAFWlMcxO6hiltySnSm3AnlAld/H8pgvb5/MCcjbr1SBhlFRBVEaU+KZEF7kSkWcf5ZU3Ag=="
+    }
+  },
+  "events": [
+    {
+      "schema_version": "opencoven.automation-approval-event/v1",
+      "event_id": "event:approval:request:r2-migration:1:request",
+      "approval_id": "approval:request:r2-migration",
+      "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+      "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
+      "approval_digest": null,
+      "sequence": 1,
+      "previous_event_digest": null,
+      "from_state": "required",
+      "to_state": "requested",
+      "event": "request",
+      "occurred_at": "2026-09-03T13:01:00Z",
+      "actor": "threads_authority",
+      "execution_phase": "not_applicable",
+      "dispatch_disposition": "not_applicable",
+      "integrity": {
+        "alg": "ed25519",
+        "key_id": "key:threads:test-authority",
+        "signed_digest": "9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
+        "signature_b64": "Lw1KY2fkZijCpXST8Xl0AcBScnU7it8zcfe6ZCYlUolHFmazL8GWpmlvBt+teZu5roHibVmsIBANtGsR7qiMDA=="
+      }
+    },
+    {
+      "schema_version": "opencoven.automation-approval-event/v1",
+      "event_id": "event:approval:request:r2-migration:2:approve",
+      "approval_id": "approval:request:r2-migration",
+      "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+      "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
+      "approval_digest": "sha256:1726164913968a41a392c4ae79fb0c7394c513d14d11d6c5cef4b18df563b542",
+      "sequence": 2,
+      "previous_event_digest": "sha256:9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
+      "from_state": "requested",
+      "to_state": "approved",
+      "event": "approve",
+      "occurred_at": "2026-09-03T13:02:00Z",
+      "actor": "threads_authority",
+      "execution_phase": "not_applicable",
+      "dispatch_disposition": "not_applicable",
+      "integrity": {
+        "alg": "ed25519",
+        "key_id": "key:threads:test-authority",
+        "signed_digest": "0256f8ad0531a7800fee8c42ff67de0f191161ffd3e14c6a477fa8d6fa0e4052",
+        "signature_b64": "WwxVgAluZpEzXJqmmef1CXJ9CNdm1QRNRHFgKeFhj+KJWeP5o3PitSsgVd0sOQDH8jTCC+hUMfwdA+bam279Dw=="
+      }
+    }
+  ],
+  "snapshot": {
+    "now": "2026-09-03T13:06:00Z",
+    "principal_id": "principal:alice",
+    "familiar_id": "familiar:sage",
+    "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "automation_id": "automation:daily-report",
+    "definition_revision": 7,
+    "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "occurrence_id": "occ:2026-09-03",
+    "run_id": "run:01",
+    "attempt": 1,
+    "fence_generation": 4,
+    "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "runtime_capabilities": [
+      "state.mutate"
+    ],
+    "project_id": "project:coven",
+    "workspace_id": "workspace:main",
+    "policy": "policy:2026-09-03",
+    "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest": "manifest:1",
+    "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+  }
+}

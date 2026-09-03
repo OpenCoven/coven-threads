@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/evidence-read.schema.json",
+  "title": "AutomationEvidenceRead v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "read_id",
+    "requesting_principal_id",
+    "authorization_proof_ref",
+    "subject_principal_id",
+    "automation_id",
+    "maximum_sensitivity",
+    "retention_classes",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-evidence-read/v1"
+    },
+    "read_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "requesting_principal_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "authorization_proof_ref": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "subject_principal_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "automation_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "maximum_sensitivity": {
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "retention_classes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "common.schema.json#/$defs/retention"
+      }
+    },
+    "issued_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "expires_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "nonce": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "integrity": {
+      "$ref": "common.schema.json#/$defs/integrity"
+    }
+  }
+}

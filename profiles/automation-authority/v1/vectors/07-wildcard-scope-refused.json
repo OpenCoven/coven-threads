@@ -1,0 +1,79 @@
+{
+  "request": {
+    "schema_version": "opencoven.automation-authorization-request/v1",
+    "request_id": "request:scope-broad",
+    "principal": {
+      "id": "principal:alice",
+      "authorization_proof_ref": "proof:scope-broad"
+    },
+    "replay": {
+      "nonce": "nonce:scope-broad",
+      "adoption_key": "adopt:scope-broad",
+      "issued_at": "2026-09-03T13:00:00Z",
+      "expires_at": "2026-09-03T14:00:00Z"
+    },
+    "familiar": {
+      "id": "familiar:sage",
+      "embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "execution": {
+      "occurrence_id": "occ:2026-09-03",
+      "run_id": "run:01",
+      "attempt": 1,
+      "fence_generation": 4
+    },
+    "action": {
+      "type": "artifact.create",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "risk_class": "R1",
+      "proposal_safe": true
+    },
+    "requested_capabilities": [
+      "artifact.write"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "*",
+        "access": "write",
+        "recursive": true
+      }
+    ],
+    "context": {
+      "project_id": "project:coven",
+      "workspace_id": "workspace:main",
+      "runtime": {
+        "id": "runtime:node",
+        "descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "capabilities": [
+          "artifact.write"
+        ]
+      }
+    },
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "previous_approval_digest": null,
+    "conditions": [],
+    "data": {
+      "sensitivity": "internal",
+      "retention": "authority_evidence_90d"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "3603164a911920c5466d6bfdf6ba2e3d85252d5173576f56b34e8ebcfbcf26d3",
+      "signature_b64": "vS2hVouIcUEWMXqKjok5VgvPrIqELYFg28JhBxzRucixlz+lr1jwOt+tf40TzPWcLVRmOzoQwWccSqgRXrKoDg=="
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "approval": {
+    "schema_version": "opencoven.automation-approval/v1",
+    "approval_id": "approval:request:r2-migration",
+    "approving_principal": {
+      "id": "principal:alice",
+      "key_ref": "key:principal:alice"
+    },
+    "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+    "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
+    "familiar_id": "familiar:sage",
+    "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "authorized_principal_id": "principal:alice",
+    "occurrence_id": "occ:2026-09-03",
+    "run_id": "run:01",
+    "attempt": 1,
+    "fence_generation": 4,
+    "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "capabilities": [
+      "state.mutate"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "state/schema-v2.sqlite",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "project_id": "project:coven",
+    "workspace_id": "workspace:main",
+    "runtime_id": "runtime:node",
+    "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "runtime_capabilities": [
+      "state.mutate"
+    ],
+    "use": {
+      "kind": "single_use"
+    },
+    "issued_at": "2026-09-03T13:05:00Z",
+    "expires_at": "2026-09-03T13:05:30Z",
+    "nonce": "approval-nonce:request:r2-migration",
+    "rationale": {
+      "text": "Approve this exact operation.",
+      "privacy": "internal"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "03a0db95630fe705937ab5f0703474680d40b21a5e107d2a87b33a42ee8e8803",
+      "signature_b64": "wzKcF+81gfiW6cEIwpHMH3igLI75NbeMWyW1vLJTrBerVeHka/o2iRYjCeZ823zI1FQQ4QwVR+11qCkjbg+GCw=="
+    }
+  },
+  "now": "2026-09-03T13:06:00Z"
+}

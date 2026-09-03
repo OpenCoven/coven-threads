@@ -11,6 +11,14 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
 
 ### Added
 
+- Automation Authority Profile v1 (`coven-threads#29`):
+  - closed schemas and a Node-core validator for request, decision, approval,
+    append-only lifecycle, proposal-only, evidence-read, R0–R4,
+    capability/scope, replay, privacy, and final-dispatch contracts;
+  - domain-separated SHA-256 canonical digests and Ed25519 authentication;
+  - an exact manifest with 62 vectors covering all 18 issue categories plus
+    duplicate-key, non-I-JSON, broad-scope, risk-lowering, replay, and
+    semantic-forgery mutations.
 - `AuditEventType::ApplyAudit` variant + `"apply_audit"` tag in `WARD_AUDIT_SCHEMA_SQL`'s CHECK constraint (coven-threads#5).
   - Enables the coven daemon to persist Gate-4 Tier-2 applied-write records into `ward.audit` (downstream: coven#414).
 - `WardAuditRecord::detail` field — nullable JSON column for event-type-specific payload.

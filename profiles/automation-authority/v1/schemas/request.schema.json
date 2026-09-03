@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/request.schema.json",
+  "title": "AutomationAuthorizationRequest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "principal",
+    "replay",
+    "familiar",
+    "automation",
+    "execution",
+    "action",
+    "requested_capabilities",
+    "scopes",
+    "context",
+    "versions",
+    "previous_approval_digest",
+    "conditions",
+    "data",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-authorization-request/v1"
+    },
+    "request_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "authorization_proof_ref"],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "authorization_proof_ref": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nonce", "adoption_key", "issued_at", "expires_at"],
+      "properties": {
+        "nonce": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "adoption_key": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "issued_at": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "expires_at": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        }
+      }
+    },
+    "familiar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "embodiment_digest"],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "embodiment_digest": {
+          "$ref": "common.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "automation": {
+      "$ref": "common.schema.json#/$defs/automation"
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["occurrence_id", "run_id", "attempt", "fence_generation"],
+      "properties": {
+        "occurrence_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "run_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "fence_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "digest", "risk_class", "proposal_safe"],
+      "properties": {
+        "type": {
+          "enum": [
+            "analysis.read",
+            "artifact.create",
+            "state.migrate",
+            "network.fetch",
+            "external.publish",
+            "identity.mutate",
+            "authority.change",
+            "release.publish",
+            "resource.delete"
+          ]
+        },
+        "digest": {
+          "$ref": "common.schema.json#/$defs/digest"
+        },
+        "risk_class": {
+          "$ref": "common.schema.json#/$defs/risk_class"
+        },
+        "proposal_safe": {
+          "type": "boolean"
+        }
+      }
+    },
+    "requested_capabilities": {
+      "$ref": "common.schema.json#/$defs/capabilities"
+    },
+    "scopes": {
+      "$ref": "common.schema.json#/$defs/scopes"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "workspace_id", "runtime"],
+      "properties": {
+        "project_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "workspace_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "runtime": {
+          "$ref": "common.schema.json#/$defs/runtime"
+        }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "policy", "policy_digest", "manifest", "manifest_digest"],
+      "properties": {
+        "profile": {
+          "const": "1.0.0"
+        },
+        "policy": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "policy_digest": {
+          "$ref": "common.schema.json#/$defs/digest"
+        },
+        "manifest": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "manifest_digest": {
+          "$ref": "common.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "previous_approval_digest": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/digest"
+        }
+      ]
+    },
+    "conditions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "data": {
+      "$ref": "common.schema.json#/$defs/privacy"
+    },
+    "integrity": {
+      "$ref": "common.schema.json#/$defs/integrity"
+    }
+  }
+}

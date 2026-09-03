@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/approval.schema.json",
+  "title": "AutomationApproval v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "approval_id",
+    "approving_principal",
+    "request_digest",
+    "decision_digest",
+    "familiar_id",
+    "familiar_embodiment_digest",
+    "automation",
+    "authorized_principal_id",
+    "occurrence_id",
+    "run_id",
+    "attempt",
+    "fence_generation",
+    "action_digest",
+    "capabilities",
+    "scopes",
+    "project_id",
+    "workspace_id",
+    "runtime_id",
+    "runtime_descriptor_digest",
+    "runtime_capabilities",
+    "use",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "rationale",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-approval/v1"
+    },
+    "approval_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "approving_principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key_ref"],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "key_ref": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      }
+    },
+    "request_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "decision_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "familiar_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "familiar_embodiment_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "automation": {
+      "$ref": "common.schema.json#/$defs/automation"
+    },
+    "authorized_principal_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "occurrence_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "run_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "fence_generation": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "action_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "capabilities": {
+      "$ref": "common.schema.json#/$defs/capabilities"
+    },
+    "scopes": {
+      "$ref": "common.schema.json#/$defs/scopes"
+    },
+    "project_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "workspace_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "runtime_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "runtime_descriptor_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "runtime_capabilities": {
+      "$ref": "common.schema.json#/$defs/capabilities"
+    },
+    "use": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "single_use"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "max_uses", "occurrence_prefix"],
+          "properties": {
+            "kind": {
+              "const": "recurring"
+            },
+            "max_uses": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 366
+            },
+            "occurrence_prefix": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            }
+          }
+        }
+      ]
+    },
+    "issued_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "expires_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "nonce": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "rationale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "privacy"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "privacy": {
+          "enum": ["public", "internal", "confidential", "restricted"]
+        }
+      }
+    },
+    "integrity": {
+      "$ref": "common.schema.json#/$defs/integrity"
+    }
+  }
+}

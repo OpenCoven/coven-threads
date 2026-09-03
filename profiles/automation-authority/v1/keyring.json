@@ -1,0 +1,19 @@
+{
+  "schema_version": "opencoven.automation-authority-test-keyring/v1",
+  "keys": {
+    "key:threads:test-authority": {
+      "role": "threads_authority",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAx3H/TjnZw3H9c45W4EvHCknY7JVJoqn3g5/3WhqputA=\n-----END PUBLIC KEY-----\n"
+    },
+    "key:principal:alice": {
+      "role": "principal",
+      "principal_id": "principal:alice",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAKz9Fz4RGC7vne5XD5mnKYAxUfhyCEbSE8PLFPRQIpw0=\n-----END PUBLIC KEY-----\n"
+    },
+    "key:principal:bob": {
+      "role": "principal",
+      "principal_id": "principal:bob",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEANgdxHgEtDQkFZ6nHdBmr6rxel72JPTYpuEBb05BxRc0=\n-----END PUBLIC KEY-----\n"
+    }
+  }
+}

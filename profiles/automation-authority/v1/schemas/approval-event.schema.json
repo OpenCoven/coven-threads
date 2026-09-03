@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/approval-event.schema.json",
+  "title": "AutomationApprovalEvent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "approval_id",
+    "request_digest",
+    "decision_digest",
+    "approval_digest",
+    "sequence",
+    "previous_event_digest",
+    "from_state",
+    "to_state",
+    "event",
+    "occurred_at",
+    "actor",
+    "execution_phase",
+    "dispatch_disposition",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-approval-event/v1"
+    },
+    "event_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "approval_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "request_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "decision_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "approval_digest": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/digest"
+        }
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "previous_event_digest": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/digest"
+        }
+      ]
+    },
+    "from_state": {
+      "enum": ["required", "requested", "approved", "rejected", "expired", "revoked", "consumed"]
+    },
+    "to_state": {
+      "enum": ["requested", "approved", "rejected", "expired", "revoked", "consumed"]
+    },
+    "event": {
+      "enum": ["request", "approve", "reject", "expire", "revoke", "consume"]
+    },
+    "occurred_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "actor": {
+      "const": "threads_authority"
+    },
+    "execution_phase": {
+      "enum": ["not_applicable", "not_started", "queued", "dispatching", "running", "completed"]
+    },
+    "dispatch_disposition": {
+      "enum": [
+        "not_applicable",
+        "launch_authorized",
+        "cancel_before_launch",
+        "request_cooperative_cancel",
+        "external_effects_not_rolled_back"
+      ]
+    },
+    "integrity": {
+      "$ref": "common.schema.json#/$defs/integrity"
+    }
+  }
+}

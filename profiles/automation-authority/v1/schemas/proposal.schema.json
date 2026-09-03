@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/proposal.schema.json",
+  "title": "AutomationProposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_id",
+    "request_digest",
+    "action_digest",
+    "intended_target",
+    "status",
+    "protected_effects_performed",
+    "result_claim",
+    "requires_new_adoption",
+    "content_digest",
+    "created_at",
+    "privacy",
+    "integrity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-proposal/v1"
+    },
+    "proposal_id": {
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "request_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "action_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "intended_target": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "const": "not_executed"
+    },
+    "protected_effects_performed": {
+      "const": false
+    },
+    "result_claim": {
+      "const": "proposal_only"
+    },
+    "requires_new_adoption": {
+      "const": true
+    },
+    "content_digest": {
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "privacy": {
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "integrity": {
+      "$ref": "common.schema.json#/$defs/integrity"
+    }
+  }
+}

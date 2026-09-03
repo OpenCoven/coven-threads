@@ -26,6 +26,7 @@ These docs describe the **frozen design**. Where implemented code goes beyond or
 | [concepts.md](concepts.md) | The vocabulary (Thread, Weave, Strand, Channel), the two-compaction contract, the five channel-survival invariants, the descriptor-vs-predicate anti-pattern. **Read this first.** |
 | [architecture.md](architecture.md) | Where coven-threads sits in the stack, the end-to-end enforcement flow, the `ward.audit` store, relationship to RFC-0001 and `coven/docs/SAFETY-MODEL.md`. |
 | [authority-model.md](authority-model.md) | Gate 4 fail-closed as a conformance requirement, the three verdicts (Permit / DegradeToProposal / Reject), the thread tension state machine and repair path. |
+| [automation-authority-profile.md](automation-authority-profile.md) | Operation-specific automation authority, approvals, proposal-only downgrade, replay/TOCTOU, privacy, and portable vectors. |
 | [channels-and-strands.md](channels-and-strands.md) | The four channels of load, the five strand types, which strands each channel structurally requires, WARD-C1–C7. |
 | [phases.md](phases.md) | Phase 0 → 5 with honest status labels: what is frozen, what is implemented, what is active, what is blocked. |
 | [faq.md](faq.md) | Anticipated questions, answered honestly with sources. |
@@ -37,7 +38,8 @@ These docs are descriptive. When they disagree with a normative source, the sour
 
 1. **RFC-0001 §5** (`familiar-contract/rfcs/RFC-0001-familiar-contract.md`) — the external correctness anchor. *RFC wins on any conflict.*
 2. **`specs/PHASE-0-DESIGN.md`** — the frozen Phase 0 design (v0.2).
-3. **`coven-grimoire` Ward Layer Spec Brief §9** — the canonical home of WARD-C1–C7.
-4. **`coven/docs/SAFETY-MODEL.md`** — the daemon boundary this layer extends.
+3. **`specs/AUTOMATION-AUTHORITY-PROFILE-v1.md`** — the versioned automation authority contract.
+4. **`coven-grimoire` Ward Layer Spec Brief §9** — the canonical home of WARD-C1–C7.
+5. **`coven/docs/SAFETY-MODEL.md`** — the daemon boundary this layer extends.
 
 Diagrams in `diagrams/` are legibility aids derived from the design doc; they are not authoritative (see `diagrams/README.md`).

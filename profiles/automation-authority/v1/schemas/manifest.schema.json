@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/manifest.schema.json",
+  "title": "Automation Authority Profile conformance manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_version", "vector_root", "categories", "vectors"],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-authority-conformance-manifest/v1"
+    },
+    "profile_version": {
+      "const": "1.0.0"
+    },
+    "vector_root": {
+      "const": "vectors"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 18,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 18
+      }
+    },
+    "vectors": {
+      "type": "array",
+      "minItems": 18,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "kind", "file", "operation", "expected"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]+$"
+          },
+          "category": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18
+          },
+          "kind": {
+            "enum": ["positive", "negative"]
+          },
+          "file": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]+\\.json$"
+          },
+          "operation": {
+            "enum": [
+              "strict_parse",
+              "validate_request",
+              "request_adoption",
+              "validate_approval",
+              "verify_decision",
+              "decision_consumption",
+              "verify_dispatch",
+              "lifecycle",
+              "validate_proposal",
+              "evidence_read"
+            ]
+          },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ok", "error_code", "outcome"],
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "error_code": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "outcome": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "enum": ["permit", "requires_approval", "degrade_to_proposal", "reject"]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -13,7 +13,7 @@ case "$mode" in
     ;;
 esac
 
-for command in cargo rustc git; do
+for command in cargo rustc git node; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "error: missing required command: $command" >&2
     exit 1
@@ -54,6 +54,8 @@ bash -n scripts/agent-bootstrap.sh scripts/agent-check.sh
 git diff --check
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
+node --test profiles/automation-authority/v1/tests/*.test.mjs
+node profiles/automation-authority/v1/run-vectors.mjs
 
 if [[ "$mode" == "fast" ]]; then
   cargo test --locked -p coven-threads-core --lib

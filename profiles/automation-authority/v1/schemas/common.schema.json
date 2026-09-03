@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/common.schema.json",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "risk_class": {
+      "enum": ["R0", "R1", "R2", "R3", "R4"]
+    },
+    "capability": {
+      "enum": [
+        "analysis.read",
+        "artifact.write",
+        "state.mutate",
+        "network.fetch",
+        "network.publish",
+        "credential.use",
+        "evidence.read",
+        "identity.mutate",
+        "authority.admin",
+        "release.publish",
+        "resource.delete"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/capability"
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alg", "key_id", "signed_digest", "signature_b64"],
+      "properties": {
+        "alg": {
+          "const": "ed25519"
+        },
+        "key_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "signed_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "signature_b64": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$"
+        }
+      }
+    },
+    "filesystem_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "root", "path", "access", "recursive"],
+      "properties": {
+        "kind": {
+          "const": "filesystem"
+        },
+        "root": {
+          "enum": ["project", "workspace"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "access": {
+          "enum": ["read", "write"]
+        },
+        "recursive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "network_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "scheme", "host", "port", "path_prefix", "methods"],
+      "properties": {
+        "kind": {
+          "const": "network"
+        },
+        "scheme": {
+          "const": "https"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "path_prefix": {
+          "type": "string",
+          "pattern": "^/.+"
+        },
+        "methods": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["GET", "POST", "PUT"]
+          }
+        }
+      }
+    },
+    "credential_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "credential_ref", "audience", "operations"],
+      "properties": {
+        "kind": {
+          "const": "credential"
+        },
+        "credential_ref": {
+          "$ref": "#/$defs/identifier"
+        },
+        "audience": {
+          "$ref": "#/$defs/identifier"
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      }
+    },
+    "evidence_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "principal_id", "automation_id", "retention_classes"],
+      "properties": {
+        "kind": {
+          "const": "evidence"
+        },
+        "principal_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "automation_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "retention_classes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/retention"
+          }
+        }
+      }
+    },
+    "scope": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/filesystem_scope"
+        },
+        {
+          "$ref": "#/$defs/network_scope"
+        },
+        {
+          "$ref": "#/$defs/credential_scope"
+        },
+        {
+          "$ref": "#/$defs/evidence_scope"
+        }
+      ]
+    },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/scope"
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "descriptor_digest", "capabilities"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "descriptor_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/capabilities"
+        }
+      }
+    },
+    "automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "definition_revision", "definition_digest"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "definition_revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "definition_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sensitivity", "retention"],
+      "properties": {
+        "sensitivity": {
+          "enum": ["public", "internal", "confidential", "restricted"]
+        },
+        "retention": {
+          "$ref": "#/$defs/retention"
+        }
+      }
+    },
+    "retention": {
+      "enum": [
+        "ephemeral_24h",
+        "authority_evidence_90d",
+        "authority_evidence_1y"
+      ]
+    }
+  }
+}

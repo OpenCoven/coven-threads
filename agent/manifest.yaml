@@ -8,6 +8,7 @@ repository:
     - threads.weave-validation
     - threads.ward-audit-schema
     - threads.portability-conformance
+    - threads.automation-authority-profile
   explicitly_not_canonical_for:
     - familiar.identity-definition
     - principal.credential-management
@@ -31,6 +32,7 @@ risk:
     - crates/coven-threads-core/src/staging.rs
     - crates/coven-threads-core/src/surface_regions.rs
     - crates/coven-threads-core/src/validate.rs
+    - profiles/automation-authority/**
     - specs/**
     - .github/workflows/**
     - agent/manifest.yaml
@@ -64,6 +66,7 @@ contracts:
     - coven-threads-core/0.2
     - ward-audit/current_v020
     - weave-portability/v1
+    - automation-authority-profile/v1
   runtime_authority:
     repository: OpenCoven/coven
     relationship: daemon-imports-validator-and-owns-effects
