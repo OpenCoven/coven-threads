@@ -125,7 +125,12 @@ function execute(vector, body, keyring) {
     );
     const record = keyring.get(body.keyring_mutation.key_id);
     if (!record) throw new Error(`unknown keyring mutation key ${body.keyring_mutation.key_id}`);
-    delete record[body.keyring_mutation.remove];
+    if (body.keyring_mutation.remove) {
+      delete record[body.keyring_mutation.remove];
+    }
+    if (body.keyring_mutation.set) {
+      Object.assign(record, body.keyring_mutation.set);
+    }
   }
   switch (vector.operation) {
     case "strict_parse":

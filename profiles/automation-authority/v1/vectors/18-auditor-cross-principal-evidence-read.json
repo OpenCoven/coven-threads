@@ -17,7 +17,7 @@
       "alg": "ed25519",
       "key_id": "key:auditor",
       "signed_digest": "94f451b07fe365c94201568d44e3a5be8bbcb71daf013851e9d8f7fe0c2118b4",
-      "signature_b64": "Y+Hi9gM/o7/2K0Lw7yejdkJfjV1LL96vA+FzR7v2714JID0Nxzi6gqM6UH2i8p6WxPesOjERRQNWB+IVB8ddBA=="
+      "signature_b64": "LhQNzq4OTOKL5OBbF3D7rd6JRhUWtjK/hilTHLVSwJBZRtmMXhPQCb2O15SD77iJSWEJfz4ycIRROLcu2itcAA=="
     }
   },
   "evidence": {

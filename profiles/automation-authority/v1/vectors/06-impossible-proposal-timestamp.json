@@ -16,7 +16,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "153e706e46c1e0d521e2e29ec5d7bc5323fceac2b39f00a7d7ed5432c9081943",
-      "signature_b64": "Uy79P1AoMSWPx0nkWJKXw2VcJiyF6pm/FhBpRlEd9fjUOl5NW4+QnQ0xZDgCFoLxsnVJHhtdcvfMlTVIzLmLBg=="
+      "signature_b64": "CHY655qC08vbzEkt2Ii2gQa7CtU+VaqQSoQ4IzaA889vPvw7X91YpJyZOLUfveMkMtN9u3/1zfDNt2q2FPSBDg=="
     }
   }
 }

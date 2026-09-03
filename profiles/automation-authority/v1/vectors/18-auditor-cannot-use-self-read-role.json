@@ -1,10 +1,10 @@
 {
   "read": {
     "schema_version": "opencoven.automation-evidence-read/v1",
-    "read_id": "read:missing-sensitivity",
-    "requesting_principal_id": "principal:alice",
-    "authorization_proof_ref": "proof:read:missing-sensitivity",
-    "subject_principal_id": "principal:alice",
+    "read_id": "read:auditor-self",
+    "requesting_principal_id": "principal:auditor",
+    "authorization_proof_ref": "proof:read:auditor-self",
+    "subject_principal_id": "principal:auditor",
     "automation_id": "automation:daily-report",
     "maximum_sensitivity": "internal",
     "retention_classes": [
@@ -12,17 +12,18 @@
     ],
     "issued_at": "2026-09-03T13:00:00Z",
     "expires_at": "2026-09-03T14:00:00Z",
-    "nonce": "read-nonce:missing-sensitivity",
+    "nonce": "read-nonce:auditor-self",
     "integrity": {
       "alg": "ed25519",
-      "key_id": "key:principal:alice",
-      "signed_digest": "60837bb7df1b49f14c816d598979a67cdd989b963261561be2da1067bcaac2c3",
-      "signature_b64": "rdE5znTVvLqJQtEQY9xY+QbRg1elKimQsSRPNnJlTJxOkcVkfzh7abRSbzTaGD012MGVKhu5LXNZPiOujWVGBQ=="
+      "key_id": "key:auditor",
+      "signed_digest": "d53f1ad7be628b8ace4497b655929f4c08e31605df14816c4efdc7b70837dd37",
+      "signature_b64": "KIv4Laq2zt1qy+sEI3h4XRftbMlhcXGQqhGl2+z4Tlcf9Whvb3g6lHCW2/5jjoJLl+3ZbQSaWxlbgoCs4BRfAw=="
     }
   },
   "evidence": {
-    "principal_id": "principal:alice",
+    "principal_id": "principal:auditor",
     "automation_id": "automation:daily-report",
+    "sensitivity": "internal",
     "retention": "authority_evidence_90d",
     "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },

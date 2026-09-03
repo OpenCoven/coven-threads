@@ -325,3 +325,53 @@ test("generic evidence.read cannot cross principals through approval and dispatc
       error.code === "evidence_scope_cross_principal_forbidden",
   );
 });
+
+test("evidence-read tokens enforce principal-self and auditor-cross role separation", () => {
+  for (const file of [
+    "vectors/18-authorized-evidence-read.json",
+    "vectors/18-auditor-cross-principal-evidence-read.json",
+  ]) {
+    const vector = read(file);
+    assert.doesNotThrow(() =>
+      profile.authorizeEvidenceRead(vector.read, vector.evidence, {
+        keyring,
+        now: vector.now,
+      }),
+    );
+  }
+  for (const [file, code] of [
+    [
+      "vectors/18-threads-authority-cannot-self-read.json",
+      "integrity_principal_id_unexpected",
+    ],
+    [
+      "vectors/18-protected-owner-cannot-self-read.json",
+      "evidence_read_role_mismatch",
+    ],
+    [
+      "vectors/18-auditor-cannot-use-self-read-role.json",
+      "evidence_read_role_mismatch",
+    ],
+  ]) {
+    const vector = read(file);
+    const alteredKeyring = new Map(
+      [...keyring].map(([id, record]) => [id, structuredClone(record)]),
+    );
+    if (vector.keyring_mutation?.set) {
+      Object.assign(
+        alteredKeyring.get(vector.keyring_mutation.key_id),
+        vector.keyring_mutation.set,
+      );
+    }
+    assert.throws(
+      () =>
+        profile.authorizeEvidenceRead(vector.read, vector.evidence, {
+          keyring: alteredKeyring,
+          now: vector.now,
+        }),
+      (error) =>
+        error instanceof profile.AuthorityError &&
+        error.code === code,
+    );
+  }
+});

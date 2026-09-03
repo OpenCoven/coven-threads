@@ -1,9 +1,9 @@
 {
   "read": {
     "schema_version": "opencoven.automation-evidence-read/v1",
-    "read_id": "read:missing-sensitivity",
+    "read_id": "read:threads-self",
     "requesting_principal_id": "principal:alice",
-    "authorization_proof_ref": "proof:read:missing-sensitivity",
+    "authorization_proof_ref": "proof:read:threads-self",
     "subject_principal_id": "principal:alice",
     "automation_id": "automation:daily-report",
     "maximum_sensitivity": "internal",
@@ -12,19 +12,26 @@
     ],
     "issued_at": "2026-09-03T13:00:00Z",
     "expires_at": "2026-09-03T14:00:00Z",
-    "nonce": "read-nonce:missing-sensitivity",
+    "nonce": "read-nonce:threads-self",
     "integrity": {
       "alg": "ed25519",
-      "key_id": "key:principal:alice",
-      "signed_digest": "60837bb7df1b49f14c816d598979a67cdd989b963261561be2da1067bcaac2c3",
-      "signature_b64": "rdE5znTVvLqJQtEQY9xY+QbRg1elKimQsSRPNnJlTJxOkcVkfzh7abRSbzTaGD012MGVKhu5LXNZPiOujWVGBQ=="
+      "key_id": "key:threads:test-authority",
+      "signed_digest": "976d4bb0b6365526ef1bb645fb455710b98dcdbdaf6526a50c942e02d8911a9e",
+      "signature_b64": "6jTgMprtRybbO2gIFKlsMqnW5KoDKAH3zJZdV7vvx6St/5OGHXeWfED3sutWPG+QHhS6I4zmRRxQs0aPQEo2Bw=="
     }
   },
   "evidence": {
     "principal_id": "principal:alice",
     "automation_id": "automation:daily-report",
+    "sensitivity": "internal",
     "retention": "authority_evidence_90d",
     "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
-  "now": "2026-09-03T13:05:00Z"
+  "now": "2026-09-03T13:05:00Z",
+  "keyring_mutation": {
+    "key_id": "key:threads:test-authority",
+    "set": {
+      "principal_id": "principal:alice"
+    }
+  }
 }

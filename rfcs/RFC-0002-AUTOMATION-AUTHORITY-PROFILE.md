@@ -56,6 +56,9 @@ Identity-bearing principal, protected-owner, and auditor keys always carry an
 exact `principal_id`; omission never means wildcard identity. Generic
 `evidence.read` authority is self-only. Cross-principal evidence access is
 available only through the dedicated signed auditor flow.
+Threads-authority keys cannot carry principal identity. Dedicated self-read
+tokens require a principal key, and cross-principal tokens require an auditor
+key; protected-owner and Threads-authority roles cannot substitute.
 
 ## Ownership
 

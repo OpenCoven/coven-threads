@@ -315,6 +315,16 @@ function normalizeKeyring(keyring) {
         `$.keyring.${keyId}.principal_id`,
       );
     }
+    if (
+      record.role === "threads_authority" &&
+      Object.hasOwn(record, "principal_id")
+    ) {
+      fail(
+        "integrity_principal_id_unexpected",
+        `Threads authority key ${keyId} cannot carry a principal_id`,
+        `$.keyring.${keyId}.principal_id`,
+      );
+    }
     if (identityRoles.has(record.role)) {
       ensureUnicodeScalarString(
         record.principal_id,
@@ -2812,7 +2822,19 @@ export function authorizeEvidenceRead(value, evidence, { keyring, now } = {}) {
   if (key.principal_id !== value.requesting_principal_id) {
     fail("evidence_reader_mismatch", "read request signing principal mismatch");
   }
-  if (value.requesting_principal_id !== value.subject_principal_id && key.role !== "auditor") {
+  if (
+    value.requesting_principal_id === value.subject_principal_id &&
+    key.role !== "principal"
+  ) {
+    fail(
+      "evidence_read_role_mismatch",
+      "self-read tokens require a principal signing key",
+    );
+  }
+  if (
+    value.requesting_principal_id !== value.subject_principal_id &&
+    key.role !== "auditor"
+  ) {
     fail("evidence_read_unauthorized", "cross-principal evidence read requires auditor authority");
   }
   requireObject(evidence, "$.evidence");

@@ -26,6 +26,9 @@ and impossible UTC calendar timestamps are rejected rather than normalized.
 Principal, protected-owner, and auditor keys always bind an exact principal ID.
 Generic `evidence.read` scopes can name only the authenticated request
 principal; cross-principal reads use the dedicated signed auditor flow.
+Dedicated self-read tokens require a principal key, while cross-principal
+tokens require an auditor key. Threads-authority and protected-owner keys
+cannot substitute for evidence-access roles.
 
 ## Why proposal-only matters
 
@@ -37,7 +40,7 @@ new adoption decision before execution.
 ## Portable artifacts
 
 The versioned schemas, validator, public conformance keyring, exact manifest,
-and 127 vectors are under
+and 130 vectors are under
 [`profiles/automation-authority/v1/`](../profiles/automation-authority/v1/).
 The normative contract is
 [`specs/AUTOMATION-AUTHORITY-PROFILE-v1.md`](../specs/AUTOMATION-AUTHORITY-PROFILE-v1.md).

@@ -1416,6 +1416,18 @@
       }
     },
     {
+      "id": "18-auditor-cannot-use-self-read-role",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-auditor-cannot-use-self-read-role.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_read_role_mismatch",
+        "outcome": null
+      }
+    },
+    {
       "id": "18-auditor-cross-principal-evidence-read",
       "category": 18,
       "kind": "positive",
@@ -1532,6 +1544,30 @@
       "expected": {
         "ok": false,
         "error_code": "integrity_principal_id_missing",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-protected-owner-cannot-self-read",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-protected-owner-cannot-self-read.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_read_role_mismatch",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-threads-authority-cannot-self-read",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-threads-authority-cannot-self-read.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "integrity_principal_id_unexpected",
         "outcome": null
       }
     },

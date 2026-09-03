@@ -1579,6 +1579,35 @@ add("18-keyring-auditor-missing-principal-id", 18, "negative", "evidence_read", 
     remove: "principal_id",
   },
 }, { error: "integrity_principal_id_missing" });
+add("18-threads-authority-cannot-self-read", 18, "negative", "evidence_read", {
+  read: evidenceRead("threads-self", "principal:alice", "principal:alice", "authority"),
+  evidence,
+  now: "2026-09-03T13:05:00Z",
+  keyring_mutation: {
+    key_id: "key:threads:test-authority",
+    set: {
+      principal_id: "principal:alice",
+    },
+  },
+}, { error: "integrity_principal_id_unexpected" });
+const ownerEvidence = {
+  ...evidence,
+  principal_id: "principal:owner",
+};
+add("18-protected-owner-cannot-self-read", 18, "negative", "evidence_read", {
+  read: evidenceRead("owner-self", "principal:owner", "principal:owner", "owner"),
+  evidence: ownerEvidence,
+  now: "2026-09-03T13:05:00Z",
+}, { error: "evidence_read_role_mismatch" });
+const auditorEvidence = {
+  ...evidence,
+  principal_id: "principal:auditor",
+};
+add("18-auditor-cannot-use-self-read-role", 18, "negative", "evidence_read", {
+  read: evidenceRead("auditor-self", "principal:auditor", "principal:auditor", "auditor"),
+  evidence: auditorEvidence,
+  now: "2026-09-03T13:05:00Z",
+}, { error: "evidence_read_role_mismatch" });
 add("18-evidence-read-not-yet-valid", 18, "negative", "evidence_read", {
   read: evidenceRead("early", "principal:alice", "principal:alice"),
   evidence,

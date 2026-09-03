@@ -3,27 +3,27 @@
   "keys": {
     "key:threads:test-authority": {
       "role": "threads_authority",
-      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAMpPezcePbxGamRIonbRC9RMqeFXbW2RweA9t3h65XYw=\n-----END PUBLIC KEY-----\n"
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAZOheTTTnNmYMXOjfol3qRDq7s5/LsxaF4UuqjXjSzQo=\n-----END PUBLIC KEY-----\n"
     },
     "key:principal:alice": {
       "role": "principal",
       "principal_id": "principal:alice",
-      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAVdwbK1NWftMLdGcdAHsggSaJvPTxZzlHTZvJiCQIx0g=\n-----END PUBLIC KEY-----\n"
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAihBkpwq2UPxywnWwU17VFMBsSG3OKARM1AaXHNsaIfE=\n-----END PUBLIC KEY-----\n"
     },
     "key:principal:bob": {
       "role": "principal",
       "principal_id": "principal:bob",
-      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEABYYPHv40KLqWw1TVhmigdGxOYW3yfd9iwvVilBoWBu0=\n-----END PUBLIC KEY-----\n"
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEApDFueyxYaRtOUw5R8XjJViBNuhmslruwQykeH1ju6N0=\n-----END PUBLIC KEY-----\n"
     },
     "key:protected-owner": {
       "role": "protected_owner",
       "principal_id": "principal:owner",
-      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEATN68yKMEpyy2lie3YjAcRHOoXCaHXcuhzTCNxqIQdoo=\n-----END PUBLIC KEY-----\n"
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAmpRI8Yx7R+HFnD6+ik2WkzaIILt01XjBykx8npqMMsU=\n-----END PUBLIC KEY-----\n"
     },
     "key:auditor": {
       "role": "auditor",
       "principal_id": "principal:auditor",
-      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEATMyJ6XT/pb5SrwA6NSeTn9oEPOT355RLWPIPWlskjOA=\n-----END PUBLIC KEY-----\n"
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAm7AuaME5acjDf7WImhMOLhfLL+D4hZK6Ox6Zqi9SJJE=\n-----END PUBLIC KEY-----\n"
     }
   }
 }

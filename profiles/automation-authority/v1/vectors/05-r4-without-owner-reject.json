@@ -73,7 +73,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "2f4daeb1453215da3a7cf51d60a2c5d4660ac40ade9ba4f07a5ebdf6247fb1be",
-      "signature_b64": "bdDaL6oveSzLAP4ajnNn/j1RTw6N81H5Fa3CKfKFhBTopLFHL/RuiSKt3EWE37e7Ap5anLr5FT0Mu86nAqHUCg=="
+      "signature_b64": "jSmf9qkHCEN7P7/8NsmUaPSuzy7E/KCcCMoX64f2gAxgFKwHkrBue9yCqd6PkE6jh+lPbiaWG9aKikPemTXCDA=="
     }
   },
   "policy": {
@@ -157,7 +157,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "662854d78399c2adcc717a9021b95adcc28cd0b88cb704e9e2eadb3319f02d77",
-      "signature_b64": "cEmplwSvcj/7yE6IyEY+Bxj3PVucs4n1w82udexVCVGsMTxepOtCKD+p+iR63KMv4DE5BNsLHlFJWHtRHMlFCA=="
+      "signature_b64": "g7g2lz7EwZyjAgSXHDVe9JJULgOWDxDo2Jf/aqu3AUIibNYc4VSfJuJE3CiIVuIkj8/CtqmD88OMbXHB4d7zBw=="
     }
   }
 }

@@ -61,7 +61,7 @@
       "alg": "ed25519",
       "key_id": "key:protected-owner",
       "signed_digest": "8b28d6d386d6bf1b05cfc39f34aa9af4879720e1ec1715e0bd4587054321710f",
-      "signature_b64": "tnJgNOYqhhhJakYMuJZU2slwX60iMwsnNoNLrW/pz8aHlNv57zkPthCMKhdI/vuqCNoecf3CItEKidnofFTZCQ=="
+      "signature_b64": "x/T6Mq6YdNeLem6siuVfh5TmvFD0p33fLjyKqL9MmsNB6Fx8YBU96KzaCTKjM/InstB9Dx5OuCoXUGLOTGoSCw=="
     }
   },
   "keyring_mutation": {

@@ -59,6 +59,16 @@ test("keyring publishes public verification keys only", () => {
   }
 });
 
+test("Threads authority key records reject principal identity fields", () => {
+  const keyring = strictParseJson(readFileSync(resolve(ROOT, "keyring.json"), "utf8"));
+  keyring.keys["key:threads:test-authority"].principal_id = "principal:alice";
+  assert.throws(
+    () => validateKeyring(new Map(Object.entries(keyring.keys))),
+    (error) =>
+      error.code === "integrity_principal_id_unexpected",
+  );
+});
+
 test("manifest runner passes without writing profile artifacts", () => {
   const before = snapshotFiles(ROOT);
   const result = spawnSync(process.execPath, [resolve(ROOT, "run-vectors.mjs")], {
