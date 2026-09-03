@@ -198,7 +198,7 @@
               "enum": ["human_per_run", "protected_owner_per_run"]
             },
             "recurring_allowed": {
-              "const": false
+              "type": "boolean"
             }
           }
         }

@@ -40,6 +40,13 @@
     "runtime_capabilities": [
       "state.mutate"
     ],
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
     "use": {
       "kind": "single_use"
     },
@@ -53,8 +60,8 @@
     "integrity": {
       "alg": "ed25519",
       "key_id": "key:principal:alice",
-      "signed_digest": "7f15fce695051ecdec61e30c4ca97097e935f25beef23fda71d479ac68d34f0b",
-      "signature_b64": "QTYRoTeNUd+RxEqDVdppFCZ4PW0iBfeNhbfm8uLPgCKXLxnzx5lk0D3YMsqvJkt34GtaecAiRS8/vWuqeySMCg=="
+      "signed_digest": "954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
+      "signature_b64": "e/RzGvNwqiuWK3DHqjl/DoY5oQzSZCvnbY/bYqyjnBjCOFryRGrEgBbLUPcbXtF7KmcEaPn26hxd2NcCxr17CA=="
     }
   },
   "events": [
@@ -74,11 +81,13 @@
       "actor": "client",
       "execution_phase": "not_applicable",
       "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "e44e82c9a5d95e71cab8f9ef29835b9bb8420e44c561e62e654b0a33b51da3ac",
-        "signature_b64": "2DPhuFrEC6aSNxachDBrg2RVmnyMyQ2vuCnoUnojUMFLVHdheAJbBIJM8DRag+EkJUzIrN4m2uNH9eQYXDFBBQ=="
+        "signed_digest": "252a65d31d73909d1830f47bf297888438844d0003309a87e9d2da8939a085d4",
+        "signature_b64": "NgGpmQtib0Bh6CXEpk2Wbc5D0exOexq4BwyPpcvh9VA/aCWU+Pq9UPiB2+1DyssB6myiyI7udG4efF8L4kK6Cw=="
       }
     }
   ]

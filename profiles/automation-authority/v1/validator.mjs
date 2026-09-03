@@ -9,6 +9,7 @@ const REQUEST_VERSION = "opencoven.automation-authorization-request/v1";
 const DECISION_VERSION = "opencoven.automation-authorization-decision/v1";
 const APPROVAL_VERSION = "opencoven.automation-approval/v1";
 const EVENT_VERSION = "opencoven.automation-approval-event/v1";
+const CONSUMPTION_VERSION = "opencoven.automation-consumption-snapshot/v1";
 const PROPOSAL_VERSION = "opencoven.automation-proposal/v1";
 const EVIDENCE_READ_VERSION = "opencoven.automation-evidence-read/v1";
 
@@ -17,6 +18,7 @@ const DOMAIN = Object.freeze({
   decision: "opencoven:automation-decision:v1",
   approval: "opencoven:automation-approval:v1",
   event: "opencoven:automation-approval-event:v1",
+  consumption: "opencoven:automation-consumption-snapshot:v1",
   proposal: "opencoven:automation-proposal:v1",
   evidenceRead: "opencoven:automation-evidence-read:v1",
 });
@@ -292,6 +294,13 @@ export function verifySignedArtifact(value, domain, keyring, expectedRole = unde
   requireString(integrity.key_id, "$.integrity.key_id");
   requireDigestHex(integrity.signed_digest, "$.integrity.signed_digest", false);
   requireString(integrity.signature_b64, "$.integrity.signature_b64");
+  if (!/^[A-Za-z0-9+/]{86}==$/.test(integrity.signature_b64)) {
+    fail(
+      "integrity_signature_noncanonical",
+      "signature_b64 must be canonical padded Base64",
+      "$.integrity.signature_b64",
+    );
+  }
 
   const keys = normalizeKeyring(keyring);
   const record = keys.get(integrity.key_id);
@@ -303,11 +312,9 @@ export function verifySignedArtifact(value, domain, keyring, expectedRole = unde
   if (digest !== integrity.signed_digest) {
     fail("integrity_digest_mismatch", "signed digest does not match canonical artifact bytes");
   }
-  let signature;
-  try {
-    signature = Buffer.from(integrity.signature_b64, "base64");
-  } catch {
-    fail("integrity_signature_invalid", "signature is not valid base64");
+  const signature = Buffer.from(integrity.signature_b64, "base64");
+  if (signature.toString("base64") !== integrity.signature_b64) {
+    fail("integrity_signature_noncanonical", "signature Base64 does not round-trip canonically");
   }
   if (
     signature.length !== 64 ||
@@ -729,6 +736,9 @@ export function validateAuthorizationRequest(value, { keyring } = {}) {
 
 export function adoptAuthorizationRequest(value, state = null, { keyring, now } = {}) {
   validateAuthorizationRequest(value, { keyring });
+  if (now && Date.parse(now) < Date.parse(value.replay.issued_at)) {
+    fail("request_not_yet_valid", "request has not reached its issue time");
+  }
   if (now && Date.parse(now) >= Date.parse(value.replay.expires_at)) {
     fail("request_expired", "request has expired");
   }
@@ -752,13 +762,83 @@ function grantMatchesRequest(grant, request, now) {
   return (
     grant.principal_id === request.principal.id &&
     grant.familiar_id === request.familiar.id &&
+    grant.familiar_embodiment_digest === request.familiar.embodiment_digest &&
     grant.automation_id === request.automation.id &&
+    grant.definition_revision === request.automation.definition_revision &&
     grant.definition_digest === request.automation.definition_digest &&
     grant.action_type === request.action.type &&
+    grant.action_digest === request.action.digest &&
+    grant.project_id === request.context.project_id &&
+    grant.workspace_id === request.context.workspace_id &&
+    grant.runtime_id === request.context.runtime.id &&
+    grant.runtime_descriptor_digest === request.context.runtime.descriptor_digest &&
+    canonicalize([...grant.runtime_capabilities].sort()) ===
+      canonicalize([...request.context.runtime.capabilities].sort()) &&
     grant.risk_classes.includes(request.action.risk_class) &&
     Date.parse(grant.expires_at) > Date.parse(now) &&
     grant.uses < grant.max_uses
   );
+}
+
+function validateRecurringGrant(grant, index) {
+  const path = `$.policy_snapshot.recurring_grants[${index}]`;
+  const fields = [
+    "grant_id",
+    "principal_id",
+    "familiar_id",
+    "familiar_embodiment_digest",
+    "automation_id",
+    "definition_revision",
+    "definition_digest",
+    "action_type",
+    "action_digest",
+    "project_id",
+    "workspace_id",
+    "runtime_id",
+    "runtime_descriptor_digest",
+    "runtime_capabilities",
+    "risk_classes",
+    "capabilities",
+    "scopes",
+    "expires_at",
+    "max_uses",
+    "uses",
+  ];
+  required(grant, fields, path);
+  closed(grant, fields, path);
+  for (const name of [
+    "grant_id",
+    "principal_id",
+    "familiar_id",
+    "automation_id",
+    "action_type",
+    "project_id",
+    "workspace_id",
+    "runtime_id",
+  ]) {
+    requireString(grant[name], `${path}.${name}`);
+  }
+  requireInteger(grant.definition_revision, `${path}.definition_revision`, 1);
+  requireDigestHex(
+    grant.familiar_embodiment_digest,
+    `${path}.familiar_embodiment_digest`,
+  );
+  requireDigestHex(grant.definition_digest, `${path}.definition_digest`);
+  requireDigestHex(grant.action_digest, `${path}.action_digest`);
+  requireDigestHex(grant.runtime_descriptor_digest, `${path}.runtime_descriptor_digest`);
+  validateCapabilities(grant.runtime_capabilities, `${path}.runtime_capabilities`);
+  requireArray(grant.risk_classes, `${path}.risk_classes`, { nonempty: true, unique: true });
+  grant.risk_classes.forEach((risk, riskIndex) =>
+    requireEnum(risk, Object.keys(RISK_NUMBER), `${path}.risk_classes[${riskIndex}]`),
+  );
+  validateCapabilities(grant.capabilities, `${path}.capabilities`);
+  validateScopes(grant.scopes, `${path}.scopes`);
+  requireTimestamp(grant.expires_at, `${path}.expires_at`);
+  requireInteger(grant.max_uses, `${path}.max_uses`, 1);
+  requireInteger(grant.uses, `${path}.uses`, 0);
+  if (grant.uses > grant.max_uses) {
+    fail("recurring_grant_usage_invalid", "recurring grant usage exceeds its bound", path);
+  }
 }
 
 function scopeKey(scope) {
@@ -806,7 +886,9 @@ function decisionBase(request, snapshot, outcome, grants, denied, degraded, reas
       outcome === "requires_approval"
         ? {
             profile: request.action.risk_class === "R4" ? "protected_owner_per_run" : "human_per_run",
-            recurring_allowed: false,
+            recurring_allowed:
+              request.action.risk_class === "R2" &&
+              snapshot.recurring_approval_allowed === true,
           }
         : null,
     versions: { ...request.versions },
@@ -838,10 +920,41 @@ export function evaluateAuthorization(request, snapshot, { keyring, unsigned = f
       "manifest_digest",
       "recurring_grants",
       "protected_owner_approval",
+      "recurring_approval_allowed",
+    ],
+    "$.policy_snapshot",
+  );
+  closed(
+    snapshot,
+    [
+      "now",
+      "policy",
+      "policy_digest",
+      "manifest",
+      "manifest_digest",
+      "recurring_grants",
+      "protected_owner_approval",
+      "recurring_approval_allowed",
+      "previous_approval_digest",
     ],
     "$.policy_snapshot",
   );
   requireTimestamp(snapshot.now, "$.policy_snapshot.now");
+  requireString(snapshot.policy, "$.policy_snapshot.policy");
+  requireDigestHex(snapshot.policy_digest, "$.policy_snapshot.policy_digest");
+  requireString(snapshot.manifest, "$.policy_snapshot.manifest");
+  requireDigestHex(snapshot.manifest_digest, "$.policy_snapshot.manifest_digest");
+  requireBoolean(snapshot.protected_owner_approval, "$.policy_snapshot.protected_owner_approval");
+  requireBoolean(
+    snapshot.recurring_approval_allowed,
+    "$.policy_snapshot.recurring_approval_allowed",
+  );
+  if (snapshot.previous_approval_digest !== undefined) {
+    requireDigestHex(
+      snapshot.previous_approval_digest,
+      "$.policy_snapshot.previous_approval_digest",
+    );
+  }
   if (Date.parse(snapshot.now) < Date.parse(request.replay.issued_at)) {
     fail("request_not_yet_valid", "request issue time is in the future");
   }
@@ -869,12 +982,30 @@ export function evaluateAuthorization(request, snapshot, { keyring, unsigned = f
   request.context.runtime.capabilities.forEach((capability) => {
     if (!CAPABILITY_RISK.has(capability)) fail("runtime_capability_unknown", capability);
   });
+  requireArray(snapshot.recurring_grants, "$.policy_snapshot.recurring_grants");
+  snapshot.recurring_grants.forEach(validateRecurringGrant);
+  const requestedRisk = RISK_NUMBER[request.action.risk_class];
+  const runtimeCapabilities = new Set(request.context.runtime.capabilities);
+  const approvalCandidate =
+    request.conditions.includes("automation_imported") ||
+    request.conditions.includes("automation_new") ||
+    requestedRisk === 2 ||
+    (requestedRisk === 3 && !request.action.proposal_safe) ||
+    (requestedRisk === 4 && snapshot.protected_owner_approval === true);
+  if (
+    approvalCandidate &&
+    request.requested_capabilities.some((capability) => !runtimeCapabilities.has(capability))
+  ) {
+    fail(
+      "runtime_capability_missing",
+      "approval cannot authorize a capability absent from the bound runtime",
+    );
+  }
 
   const matchingGrant = (snapshot.recurring_grants ?? []).find((grant) =>
     grantMatchesRequest(grant, request, snapshot.now),
   );
   const allowedCapabilities = new Set(matchingGrant?.capabilities ?? []);
-  const runtimeCapabilities = new Set(request.context.runtime.capabilities);
   const granted = request.requested_capabilities.filter(
     (capability) => allowedCapabilities.has(capability) && runtimeCapabilities.has(capability),
   );
@@ -884,7 +1015,6 @@ export function evaluateAuthorization(request, snapshot, { keyring, unsigned = f
 
   const grantScopes = new Set((matchingGrant?.scopes ?? []).map(scopeKey));
   const scopes = request.scopes.filter((scope) => grantScopes.has(scopeKey(scope)));
-  const requestedRisk = RISK_NUMBER[request.action.risk_class];
   let outcome;
   let degraded = [];
   let reasonCodes = [];
@@ -1117,12 +1247,19 @@ export function validateDecision(value, { keyring } = {}) {
       ["human_per_run", "protected_owner_per_run"],
       "$.decision.approval_requirement.profile",
     );
-    exact(
+    requireBoolean(
       value.approval_requirement.recurring_allowed,
-      false,
-      "decision_recurring_approval_forbidden",
       "$.decision.approval_requirement.recurring_allowed",
     );
+    if (
+      value.approval_requirement.profile === "protected_owner_per_run" &&
+      value.approval_requirement.recurring_allowed
+    ) {
+      fail(
+        "decision_recurring_approval_forbidden",
+        "protected-owner approval is always per-run",
+      );
+    }
     if (value.outcome !== "requires_approval") {
       fail("decision_approval_profile_unexpected", "non-approval outcome carries approval policy");
     }
@@ -1205,6 +1342,86 @@ export function consumeDecision(decision, state = null, { keyring } = {}) {
   };
 }
 
+export function validateConsumptionSnapshot(value, { keyring, now } = {}) {
+  requireObject(value, "$.consumption_snapshot");
+  required(
+    value,
+    [
+      "schema_version",
+      "snapshot_id",
+      "recorded_at",
+      "store_revision",
+      "request_adoptions",
+      "decision_consumptions",
+      "approval_heads",
+      "integrity",
+    ],
+    "$.consumption_snapshot",
+  );
+  closed(
+    value,
+    [
+      "schema_version",
+      "snapshot_id",
+      "recorded_at",
+      "store_revision",
+      "request_adoptions",
+      "decision_consumptions",
+      "approval_heads",
+      "integrity",
+    ],
+    "$.consumption_snapshot",
+  );
+  exact(
+    value.schema_version,
+    CONSUMPTION_VERSION,
+    "schema_unknown_version",
+    "$.consumption_snapshot.schema_version",
+  );
+  requireString(value.snapshot_id, "$.consumption_snapshot.snapshot_id");
+  requireTimestamp(value.recorded_at, "$.consumption_snapshot.recorded_at");
+  requireInteger(value.store_revision, "$.consumption_snapshot.store_revision", 1);
+  if (now && Date.parse(value.recorded_at) > Date.parse(now)) {
+    fail("consumption_snapshot_from_future", "consumption snapshot is newer than trusted now");
+  }
+  requireArray(value.request_adoptions, "$.consumption_snapshot.request_adoptions");
+  const adoptionKeys = new Set();
+  value.request_adoptions.forEach((adoption, index) => {
+    const path = `$.consumption_snapshot.request_adoptions[${index}]`;
+    required(adoption, ["request_digest", "nonce", "adoption_key"], path);
+    closed(adoption, ["request_digest", "nonce", "adoption_key"], path);
+    requireDigestHex(adoption.request_digest, `${path}.request_digest`);
+    requireString(adoption.nonce, `${path}.nonce`);
+    requireString(adoption.adoption_key, `${path}.adoption_key`);
+    const key = canonicalize(adoption);
+    if (adoptionKeys.has(key)) fail("consumption_snapshot_duplicate", "duplicate request adoption");
+    adoptionKeys.add(key);
+  });
+  requireArray(value.decision_consumptions, "$.consumption_snapshot.decision_consumptions", {
+    unique: true,
+  });
+  value.decision_consumptions.forEach((digest, index) =>
+    requireDigestHex(digest, `$.consumption_snapshot.decision_consumptions[${index}]`),
+  );
+  requireArray(value.approval_heads, "$.consumption_snapshot.approval_heads");
+  const approvalIds = new Set();
+  value.approval_heads.forEach((head, index) => {
+    const path = `$.consumption_snapshot.approval_heads[${index}]`;
+    required(head, ["approval_id", "head_event_digest", "usage_count"], path);
+    closed(head, ["approval_id", "head_event_digest", "usage_count"], path);
+    requireString(head.approval_id, `${path}.approval_id`);
+    requireDigestHex(head.head_event_digest, `${path}.head_event_digest`);
+    requireInteger(head.usage_count, `${path}.usage_count`, 0);
+    if (approvalIds.has(head.approval_id)) {
+      fail("consumption_snapshot_duplicate", "duplicate approval head");
+    }
+    approvalIds.add(head.approval_id);
+  });
+  validateIntegrityShape(value.integrity, "$.consumption_snapshot.integrity");
+  verifySignedArtifact(value, DOMAIN.consumption, keyring, "threads_authority");
+  return value;
+}
+
 function validateCapabilitiesOrEmpty(capabilities, path) {
   requireArray(capabilities, path, { unique: true });
   capabilities.forEach((capability, index) => {
@@ -1244,6 +1461,7 @@ export function validateApproval(value, { keyring, now } = {}) {
       "runtime_id",
       "runtime_descriptor_digest",
       "runtime_capabilities",
+      "versions",
       "use",
       "issued_at",
       "expires_at",
@@ -1277,6 +1495,7 @@ export function validateApproval(value, { keyring, now } = {}) {
       "runtime_id",
       "runtime_descriptor_digest",
       "runtime_capabilities",
+      "versions",
       "use",
       "issued_at",
       "expires_at",
@@ -1306,26 +1525,62 @@ export function validateApproval(value, { keyring, now } = {}) {
   requireInteger(value.automation.definition_revision, "$.automation.definition_revision", 1);
   requireDigestHex(value.automation.definition_digest, "$.automation.definition_digest");
   requireString(value.authorized_principal_id, "$.authorized_principal_id");
-  requireString(value.occurrence_id, "$.occurrence_id");
-  requireString(value.run_id, "$.run_id");
-  requireInteger(value.attempt, "$.attempt", 1);
-  requireInteger(value.fence_generation, "$.fence_generation", 1);
+  if (value.use?.kind === "recurring") {
+    exact(value.occurrence_id, null, "approval_recurring_shape_invalid", "$.occurrence_id");
+    exact(value.run_id, null, "approval_recurring_shape_invalid", "$.run_id");
+    exact(value.attempt, null, "approval_recurring_shape_invalid", "$.attempt");
+    exact(value.fence_generation, null, "approval_recurring_shape_invalid", "$.fence_generation");
+  } else {
+    requireString(value.occurrence_id, "$.occurrence_id");
+    requireString(value.run_id, "$.run_id");
+    requireInteger(value.attempt, "$.attempt", 1);
+    requireInteger(value.fence_generation, "$.fence_generation", 1);
+  }
   validateCapabilities(value.capabilities, "$.capabilities");
   validateScopes(value.scopes);
   requireString(value.project_id, "$.project_id");
   requireString(value.workspace_id, "$.workspace_id");
   requireString(value.runtime_id, "$.runtime_id");
   validateCapabilities(value.runtime_capabilities, "$.runtime_capabilities");
+  const approvalRuntimeCapabilities = new Set(value.runtime_capabilities);
+  if (value.capabilities.some((capability) => !approvalRuntimeCapabilities.has(capability))) {
+    fail(
+      "approval_runtime_capability_missing",
+      "approval grants a capability absent from its bound runtime",
+    );
+  }
+  required(
+    value.versions,
+    ["profile", "policy", "policy_digest", "manifest", "manifest_digest"],
+    "$.versions",
+  );
+  closed(
+    value.versions,
+    ["profile", "policy", "policy_digest", "manifest", "manifest_digest"],
+    "$.versions",
+  );
+  exact(value.versions.profile, "1.0.0", "profile_version_unknown", "$.versions.profile");
+  requireString(value.versions.policy, "$.versions.policy");
+  requireDigestHex(value.versions.policy_digest, "$.versions.policy_digest");
+  requireString(value.versions.manifest, "$.versions.manifest");
+  requireDigestHex(value.versions.manifest_digest, "$.versions.manifest_digest");
   requireObject(value.use, "$.use");
   requireString(value.use.kind, "$.use.kind");
   if (value.use.kind === "single_use") {
     closed(value.use, ["kind"], "$.use");
   } else if (value.use.kind === "recurring") {
-    required(value.use, ["kind", "max_uses", "occurrence_prefix"], "$.use");
-    closed(value.use, ["kind", "max_uses", "occurrence_prefix"], "$.use");
+    required(value.use, ["kind", "grant_id", "max_uses", "occurrence_prefix"], "$.use");
+    closed(value.use, ["kind", "grant_id", "max_uses", "occurrence_prefix"], "$.use");
+    requireString(value.use.grant_id, "$.use.grant_id");
     requireInteger(value.use.max_uses, "$.use.max_uses", 1);
     if (value.use.max_uses > 366) fail("approval_use_too_broad", "recurring max_uses exceeds 366");
     requireString(value.use.occurrence_prefix, "$.use.occurrence_prefix");
+    if (
+      value.use.occurrence_prefix.length < 8 ||
+      value.use.occurrence_prefix.includes("*")
+    ) {
+      fail("approval_use_too_broad", "recurring occurrence prefix is too broad");
+    }
   } else {
     fail("approval_use_unknown", `unknown approval use ${value.use.kind}`, "$.use.kind");
   }
@@ -1333,6 +1588,9 @@ export function validateApproval(value, { keyring, now } = {}) {
   requireTimestamp(value.expires_at, "$.expires_at");
   if (Date.parse(value.expires_at) <= Date.parse(value.issued_at)) {
     fail("approval_invalid_interval", "approval expiry must be after issue time");
+  }
+  if (now && Date.parse(now) < Date.parse(value.issued_at)) {
+    fail("approval_not_yet_valid", "approval has not reached its issue time");
   }
   if (now && Date.parse(now) >= Date.parse(value.expires_at)) {
     fail("approval_expired", "approval has expired");
@@ -1376,6 +1634,8 @@ function validateLifecycleEvent(event, { keyring } = {}) {
       "actor",
       "execution_phase",
       "dispatch_disposition",
+      "consumption",
+      "occurrence_disposition",
       "integrity",
     ],
     "$.event",
@@ -1398,6 +1658,8 @@ function validateLifecycleEvent(event, { keyring } = {}) {
       "actor",
       "execution_phase",
       "dispatch_disposition",
+      "consumption",
+      "occurrence_disposition",
       "integrity",
     ],
     "$.event",
@@ -1419,6 +1681,63 @@ function validateLifecycleEvent(event, { keyring } = {}) {
     ["required", "requested", "approved", "rejected", "expired", "revoked", "consumed"],
     "$.event.from_state",
   );
+  if (event.consumption !== null) {
+    const path = "$.event.consumption";
+    required(
+      event.consumption,
+      [
+        "request_digest",
+        "decision_digest",
+        "occurrence_id",
+        "run_id",
+        "attempt",
+        "fence_generation",
+      ],
+      path,
+    );
+    closed(
+      event.consumption,
+      [
+        "request_digest",
+        "decision_digest",
+        "occurrence_id",
+        "run_id",
+        "attempt",
+        "fence_generation",
+      ],
+      path,
+    );
+    requireDigestHex(event.consumption.request_digest, `${path}.request_digest`);
+    requireDigestHex(event.consumption.decision_digest, `${path}.decision_digest`);
+    requireString(event.consumption.occurrence_id, `${path}.occurrence_id`);
+    requireString(event.consumption.run_id, `${path}.run_id`);
+    requireInteger(event.consumption.attempt, `${path}.attempt`, 1);
+    requireInteger(event.consumption.fence_generation, `${path}.fence_generation`, 1);
+  }
+  if (event.event !== "consume" && event.consumption !== null) {
+    fail("lifecycle_consumption_unexpected", "only consume events may carry per-run binding");
+  }
+  if (event.occurrence_disposition !== null) {
+    const path = "$.event.occurrence_disposition";
+    required(event.occurrence_disposition, ["occurrence_id", "run_id", "disposition"], path);
+    closed(event.occurrence_disposition, ["occurrence_id", "run_id", "disposition"], path);
+    requireString(event.occurrence_disposition.occurrence_id, `${path}.occurrence_id`);
+    requireString(event.occurrence_disposition.run_id, `${path}.run_id`);
+    requireEnum(
+      event.occurrence_disposition.disposition,
+      ["rejected_no_launch", "expired_no_launch"],
+      `${path}.disposition`,
+    );
+  }
+  if (
+    !["reject", "expire"].includes(event.event) &&
+    event.occurrence_disposition !== null
+  ) {
+    fail(
+      "lifecycle_occurrence_disposition_unexpected",
+      "only rejection and expiry may carry a no-launch occurrence disposition",
+    );
+  }
   requireEnum(
     event.to_state,
     ["requested", "approved", "rejected", "expired", "revoked", "consumed"],
@@ -1440,10 +1759,34 @@ function validateLifecycleEvent(event, { keyring } = {}) {
       "cancel_before_launch",
       "request_cooperative_cancel",
       "external_effects_not_rolled_back",
+      "no_launch_rejected",
+      "no_launch_expired",
     ],
     "$.event.dispatch_disposition",
   );
-  if (event.event === "revoke") {
+  if (event.event === "reject") {
+    if (
+      event.execution_phase !== "not_started" ||
+      event.dispatch_disposition !== "no_launch_rejected"
+    ) {
+      fail("rejection_disposition_invalid", "rejection must record an explicit no-launch disposition");
+    }
+    if (
+      event.occurrence_disposition?.disposition !== "rejected_no_launch"
+    ) {
+      fail("rejection_occurrence_missing", "rejection must identify the no-launch occurrence");
+    }
+  } else if (event.event === "expire") {
+    if (
+      event.execution_phase !== "not_started" ||
+      event.dispatch_disposition !== "no_launch_expired"
+    ) {
+      fail("expiration_disposition_invalid", "expiry must record an explicit no-launch disposition");
+    }
+    if (event.occurrence_disposition?.disposition !== "expired_no_launch") {
+      fail("expiration_occurrence_missing", "expiry must identify the no-launch occurrence");
+    }
+  } else if (event.event === "revoke") {
     if (
       ["not_started", "queued", "dispatching"].includes(event.execution_phase) &&
       event.dispatch_disposition !== "cancel_before_launch"
@@ -1462,6 +1805,9 @@ function validateLifecycleEvent(event, { keyring } = {}) {
       );
     }
   } else if (event.event === "consume") {
+    if (event.consumption === null) {
+      fail("consumption_binding_missing", "consumption event must bind the exact per-run operation");
+    }
     if (
       event.execution_phase !== "dispatching" ||
       event.dispatch_disposition !== "launch_authorized"
@@ -1470,7 +1816,9 @@ function validateLifecycleEvent(event, { keyring } = {}) {
     }
   } else if (
     event.execution_phase !== "not_applicable" ||
-    event.dispatch_disposition !== "not_applicable"
+    event.dispatch_disposition !== "not_applicable" ||
+    event.consumption !== null ||
+    event.occurrence_disposition !== null
   ) {
     fail("lifecycle_disposition_invalid", "non-dispatch lifecycle event has a dispatch disposition");
   }
@@ -1484,7 +1832,6 @@ const TRANSITIONS = new Map([
   ["requested:reject", "rejected"],
   ["requested:expire", "expired"],
   ["requested:revoke", "revoked"],
-  ["approved:consume", "consumed"],
   ["approved:revoke", "revoked"],
   ["approved:expire", "expired"],
 ]);
@@ -1507,6 +1854,14 @@ export function applyLifecycleEvent(state, event, { approval, keyring } = {}) {
   } else if (event.approval_digest !== null) {
     fail("lifecycle_approval_premature", "pre-approval transition cannot claim approval evidence");
   }
+  if (
+    ["reject", "expire"].includes(event.event) &&
+    approval?.use.kind === "single_use" &&
+    (event.occurrence_disposition.occurrence_id !== approval.occurrence_id ||
+      event.occurrence_disposition.run_id !== approval.run_id)
+  ) {
+    fail("lifecycle_occurrence_mismatch", "no-launch disposition changed the occurrence");
+  }
   const expectedSequence = state ? state.sequence + 1 : 1;
   if (event.sequence !== expectedSequence) fail("lifecycle_replay", "event sequence is stale or skipped");
   const expectedState = state?.state ?? "required";
@@ -1524,17 +1879,51 @@ export function applyLifecycleEvent(state, event, { approval, keyring } = {}) {
     fail("lifecycle_chain_mismatch", "event previous digest does not match append-only head");
   }
   const expectedTo = TRANSITIONS.get(`${event.from_state}:${event.event}`);
-  if (!expectedTo || expectedTo !== event.to_state) {
+  const consumptionTarget =
+    event.event === "consume"
+      ? approval.use.kind === "recurring"
+        ? "approved"
+        : "consumed"
+      : null;
+  if (
+    (event.event === "consume" && event.to_state !== consumptionTarget) ||
+    (event.event !== "consume" && (!expectedTo || expectedTo !== event.to_state))
+  ) {
     fail("lifecycle_transition_invalid", "approval lifecycle transition is not allowed");
   }
   const consumptionCount = (state?.consumption_count ?? 0) + (event.event === "consume" ? 1 : 0);
+  const consumedOccurrences = [...(state?.consumed_occurrences ?? [])];
   if (event.event === "consume") {
+    const consumptionKey = canonicalize(event.consumption);
+    if (consumedOccurrences.includes(consumptionKey)) {
+      fail("approval_replayed", "approval already consumed for this exact occurrence/run");
+    }
     if (approval.use.kind === "single_use" && state?.consumption_count > 0) {
       fail("approval_replayed", "single-use approval was already consumed");
+    }
+    if (approval.use.kind === "single_use") {
+      const expectedConsumption = {
+        request_digest: approval.request_digest,
+        decision_digest: approval.decision_digest,
+        occurrence_id: approval.occurrence_id,
+        run_id: approval.run_id,
+        attempt: approval.attempt,
+        fence_generation: approval.fence_generation,
+      };
+      if (canonicalize(event.consumption) !== canonicalize(expectedConsumption)) {
+        fail("approval_consumption_mismatch", "single-use consumption changed the approved operation");
+      }
+    }
+    if (
+      approval.use.kind === "recurring" &&
+      !event.consumption.occurrence_id.startsWith(approval.use.occurrence_prefix)
+    ) {
+      fail("approval_occurrence_out_of_scope", "recurring approval occurrence is outside its pattern");
     }
     if (approval.use.kind === "recurring" && consumptionCount > approval.use.max_uses) {
       fail("approval_usage_exhausted", "recurring approval usage bound exceeded");
     }
+    consumedOccurrences.push(consumptionKey);
   }
   return {
     approval_id: event.approval_id,
@@ -1544,21 +1933,109 @@ export function applyLifecycleEvent(state, event, { approval, keyring } = {}) {
     sequence: event.sequence,
     last_event_digest: `sha256:${canonicalDigest(event, DOMAIN.event)}`,
     consumption_count: consumptionCount,
+    consumed_occurrences: consumedOccurrences,
     event_ids: [...(state?.event_ids ?? []), event.event_id],
   };
+}
+
+export function verifyLifecycleChain(events, { approval, keyring, now } = {}) {
+  requireArray(events, "$.lifecycle_events", { nonempty: true });
+  validateApproval(approval, { keyring, now });
+  let state = null;
+  for (const event of events) {
+    state = applyLifecycleEvent(state, event, { approval, keyring });
+  }
+  return state;
 }
 
 function assertBinding(name, actual, expected, code) {
   if (actual !== expected) fail(code, `${name} changed after authorization`);
 }
 
-export function verifyDispatch(
-  { request, decision, approval = null, lifecycle = null, snapshot },
-  { keyring } = {},
-) {
+export function verifyDispatch(bundle, { keyring } = {}) {
+  requireObject(bundle, "$.dispatch_bundle");
+  required(
+    bundle,
+    [
+      "request",
+      "decision",
+      "approval",
+      "approval_authorization_request",
+      "approval_authorization_decision",
+      "lifecycle_events",
+      "consumption_snapshot",
+      "snapshot",
+    ],
+    "$.dispatch_bundle",
+  );
+  closed(
+    bundle,
+    [
+      "request",
+      "decision",
+      "approval",
+      "approval_authorization_request",
+      "approval_authorization_decision",
+      "lifecycle_events",
+      "consumption_snapshot",
+      "snapshot",
+    ],
+    "$.dispatch_bundle",
+  );
+  const {
+    request,
+    decision,
+    approval,
+    approval_authorization_request: approvalAuthorizationRequest,
+    approval_authorization_decision: approvalAuthorizationDecision,
+    lifecycle_events: lifecycleEvents,
+    consumption_snapshot: consumptionSnapshot,
+    snapshot,
+  } = bundle;
+  requireArray(lifecycleEvents, "$.dispatch_bundle.lifecycle_events");
+  requireTimestamp(snapshot.now, "$.dispatch_bundle.snapshot.now");
   validateAuthorizationRequest(request, { keyring });
   validateDecision(decision, { keyring });
+  if (Date.parse(snapshot.now) < Date.parse(request.replay.issued_at)) {
+    fail("request_not_yet_valid", "dispatch request has not reached its issue time");
+  }
+  if (Date.parse(snapshot.now) >= Date.parse(request.replay.expires_at)) {
+    fail("request_expired", "dispatch request has expired");
+  }
+  validateConsumptionSnapshot(consumptionSnapshot, { keyring, now: snapshot.now });
+  assertBinding(
+    "consumption store revision",
+    consumptionSnapshot.store_revision,
+    snapshot.consumption_revision,
+    "consumption_snapshot_stale",
+  );
   const requestDigest = `sha256:${canonicalDigest(request, DOMAIN.request)}`;
+  if (
+    consumptionSnapshot.request_adoptions.some(
+      (adoption) =>
+        (adoption.nonce === request.replay.nonce ||
+          adoption.adoption_key === request.replay.adoption_key) &&
+        adoption.request_digest !== requestDigest,
+    )
+  ) {
+    fail("request_replayed", "nonce or adoption key was previously used by another request");
+  }
+  const matchingAdoptions = consumptionSnapshot.request_adoptions.filter(
+    (adoption) =>
+      adoption.request_digest === requestDigest &&
+      adoption.nonce === request.replay.nonce &&
+      adoption.adoption_key === request.replay.adoption_key,
+  );
+  if (matchingAdoptions.length === 0) {
+    fail("request_not_adopted", "dispatch request has no authenticated adoption evidence");
+  }
+  if (matchingAdoptions.length !== 1) {
+    fail("request_replayed", "dispatch request has duplicate adoption evidence");
+  }
+  const decisionDigest = `sha256:${canonicalDigest(decision, DOMAIN.decision)}`;
+  if (consumptionSnapshot.decision_consumptions.includes(decisionDigest)) {
+    fail("decision_replayed", "dispatch decision was already consumed");
+  }
   assertBinding("request digest", decision.request_digest, requestDigest, "decision_request_mismatch");
   assertBinding("request id", decision.request_id, request.request_id, "decision_request_mismatch");
   assertBinding(
@@ -1658,7 +2135,13 @@ export function verifyDispatch(
     "dispatch_workspace_mismatch",
   );
   assertBinding(
-    "runtime",
+    "runtime id",
+    snapshot.runtime_id,
+    request.context.runtime.id,
+    "dispatch_runtime_changed",
+  );
+  assertBinding(
+    "runtime descriptor",
     snapshot.runtime_descriptor_digest,
     request.context.runtime.descriptor_digest,
     "dispatch_runtime_changed",
@@ -1683,6 +2166,9 @@ export function verifyDispatch(
       fail("dispatch_runtime_downgrade", `runtime no longer exposes ${capability}`);
     }
   }
+  if (Date.parse(snapshot.now) < Date.parse(decision.validity.not_before)) {
+    fail("decision_not_yet_valid", "decision validity interval has not started");
+  }
   if (Date.parse(snapshot.now) >= Date.parse(decision.validity.not_after)) {
     fail("decision_expired", "decision validity interval has ended");
   }
@@ -1693,16 +2179,142 @@ export function verifyDispatch(
   if (decision.outcome === "requires_approval") {
     if (!approval) fail("approval_required", "dispatch requires operation-specific approval");
     validateApproval(approval, { keyring, now: snapshot.now });
+    if (approval.use.kind === "recurring" && !decision.approval_requirement.recurring_allowed) {
+      fail("approval_recurring_not_allowed", "decision requires a single per-run approval");
+    }
+    if (approval.use.kind === "recurring") {
+      if (!approvalAuthorizationRequest || !approvalAuthorizationDecision) {
+        fail(
+          "approval_recurring_authorization_missing",
+          "recurring approval requires its immutable grant request and decision",
+        );
+      }
+      validateAuthorizationRequest(approvalAuthorizationRequest, { keyring });
+      validateDecision(approvalAuthorizationDecision, { keyring });
+      const authorizationRequestDigest =
+        `sha256:${canonicalDigest(approvalAuthorizationRequest, DOMAIN.request)}`;
+      const authorizationDecisionDigest =
+        `sha256:${canonicalDigest(approvalAuthorizationDecision, DOMAIN.decision)}`;
+      if (
+        authorizationRequestDigest !== approval.request_digest ||
+        authorizationDecisionDigest !== approval.decision_digest ||
+        approvalAuthorizationDecision.request_digest !== approval.request_digest ||
+        approvalAuthorizationDecision.request_id !== approvalAuthorizationRequest.request_id ||
+        approvalAuthorizationDecision.outcome !== "requires_approval" ||
+        approvalAuthorizationDecision.approval_requirement.recurring_allowed !== true
+      ) {
+        fail(
+          "approval_recurring_authorization_mismatch",
+          "recurring approval grant decision does not authorize recurring use",
+        );
+      }
+      const grantBindings = approvalAuthorizationDecision.bindings;
+      const authorizationCorrelation = {
+        occurrence_id: approvalAuthorizationRequest.execution.occurrence_id,
+        run_id: approvalAuthorizationRequest.execution.run_id,
+        attempt: approvalAuthorizationRequest.execution.attempt,
+        fence_generation: approvalAuthorizationRequest.execution.fence_generation,
+      };
+      if (
+        canonicalize(approvalAuthorizationDecision.correlation) !==
+        canonicalize(authorizationCorrelation)
+      ) {
+        fail(
+          "approval_recurring_authorization_mismatch",
+          "recurring grant decision correlation does not match its request",
+        );
+      }
+      const authorizationRequestBindings = {
+        principal_id: approvalAuthorizationRequest.principal.id,
+        familiar_id: approvalAuthorizationRequest.familiar.id,
+        familiar_embodiment_digest: approvalAuthorizationRequest.familiar.embodiment_digest,
+        automation_id: approvalAuthorizationRequest.automation.id,
+        definition_revision: approvalAuthorizationRequest.automation.definition_revision,
+        definition_digest: approvalAuthorizationRequest.automation.definition_digest,
+        action_digest: approvalAuthorizationRequest.action.digest,
+        project_id: approvalAuthorizationRequest.context.project_id,
+        workspace_id: approvalAuthorizationRequest.context.workspace_id,
+        runtime_id: approvalAuthorizationRequest.context.runtime.id,
+        runtime_descriptor_digest:
+          approvalAuthorizationRequest.context.runtime.descriptor_digest,
+      };
+      const approvalGrantBindings = {
+        principal_id: approval.authorized_principal_id,
+        familiar_id: approval.familiar_id,
+        familiar_embodiment_digest: approval.familiar_embodiment_digest,
+        automation_id: approval.automation.id,
+        definition_revision: approval.automation.definition_revision,
+        definition_digest: approval.automation.definition_digest,
+        action_digest: approval.action_digest,
+        project_id: approval.project_id,
+        workspace_id: approval.workspace_id,
+        runtime_id: approval.runtime_id,
+        runtime_descriptor_digest: approval.runtime_descriptor_digest,
+      };
+      for (const [name, expectedValue] of Object.entries(approvalGrantBindings)) {
+        assertBinding(
+          name,
+          authorizationRequestBindings[name],
+          expectedValue,
+          "approval_recurring_authorization_mismatch",
+        );
+        assertBinding(
+          name,
+          grantBindings[name],
+          expectedValue,
+          "approval_recurring_authorization_mismatch",
+        );
+      }
+      if (
+        canonicalize(approvalAuthorizationRequest.requested_capabilities) !==
+          canonicalize(approval.capabilities) ||
+        canonicalize(approvalAuthorizationRequest.scopes) !== canonicalize(approval.scopes) ||
+        approvalAuthorizationRequest.action.risk_class !== "R2" ||
+        canonicalize(approvalAuthorizationRequest.context.runtime.capabilities) !==
+          canonicalize(approval.runtime_capabilities) ||
+        canonicalize(grantBindings.runtime_capabilities) !==
+          canonicalize(approval.runtime_capabilities) ||
+        canonicalize(approvalAuthorizationRequest.versions) !== canonicalize(approval.versions) ||
+        canonicalize(approvalAuthorizationDecision.versions) !==
+          canonicalize(approval.versions)
+      ) {
+        fail(
+          "approval_recurring_authorization_mismatch",
+          "recurring approval exceeds or changes its grant decision",
+        );
+      }
+    } else if (
+      approvalAuthorizationRequest !== null ||
+      approvalAuthorizationDecision !== null
+    ) {
+      fail(
+        "approval_recurring_authorization_unexpected",
+        "single-use approval cannot carry a recurring grant decision",
+      );
+    }
+    const approvalKey = normalizeKeyring(keyring).get(approval.integrity.key_id);
+    if (decision.approval_requirement.profile === "protected_owner_per_run") {
+      if (approvalKey?.role !== "protected_owner") {
+        fail(
+          "approval_role_mismatch",
+          "protected_owner_per_run requires a protected_owner signing key",
+        );
+      }
+    } else if (decision.approval_requirement.profile === "human_per_run") {
+      if (
+        approvalKey?.role !== "principal" ||
+        approval.approving_principal.id !== request.principal.id
+      ) {
+        fail(
+          "approval_role_mismatch",
+          "human_per_run requires the authorized principal's signing key",
+        );
+      }
+    }
     const approvalExpected = {
-      request_digest: requestDigest,
-      decision_digest: `sha256:${canonicalDigest(decision, DOMAIN.decision)}`,
       familiar_id: request.familiar.id,
       familiar_embodiment_digest: request.familiar.embodiment_digest,
       authorized_principal_id: request.principal.id,
-      occurrence_id: request.execution.occurrence_id,
-      run_id: request.execution.run_id,
-      attempt: request.execution.attempt,
-      fence_generation: request.execution.fence_generation,
       action_digest: request.action.digest,
       project_id: request.context.project_id,
       workspace_id: request.context.workspace_id,
@@ -1733,8 +2345,81 @@ export function verifyDispatch(
     ) {
       fail("approval_runtime_capabilities_changed", "approval runtime capabilities changed");
     }
-    if (!lifecycle || lifecycle.state !== "approved") {
+    if (canonicalize(approval.versions) !== canonicalize(request.versions)) {
+      fail("approval_policy_changed", "approval policy or manifest binding changed");
+    }
+    for (const capability of request.requested_capabilities) {
+      if (!runtimeCapabilities.has(capability)) {
+        fail(
+          "dispatch_runtime_capability_missing",
+          `approval-required dispatch runtime lacks ${capability}`,
+        );
+      }
+    }
+    if (approval.use.kind === "single_use") {
+      const singleUseExpected = {
+        request_digest: requestDigest,
+        decision_digest: decisionDigest,
+        occurrence_id: request.execution.occurrence_id,
+        run_id: request.execution.run_id,
+        attempt: request.execution.attempt,
+        fence_generation: request.execution.fence_generation,
+      };
+      for (const [name, value] of Object.entries(singleUseExpected)) {
+        assertBinding(name, approval[name], value, "approval_binding_mismatch");
+      }
+    } else if (!request.execution.occurrence_id.startsWith(approval.use.occurrence_prefix)) {
+      fail("approval_occurrence_out_of_scope", "occurrence is outside recurring approval pattern");
+    }
+    if (!Array.isArray(lifecycleEvents) || lifecycleEvents.length === 0) {
+      fail("approval_lifecycle_required", "authenticated append-only lifecycle evidence is required");
+    }
+    const lifecycle = verifyLifecycleChain(lifecycleEvents, {
+      approval,
+      keyring,
+      now: snapshot.now,
+    });
+    const committedHead = consumptionSnapshot.approval_heads.find(
+      (head) => head.approval_id === approval.approval_id,
+    );
+    if (
+      !committedHead ||
+      committedHead.head_event_digest !== lifecycle.last_event_digest ||
+      committedHead.usage_count !== lifecycle.consumption_count
+    ) {
+      fail(
+        "approval_lifecycle_head_mismatch",
+        "lifecycle chain does not match authenticated consumption state",
+      );
+    }
+    if (lifecycle.state !== "approved") {
       fail("approval_state_invalid", "approval is not in dispatchable approved state");
+    }
+    if (
+      approval.use.kind === "recurring" &&
+      lifecycle.consumption_count >= approval.use.max_uses
+    ) {
+      fail("approval_usage_exhausted", "recurring approval usage bound is exhausted");
+    }
+    const currentConsumption = canonicalize({
+      request_digest: requestDigest,
+      decision_digest: decisionDigest,
+      occurrence_id: request.execution.occurrence_id,
+      run_id: request.execution.run_id,
+      attempt: request.execution.attempt,
+      fence_generation: request.execution.fence_generation,
+    });
+    if (lifecycle.consumed_occurrences.includes(currentConsumption)) {
+      fail("approval_replayed", "approval already consumed for this exact dispatch");
+    }
+  } else {
+    if (
+      approval !== null ||
+      approvalAuthorizationRequest !== null ||
+      approvalAuthorizationDecision !== null ||
+      lifecycleEvents.length !== 0
+    ) {
+      fail("approval_unexpected", "non-approval decision cannot carry approval authority");
     }
   }
   return {
@@ -1747,6 +2432,15 @@ export function verifyDispatch(
       },
       "opencoven:automation-dispatch-binding:v1",
     )}`,
+    required_consumption: {
+      decision_digest: decisionDigest,
+      approval_id: approval?.approval_id ?? null,
+      approval_usage_before: approval
+        ? consumptionSnapshot.approval_heads.find(
+            (head) => head.approval_id === approval.approval_id,
+          )?.usage_count ?? null
+        : null,
+    },
   };
 }
 
@@ -1812,7 +2506,7 @@ export function validateProposal(value, { keyring } = {}) {
   return value;
 }
 
-export function authorizeEvidenceRead(value, evidence, { keyring } = {}) {
+export function authorizeEvidenceRead(value, evidence, { keyring, now } = {}) {
   requireObject(value, "$");
   required(
     value,
@@ -1870,6 +2564,14 @@ export function authorizeEvidenceRead(value, evidence, { keyring } = {}) {
   if (Date.parse(value.expires_at) <= Date.parse(value.issued_at)) {
     fail("evidence_read_invalid_interval", "evidence-read expiry must be after issue time");
   }
+  if (!now) fail("evidence_read_time_required", "trusted current time is required");
+  requireTimestamp(now, "$.trusted_now");
+  if (Date.parse(now) < Date.parse(value.issued_at)) {
+    fail("evidence_read_not_yet_valid", "evidence-read token is not yet valid");
+  }
+  if (Date.parse(now) >= Date.parse(value.expires_at)) {
+    fail("evidence_read_expired", "evidence-read token has expired");
+  }
   requireString(value.nonce, "$.nonce");
   validateIntegrityShape(value.integrity);
   const key = verifySignedArtifact(value, DOMAIN.evidenceRead, keyring);
@@ -1897,6 +2599,7 @@ export const profileConstants = Object.freeze({
     decision: DECISION_VERSION,
     approval: APPROVAL_VERSION,
     event: EVENT_VERSION,
+    consumption: CONSUMPTION_VERSION,
     proposal: PROPOSAL_VERSION,
     evidenceRead: EVIDENCE_READ_VERSION,
   },

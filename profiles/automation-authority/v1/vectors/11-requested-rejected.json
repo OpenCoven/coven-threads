@@ -40,6 +40,13 @@
     "runtime_capabilities": [
       "state.mutate"
     ],
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
     "use": {
       "kind": "single_use"
     },
@@ -53,8 +60,8 @@
     "integrity": {
       "alg": "ed25519",
       "key_id": "key:principal:alice",
-      "signed_digest": "7f15fce695051ecdec61e30c4ca97097e935f25beef23fda71d479ac68d34f0b",
-      "signature_b64": "QTYRoTeNUd+RxEqDVdppFCZ4PW0iBfeNhbfm8uLPgCKXLxnzx5lk0D3YMsqvJkt34GtaecAiRS8/vWuqeySMCg=="
+      "signed_digest": "954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
+      "signature_b64": "e/RzGvNwqiuWK3DHqjl/DoY5oQzSZCvnbY/bYqyjnBjCOFryRGrEgBbLUPcbXtF7KmcEaPn26hxd2NcCxr17CA=="
     }
   },
   "events": [
@@ -74,11 +81,13 @@
       "actor": "threads_authority",
       "execution_phase": "not_applicable",
       "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
-        "signature_b64": "Lw1KY2fkZijCpXST8Xl0AcBScnU7it8zcfe6ZCYlUolHFmazL8GWpmlvBt+teZu5roHibVmsIBANtGsR7qiMDA=="
+        "signed_digest": "884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
+        "signature_b64": "Y7/GkN8K3niu2RjlgOtsTAimlVhnHJ1uOb9EqUwR2CoPfO8qwzE+V/XrEr5TB8zdDqtWYkg7ChfCYJaG+LaDAg=="
       }
     },
     {
@@ -89,19 +98,25 @@
       "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
       "approval_digest": null,
       "sequence": 2,
-      "previous_event_digest": "sha256:9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
+      "previous_event_digest": "sha256:884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
       "from_state": "requested",
       "to_state": "rejected",
       "event": "reject",
       "occurred_at": "2026-09-03T13:02:00Z",
       "actor": "threads_authority",
-      "execution_phase": "not_applicable",
-      "dispatch_disposition": "not_applicable",
+      "execution_phase": "not_started",
+      "dispatch_disposition": "no_launch_rejected",
+      "consumption": null,
+      "occurrence_disposition": {
+        "occurrence_id": "occ:2026-09-03",
+        "run_id": "run:01",
+        "disposition": "rejected_no_launch"
+      },
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "638dc13b0f35137798261002d6573bec937d53a856104fbc7a62670038235b73",
-        "signature_b64": "ZFj7wztzvOy16uK7sx3Hy2CnjzypUvh6b5y8lvBeL7XGuL97TADBtIVW6+uMcPs1utAs5by467hOzJSj0lQMCg=="
+        "signed_digest": "0a6175af4cd330309ce2ff87e40d41dce793e5ee34a78e30bc210d8afed4c0ce",
+        "signature_b64": "njR3BSaLEFNLR3XFAHLiwN82Li+RSUNTlnOysUTp3n7dh+A/U4zFgkVztbATvQfiA3rocFyL3/beUXZnFXrDAQ=="
       }
     }
   ]

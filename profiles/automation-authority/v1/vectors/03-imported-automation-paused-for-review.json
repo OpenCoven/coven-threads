@@ -75,7 +75,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "50fb7332b7985fce5bceee506ed526908b29b95410bde914321d8eb9ffb86ca3",
-      "signature_b64": "whb9tCMKIF2ww9ywmCYESK+OzZw6yivqgwYUSD/OuK29i292xQIWLxkpO24QqB7dq2B6zCBUSjEGvT8MYNMqAw=="
+      "signature_b64": "nZtKZofPGrGELLHJ7H3Uepa63LNyRi3/rueqA2Yy69ymh9uW/GnPoaAIECoDQsOyjf/2NUZCZLq+2kLpqqlmAQ=="
     }
   },
   "policy": {
@@ -86,11 +86,22 @@
     "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
     "recurring_grants": [
       {
+        "grant_id": "grant:request:imported-r1",
         "principal_id": "principal:alice",
         "familiar_id": "familiar:sage",
+        "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
         "automation_id": "automation:daily-report",
+        "definition_revision": 7,
         "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
         "action_type": "artifact.create",
+        "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "project_id": "project:coven",
+        "workspace_id": "workspace:main",
+        "runtime_id": "runtime:node",
+        "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "runtime_capabilities": [
+          "artifact.write"
+        ],
         "risk_classes": [
           "R0",
           "R1"
@@ -112,7 +123,8 @@
         "uses": 1
       }
     ],
-    "protected_owner_approval": false
+    "protected_owner_approval": false,
+    "recurring_approval_allowed": false
   },
   "decision": {
     "schema_version": "opencoven.automation-authorization-decision/v1",
@@ -193,7 +205,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "e9a852bb903cc6ad5cab47b68fc70fb0c06b756a17ffe656799c7af68a7babdc",
-      "signature_b64": "ydkNFV3LdSNf32ph8yXXNzBisRA0bnXVxRPO7oVuiCAFkgi2KNvOUsRkghGlSzNZz/VDaQIUCrf28leLl6XaDQ=="
+      "signature_b64": "IbXXDIOy0kl6UluRmwk7k7Om/8e0pWrMGIVDWlO4113nr1HdFEymLYoqwbpG7jahE94mc4iO1+NVVNOnvFI+Dw=="
     }
   }
 }

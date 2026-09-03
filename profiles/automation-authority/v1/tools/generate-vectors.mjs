@@ -11,6 +11,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  applyLifecycleEvent,
   canonicalDigest,
   evaluateAuthorization,
   signArtifact,
@@ -30,6 +31,8 @@ function pair() {
 const authority = pair();
 const alice = pair();
 const bob = pair();
+const owner = pair();
+const auditor = pair();
 const keys = {
   "key:threads:test-authority": {
     role: "threads_authority",
@@ -48,6 +51,18 @@ const keys = {
     public_key: bob.publicKey,
     private_key: bob.privateKey,
   },
+  "key:protected-owner": {
+    role: "protected_owner",
+    principal_id: "principal:owner",
+    public_key: owner.publicKey,
+    private_key: owner.privateKey,
+  },
+  "key:auditor": {
+    role: "auditor",
+    principal_id: "principal:auditor",
+    public_key: auditor.publicKey,
+    private_key: auditor.privateKey,
+  },
 };
 const keyring = new Map(Object.entries(keys));
 const signer = {
@@ -62,6 +77,14 @@ const signer = {
   bob: {
     key_id: "key:principal:bob",
     private_key: bob.privateKey,
+  },
+  owner: {
+    key_id: "key:protected-owner",
+    private_key: owner.privateKey,
+  },
+  auditor: {
+    key_id: "key:auditor",
+    private_key: auditor.privateKey,
   },
 };
 
@@ -215,11 +238,20 @@ function policyFor(req, {
     recurring_grants: grant
       ? [
           {
+            grant_id: `grant:${req.request_id}`,
             principal_id: req.principal.id,
             familiar_id: req.familiar.id,
+            familiar_embodiment_digest: req.familiar.embodiment_digest,
             automation_id: req.automation.id,
+            definition_revision: req.automation.definition_revision,
             definition_digest: req.automation.definition_digest,
             action_type: req.action.type,
+            action_digest: req.action.digest,
+            project_id: req.context.project_id,
+            workspace_id: req.context.workspace_id,
+            runtime_id: req.context.runtime.id,
+            runtime_descriptor_digest: req.context.runtime.descriptor_digest,
+            runtime_capabilities: [...req.context.runtime.capabilities].sort(),
             risk_classes: ["R0", "R1"],
             capabilities,
             scopes,
@@ -230,6 +262,7 @@ function policyFor(req, {
         ]
       : [],
     protected_owner_approval: protectedOwner,
+    recurring_approval_allowed: false,
   };
 }
 
@@ -237,13 +270,17 @@ function decision(req, policy) {
   return evaluateAuthorization(req, policy, { keyring });
 }
 
-function approval(req, dec, overrides = {}) {
+function approval(req, dec, overrides = {}, approver = "alice") {
+  const approvers = {
+    alice: { id: "principal:alice", key: "key:principal:alice" },
+    owner: { id: "principal:owner", key: "key:protected-owner" },
+  };
   const value = {
     schema_version: "opencoven.automation-approval/v1",
     approval_id: `approval:${req.request_id}`,
     approving_principal: {
-      id: "principal:alice",
-      key_ref: "key:principal:alice",
+      id: approvers[approver].id,
+      key_ref: approvers[approver].key,
     },
     request_digest: `sha256:${canonicalDigest(req, "opencoven:automation-request:v1")}`,
     decision_digest: `sha256:${canonicalDigest(dec, "opencoven:automation-decision:v1")}`,
@@ -263,6 +300,7 @@ function approval(req, dec, overrides = {}) {
     runtime_id: req.context.runtime.id,
     runtime_descriptor_digest: req.context.runtime.descriptor_digest,
     runtime_capabilities: structuredClone(req.context.runtime.capabilities),
+    versions: structuredClone(req.versions),
     use: { kind: "single_use" },
     issued_at: "2026-09-03T13:05:00Z",
     expires_at: "2026-09-03T14:00:00Z",
@@ -273,12 +311,14 @@ function approval(req, dec, overrides = {}) {
     },
     ...overrides,
   };
-  return signArtifact(value, "opencoven:automation-approval:v1", signer.alice);
+  return signArtifact(value, "opencoven:automation-approval:v1", signer[approver]);
 }
 
 function event(app, sequence, previous, from, to, type, {
   phase = "not_applicable",
   disposition = "not_applicable",
+  consumption = null,
+  occurrenceDisposition = null,
   actor = "threads_authority",
 } = {}) {
   return signArtifact(
@@ -301,6 +341,8 @@ function event(app, sequence, previous, from, to, type, {
       actor,
       execution_phase: phase,
       dispatch_disposition: disposition,
+      consumption,
+      occurrence_disposition: occurrenceDisposition,
     },
     "opencoven:automation-approval-event:v1",
     signer.authority,
@@ -313,6 +355,17 @@ function lifecycle(app, terminal = null, options = {}) {
   const second = event(app, 2, firstDigest, "requested", "approved", "approve");
   const secondDigest = `sha256:${canonicalDigest(second, "opencoven:automation-approval-event:v1")}`;
   if (!terminal) return [first, second];
+  const consumption =
+    terminal === "consume"
+      ? options.consumption ?? {
+          request_digest: app.request_digest,
+          decision_digest: app.decision_digest,
+          occurrence_id: app.occurrence_id,
+          run_id: app.run_id,
+          attempt: app.attempt,
+          fence_generation: app.fence_generation,
+        }
+      : null;
   return [
     first,
     second,
@@ -321,11 +374,26 @@ function lifecycle(app, terminal = null, options = {}) {
       3,
       secondDigest,
       "approved",
-      terminal === "consume" ? "consumed" : "revoked",
+      terminal === "consume" && app.use.kind === "recurring"
+        ? "approved"
+        : terminal === "consume"
+          ? "consumed"
+          : "revoked",
       terminal,
-      options,
+      { ...options, consumption },
     ),
   ];
+}
+
+function runConsumption(req, dec) {
+  return {
+    request_digest: `sha256:${canonicalDigest(req, "opencoven:automation-request:v1")}`,
+    decision_digest: `sha256:${canonicalDigest(dec, "opencoven:automation-decision:v1")}`,
+    occurrence_id: req.execution.occurrence_id,
+    run_id: req.execution.run_id,
+    attempt: req.execution.attempt,
+    fence_generation: req.execution.fence_generation,
+  };
 }
 
 function snapshot(req, overrides = {}) {
@@ -342,6 +410,7 @@ function snapshot(req, overrides = {}) {
     attempt: req.execution.attempt,
     fence_generation: req.execution.fence_generation,
     action_digest: req.action.digest,
+    runtime_id: req.context.runtime.id,
     runtime_descriptor_digest: req.context.runtime.descriptor_digest,
     runtime_capabilities: req.context.runtime.capabilities,
     project_id: req.context.project_id,
@@ -350,8 +419,53 @@ function snapshot(req, overrides = {}) {
     policy_digest: req.versions.policy_digest,
     manifest: req.versions.manifest,
     manifest_digest: req.versions.manifest_digest,
+    consumption_revision: 7,
     ...overrides,
   };
+}
+
+function consumptionSnapshot(req, dec, app = null, events = [], overrides = {}) {
+  let state = null;
+  if (app) {
+    for (const lifecycleEvent of events) {
+      state = applyLifecycleEvent(state, lifecycleEvent, {
+        approval: app,
+        keyring,
+      });
+    }
+  }
+  return signArtifact(
+    {
+      schema_version: "opencoven.automation-consumption-snapshot/v1",
+      snapshot_id: `consumption:${req.request_id}`,
+      recorded_at: "2026-09-03T13:05:30Z",
+      store_revision: 7,
+      request_adoptions: [
+        {
+          request_digest: `sha256:${canonicalDigest(
+            req,
+            "opencoven:automation-request:v1",
+          )}`,
+          nonce: req.replay.nonce,
+          adoption_key: req.replay.adoption_key,
+        },
+      ],
+      decision_consumptions: [],
+      approval_heads:
+        app && state
+          ? [
+              {
+                approval_id: app.approval_id,
+                head_event_digest: state.last_event_digest,
+                usage_count: state.consumption_count,
+              },
+            ]
+          : [],
+      ...overrides,
+    },
+    "opencoven:automation-consumption-snapshot:v1",
+    signer.authority,
+  );
 }
 
 const manifest = {
@@ -367,6 +481,26 @@ function add(id, category, kind, operation, body, {
   error = null,
   outcome = null,
 } = {}) {
+  if (operation === "verify_dispatch" && !body.consumption_snapshot) {
+    body.consumption_snapshot = consumptionSnapshot(
+      body.request,
+      body.decision,
+      body.approval ?? null,
+      body.events ?? [],
+    );
+  }
+  if (
+    operation === "verify_dispatch" &&
+    !Object.hasOwn(body, "approval_authorization_request")
+  ) {
+    body.approval_authorization_request = null;
+  }
+  if (
+    operation === "verify_dispatch" &&
+    !Object.hasOwn(body, "approval_authorization_decision")
+  ) {
+    body.approval_authorization_decision = null;
+  }
   const file = `${id}.json`;
   writeFileSync(resolve(VECTOR_DIR, file), `${JSON.stringify(body, null, 2)}\n`);
   manifest.vectors.push({
@@ -405,6 +539,23 @@ add("02-r1-narrow-recurring-permit", 2, "positive", "verify_decision", {
   policy: r1Policy,
   decision: r1Decision,
 }, { outcome: "permit" });
+for (const [name, field, value] of [
+  ["familiar-embodiment", "familiar_embodiment_digest", digest("e")],
+  ["definition-revision", "definition_revision", 999],
+  ["action-digest", "action_digest", digest("e")],
+  ["project", "project_id", "project:other"],
+  ["workspace", "workspace_id", "workspace:other"],
+  ["runtime-id", "runtime_id", "runtime:other"],
+  ["runtime-descriptor", "runtime_descriptor_digest", digest("f")],
+  ["runtime-capabilities", "runtime_capabilities", ["analysis.read"]],
+]) {
+  const mismatchedPolicy = structuredClone(r1Policy);
+  mismatchedPolicy.recurring_grants[0][field] = value;
+  add(`02-recurring-grant-${name}-mismatch`, 2, "positive", "evaluate_request", {
+    request: r1,
+    policy: mismatchedPolicy,
+  }, { outcome: "degrade_to_proposal" });
+}
 
 const r2 = request({
   id: "r2-migration",
@@ -443,6 +594,21 @@ const unsafeR2 = request({
 add("03-r2-missing-safeguards", 3, "negative", "validate_request", {
   request: unsafeR2,
 }, { error: "r2_safeguards_missing" });
+const runtimeMissingR2 = request({
+  id: "r2-runtime-capability-missing",
+  action: "state.migrate",
+  risk: "R2",
+  proposalSafe: false,
+  capabilities: ["state.mutate"],
+  runtimeCapabilities: ["analysis.read"],
+  scopes: [fsScope("state/schema-v2.sqlite")],
+  conditions: ["deterministic_validation", "rollback_plan"],
+});
+const runtimeMissingPolicy = policyFor(runtimeMissingR2, { grant: false });
+add("03-approval-runtime-capability-missing-at-evaluation", 3, "negative", "evaluate_request", {
+  request: runtimeMissingR2,
+  policy: runtimeMissingPolicy,
+}, { error: "runtime_capability_missing" });
 
 const r3 = request({
   id: "r3-publication",
@@ -473,6 +639,26 @@ add("05-r4-without-owner-reject", 5, "positive", "verify_decision", {
   policy: r4Policy,
   decision: decision(r4, r4Policy),
 }, { outcome: "reject" });
+const r4ApprovedPolicy = policyFor(r4, { grant: false, protectedOwner: true });
+const r4ApprovedDecision = decision(r4, r4ApprovedPolicy);
+const r4OwnerApproval = approval(r4, r4ApprovedDecision, {}, "owner");
+const r4OwnerEvents = lifecycle(r4OwnerApproval);
+add("05-r4-protected-owner-approval-dispatch", 5, "positive", "verify_dispatch", {
+  request: r4,
+  decision: r4ApprovedDecision,
+  approval: r4OwnerApproval,
+  events: r4OwnerEvents,
+  snapshot: snapshot(r4),
+});
+const r4PrincipalApproval = approval(r4, r4ApprovedDecision);
+const r4PrincipalEvents = lifecycle(r4PrincipalApproval);
+add("05-r4-principal-cannot-substitute-for-owner", 5, "negative", "verify_dispatch", {
+  request: r4,
+  decision: r4ApprovedDecision,
+  approval: r4PrincipalApproval,
+  events: r4PrincipalEvents,
+  snapshot: snapshot(r4),
+}, { error: "approval_role_mismatch" });
 
 const unknownAction = structuredClone(r1);
 unknownAction.action.type = "prompt.says.allowed";
@@ -582,6 +768,30 @@ add("09-proposal-cannot-claim-execution", 9, "negative", "validate_proposal", {
 }, { error: "proposal_effect_forbidden" });
 
 const r2Approval = approval(r2, r2Decision);
+const r2ApprovedEvents = lifecycle(r2Approval);
+add("03-human-per-run-principal-dispatch", 3, "positive", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: r2Approval,
+  events: r2ApprovedEvents,
+  snapshot: snapshot(r2),
+});
+const r2OwnerApproval = approval(r2, r2Decision, {}, "owner");
+const r2OwnerEvents = lifecycle(r2OwnerApproval);
+add("03-human-per-run-refuses-protected-owner-substitution", 3, "negative", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: r2OwnerApproval,
+  events: r2OwnerEvents,
+  snapshot: snapshot(r2),
+}, { error: "approval_role_mismatch" });
+add("03-approval-runtime-capability-missing-at-dispatch", 3, "negative", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: r2Approval,
+  events: r2ApprovedEvents,
+  snapshot: snapshot(r2, { runtime_capabilities: ["analysis.read"] }),
+}, { error: "dispatch_runtime_capability_missing" });
 add("10-single-use-approval-consumed", 10, "positive", "lifecycle", {
   approval: r2Approval,
   events: lifecycle(r2Approval, "consume", {
@@ -606,6 +816,162 @@ add("10-decision-consumption-replay", 10, "negative", "decision_consumption", {
   decision: r1Decision,
   repetitions: 2,
 }, { error: "decision_replayed" });
+add("10-dispatch-requires-request-adoption", 10, "negative", "verify_dispatch", {
+  request: r1,
+  decision: r1Decision,
+  approval: null,
+  events: [],
+  consumption_snapshot: consumptionSnapshot(r1, r1Decision, null, [], {
+    request_adoptions: [],
+  }),
+  snapshot: snapshot(r1),
+}, { error: "request_not_adopted" });
+add("10-dispatch-refuses-consumed-decision", 10, "negative", "verify_dispatch", {
+  request: r1,
+  decision: r1Decision,
+  approval: null,
+  events: [],
+  consumption_snapshot: consumptionSnapshot(r1, r1Decision, null, [], {
+    decision_consumptions: [
+      `sha256:${canonicalDigest(r1Decision, "opencoven:automation-decision:v1")}`,
+    ],
+  }),
+  snapshot: snapshot(r1),
+}, { error: "decision_replayed" });
+
+const recurringGrantRequest = request({
+  id: "recurring-approval-grant",
+  occurrence: "occ:daily:0001",
+  run: "run:daily:0001",
+  action: "state.migrate",
+  risk: "R2",
+  proposalSafe: false,
+  capabilities: ["state.mutate"],
+  scopes: [fsScope("state/schema-v2.sqlite")],
+  conditions: ["deterministic_validation", "rollback_plan"],
+});
+const recurringApprovalPolicy = {
+  ...policyFor(recurringGrantRequest, { grant: false }),
+  recurring_approval_allowed: true,
+};
+const recurringGrantDecision = decision(recurringGrantRequest, recurringApprovalPolicy);
+const recurringApproval = approval(recurringGrantRequest, recurringGrantDecision, {
+  occurrence_id: null,
+  run_id: null,
+  attempt: null,
+  fence_generation: null,
+  use: {
+    kind: "recurring",
+    grant_id: "recurring-approval:daily-state",
+    max_uses: 2,
+    occurrence_prefix: "occ:daily:",
+  },
+});
+const recurringApprovalEvents = lifecycle(recurringApproval);
+const recurringApproveHead = `sha256:${canonicalDigest(
+  recurringApprovalEvents.at(-1),
+  "opencoven:automation-approval-event:v1",
+)}`;
+const firstRecurringConsumption = event(
+  recurringApproval,
+  3,
+  recurringApproveHead,
+  "approved",
+  "approved",
+  "consume",
+  {
+    phase: "dispatching",
+    disposition: "launch_authorized",
+    consumption: runConsumption(recurringGrantRequest, recurringGrantDecision),
+  },
+);
+const recurringEventsAfterOne = [...recurringApprovalEvents, firstRecurringConsumption];
+const recurringSecondRequest = request({
+  id: "recurring-approval-second",
+  occurrence: "occ:daily:0002",
+  run: "run:daily:0002",
+  action: "state.migrate",
+  risk: "R2",
+  proposalSafe: false,
+  capabilities: ["state.mutate"],
+  scopes: [fsScope("state/schema-v2.sqlite")],
+  conditions: ["deterministic_validation", "rollback_plan"],
+});
+const recurringSecondPolicy = {
+  ...policyFor(recurringSecondRequest, { grant: false }),
+  recurring_approval_allowed: true,
+};
+const recurringSecondDecision = decision(recurringSecondRequest, recurringSecondPolicy);
+add("10-recurring-approval-reuses-bounded-authority", 10, "positive", "verify_dispatch", {
+  request: recurringSecondRequest,
+  decision: recurringSecondDecision,
+  approval: recurringApproval,
+  approval_authorization_request: recurringGrantRequest,
+  approval_authorization_decision: recurringGrantDecision,
+  events: recurringEventsAfterOne,
+  snapshot: snapshot(recurringSecondRequest),
+});
+add("10-recurring-approval-requires-grant-decision", 10, "negative", "verify_dispatch", {
+  request: recurringSecondRequest,
+  decision: recurringSecondDecision,
+  approval: recurringApproval,
+  approval_authorization_request: null,
+  approval_authorization_decision: null,
+  events: recurringEventsAfterOne,
+  snapshot: snapshot(recurringSecondRequest),
+}, { error: "approval_recurring_authorization_missing" });
+add("10-recurring-approval-refuses-same-occurrence-replay", 10, "negative", "verify_dispatch", {
+  request: recurringGrantRequest,
+  decision: recurringGrantDecision,
+  approval: recurringApproval,
+  approval_authorization_request: recurringGrantRequest,
+  approval_authorization_decision: recurringGrantDecision,
+  events: recurringEventsAfterOne,
+  snapshot: snapshot(recurringGrantRequest),
+}, { error: "approval_replayed" });
+const firstConsumptionHead = `sha256:${canonicalDigest(
+  firstRecurringConsumption,
+  "opencoven:automation-approval-event:v1",
+)}`;
+const secondRecurringConsumption = event(
+  recurringApproval,
+  4,
+  firstConsumptionHead,
+  "approved",
+  "approved",
+  "consume",
+  {
+    phase: "dispatching",
+    disposition: "launch_authorized",
+    consumption: runConsumption(recurringSecondRequest, recurringSecondDecision),
+  },
+);
+const recurringEventsExhausted = [...recurringEventsAfterOne, secondRecurringConsumption];
+const recurringThirdRequest = request({
+  id: "recurring-approval-third",
+  occurrence: "occ:daily:0003",
+  run: "run:daily:0003",
+  action: "state.migrate",
+  risk: "R2",
+  proposalSafe: false,
+  capabilities: ["state.mutate"],
+  scopes: [fsScope("state/schema-v2.sqlite")],
+  conditions: ["deterministic_validation", "rollback_plan"],
+});
+const recurringThirdPolicy = {
+  ...policyFor(recurringThirdRequest, { grant: false }),
+  recurring_approval_allowed: true,
+};
+const recurringThirdDecision = decision(recurringThirdRequest, recurringThirdPolicy);
+add("10-recurring-approval-usage-bound-exhausted", 10, "negative", "verify_dispatch", {
+  request: recurringThirdRequest,
+  decision: recurringThirdDecision,
+  approval: recurringApproval,
+  approval_authorization_request: recurringGrantRequest,
+  approval_authorization_decision: recurringGrantDecision,
+  events: recurringEventsExhausted,
+  snapshot: snapshot(recurringThirdRequest),
+}, { error: "approval_usage_exhausted" });
 
 const expiredApproval = approval(r2, r2Decision, {
   expires_at: "2026-09-03T13:05:30Z",
@@ -614,6 +980,36 @@ add("11-expired-approval", 11, "negative", "validate_approval", {
   approval: expiredApproval,
   now: "2026-09-03T13:06:00Z",
 }, { error: "approval_expired" });
+const futureRequest = structuredClone(r1);
+futureRequest.replay.issued_at = "2026-09-03T13:10:00Z";
+const signedFutureRequest = resign(futureRequest, "opencoven:automation-request:v1", "alice");
+add("11-request-not-yet-valid-at-dispatch", 11, "negative", "verify_dispatch", {
+  request: signedFutureRequest,
+  decision: r1Decision,
+  snapshot: snapshot(signedFutureRequest),
+}, { error: "request_not_yet_valid" });
+const futureDecision = structuredClone(r1Decision);
+futureDecision.validity.not_before = "2026-09-03T13:10:00Z";
+const signedFutureDecision = resign(
+  futureDecision,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+add("11-decision-not-yet-valid-at-dispatch", 11, "negative", "verify_dispatch", {
+  request: r1,
+  decision: signedFutureDecision,
+  snapshot: snapshot(r1),
+}, { error: "decision_not_yet_valid" });
+const futureApproval = approval(r2, r2Decision, {
+  issued_at: "2026-09-03T13:10:00Z",
+});
+add("11-approval-not-yet-valid-at-dispatch", 11, "negative", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: futureApproval,
+  events: lifecycle(futureApproval),
+  snapshot: snapshot(r2),
+}, { error: "approval_not_yet_valid" });
 const revokedEvents = lifecycle(r2Approval, "revoke", {
   phase: "queued",
   disposition: "cancel_before_launch",
@@ -625,9 +1021,50 @@ add("11-revoked-approval-cannot-dispatch", 11, "negative", "verify_dispatch", {
   events: revokedEvents,
   snapshot: snapshot(r2),
 }, { error: "approval_state_invalid" });
+const consumedApprovalEvents = lifecycle(r2Approval, "consume", {
+  phase: "dispatching",
+  disposition: "launch_authorized",
+});
+add("11-consumed-approval-cannot-dispatch", 11, "negative", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: r2Approval,
+  events: consumedApprovalEvents,
+  snapshot: snapshot(r2),
+}, { error: "approval_state_invalid" });
+add("17-lifecycle-summary-cannot-authorize-dispatch", 17, "negative", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: r2Approval,
+  events: [],
+  lifecycle_summary: { state: "approved" },
+  consumption_snapshot: consumptionSnapshot(
+    r2,
+    r2Decision,
+    r2Approval,
+    r2ApprovedEvents,
+  ),
+  snapshot: snapshot(r2),
+}, { error: "approval_lifecycle_required" });
+add("17-forged-lifecycle-head-cannot-dispatch", 17, "negative", "verify_dispatch", {
+  request: r2,
+  decision: r2Decision,
+  approval: r2Approval,
+  events: r2ApprovedEvents,
+  consumption_snapshot: consumptionSnapshot(r2, r2Decision, r2Approval, r2ApprovedEvents, {
+    approval_heads: [
+      {
+        approval_id: r2Approval.approval_id,
+        head_event_digest: digest("f"),
+        usage_count: 0,
+      },
+    ],
+  }),
+  snapshot: snapshot(r2),
+}, { error: "approval_lifecycle_head_mismatch" });
 for (const [type, target, phase, disposition] of [
-  ["reject", "rejected", "not_applicable", "not_applicable"],
-  ["expire", "expired", "not_applicable", "not_applicable"],
+  ["reject", "rejected", "not_started", "no_launch_rejected"],
+  ["expire", "expired", "not_started", "no_launch_expired"],
   ["revoke", "revoked", "queued", "cancel_before_launch"],
 ]) {
   const requested = event(r2Approval, 1, null, "required", "requested", "request");
@@ -644,10 +1081,49 @@ for (const [type, target, phase, disposition] of [
         "requested",
         target,
         type,
-        { phase, disposition },
+        {
+          phase,
+          disposition,
+          occurrenceDisposition:
+            type === "reject"
+              ? {
+                  occurrence_id: r2Approval.occurrence_id,
+                  run_id: r2Approval.run_id,
+                  disposition: "rejected_no_launch",
+                }
+              : type === "expire"
+                ? {
+                    occurrence_id: r2Approval.occurrence_id,
+                    run_id: r2Approval.run_id,
+                    disposition: "expired_no_launch",
+                  }
+                : null,
+        },
       ),
     ],
   });
+}
+for (const [type, target, error] of [
+  ["reject", "rejected", "rejection_disposition_invalid"],
+  ["expire", "expired", "expiration_disposition_invalid"],
+]) {
+  const requested = event(r2Approval, 1, null, "required", "requested", "request");
+  const requestedDigest =
+    `sha256:${canonicalDigest(requested, "opencoven:automation-approval-event:v1")}`;
+  add(`11-${type}-requires-no-launch-disposition`, 11, "negative", "lifecycle", {
+    approval: r2Approval,
+    events: [
+      requested,
+      event(
+        r2Approval,
+        2,
+        requestedDigest,
+        "requested",
+        target,
+        type,
+      ),
+    ],
+  }, { error });
 }
 
 for (const [name, field, value, error] of [
@@ -674,6 +1150,7 @@ for (const [name, field, value, error] of [
 }
 const changedCapabilities = structuredClone(r2Approval);
 changedCapabilities.capabilities = ["analysis.read"];
+changedCapabilities.runtime_capabilities = ["analysis.read", "state.mutate"];
 const changedCapabilitiesApproval = resign(
   changedCapabilities,
   "opencoven:automation-approval:v1",
@@ -696,7 +1173,7 @@ add("12-changed-scopes-invalidates-approval", 12, "negative", "verify_dispatch",
   snapshot: snapshot(r2),
 }, { error: "approval_scopes_changed" });
 const changedRuntimeCapabilities = structuredClone(r2Approval);
-changedRuntimeCapabilities.runtime_capabilities = ["analysis.read"];
+changedRuntimeCapabilities.runtime_capabilities = ["analysis.read", "state.mutate"];
 const changedRuntimeCapabilitiesApproval = resign(
   changedRuntimeCapabilities,
   "opencoven:automation-approval:v1",
@@ -708,6 +1185,11 @@ add("12-changed-runtime-capabilities-invalidates-approval", 12, "negative", "ver
   events: lifecycle(changedRuntimeCapabilitiesApproval),
   snapshot: snapshot(r2),
 }, { error: "approval_runtime_capabilities_changed" });
+const impossibleRuntimeApproval = structuredClone(r2Approval);
+impossibleRuntimeApproval.runtime_capabilities = ["analysis.read"];
+add("12-approval-capability-absent-from-runtime", 12, "negative", "validate_approval", {
+  approval: resign(impossibleRuntimeApproval, "opencoven:automation-approval:v1"),
+}, { error: "approval_runtime_capability_missing" });
 
 const previousReq = request({
   id: "previous-approval",
@@ -752,6 +1234,11 @@ add("14-runtime-substitution", 14, "negative", "verify_dispatch", {
   decision: r1Decision,
   snapshot: snapshot(r1, { runtime_descriptor_digest: digest("8") }),
 }, { error: "dispatch_runtime_changed" });
+add("14-runtime-id-substitution", 14, "negative", "verify_dispatch", {
+  request: r1,
+  decision: r1Decision,
+  snapshot: snapshot(r1, { runtime_id: "runtime:substitute" }),
+}, { error: "dispatch_runtime_changed" });
 
 add("15-policy-changed-before-dispatch", 15, "negative", "verify_dispatch", {
   request: r1,
@@ -768,6 +1255,13 @@ add("15-stale-fence-before-dispatch", 15, "negative", "verify_dispatch", {
   decision: r1Decision,
   snapshot: snapshot(r1, { fence_generation: 5 }),
 }, { error: "dispatch_stale_fence" });
+add("15-stale-consumption-snapshot", 15, "negative", "verify_dispatch", {
+  request: r1,
+  decision: r1Decision,
+  approval: null,
+  events: [],
+  snapshot: snapshot(r1, { consumption_revision: 8 }),
+}, { error: "consumption_snapshot_stale" });
 
 for (const [name, phase, disposition] of [
   ["queued", "queued", "cancel_before_launch"],
@@ -816,6 +1310,13 @@ tamperedApproval.action_digest = digest("9");
 add("17-tampered-approval", 17, "negative", "validate_approval", {
   approval: tamperedApproval,
 }, { error: "integrity_digest_mismatch" });
+const noncanonicalBase64Request = structuredClone(r1);
+noncanonicalBase64Request.integrity.signature_b64 =
+  `${noncanonicalBase64Request.integrity.signature_b64.slice(0, 12)} \n` +
+  noncanonicalBase64Request.integrity.signature_b64.slice(12);
+add("17-noncanonical-signature-base64", 17, "negative", "validate_request", {
+  request: noncanonicalBase64Request,
+}, { error: "integrity_signature_noncanonical" });
 const forgedEvent = lifecycle(r2Approval)[0];
 forgedEvent.actor = "client";
 add("17-client-forged-lifecycle-state", 17, "negative", "lifecycle", {
@@ -823,7 +1324,9 @@ add("17-client-forged-lifecycle-state", 17, "negative", "lifecycle", {
   events: [resign(forgedEvent, "opencoven:automation-approval-event:v1", "authority")],
 }, { error: "lifecycle_actor_forged" });
 
-function evidenceRead(which, requester, subject) {
+function evidenceRead(which, requester, subject, signingRole = null) {
+  const selectedSigner =
+    signingRole ?? (requester === "principal:alice" ? "alice" : "bob");
   return signArtifact(
     {
       schema_version: "opencoven.automation-evidence-read/v1",
@@ -839,7 +1342,7 @@ function evidenceRead(which, requester, subject) {
       nonce: `read-nonce:${which}`,
     },
     "opencoven:automation-evidence-read:v1",
-    signer[requester === "principal:alice" ? "alice" : "bob"],
+    signer[selectedSigner],
   );
 }
 const evidence = {
@@ -852,11 +1355,28 @@ const evidence = {
 add("18-authorized-evidence-read", 18, "positive", "evidence_read", {
   read: evidenceRead("self", "principal:alice", "principal:alice"),
   evidence,
+  now: "2026-09-03T13:05:00Z",
 });
 add("18-unauthorized-evidence-read", 18, "negative", "evidence_read", {
   read: evidenceRead("cross", "principal:bob", "principal:alice"),
   evidence,
+  now: "2026-09-03T13:05:00Z",
 }, { error: "evidence_read_unauthorized" });
+add("18-auditor-cross-principal-evidence-read", 18, "positive", "evidence_read", {
+  read: evidenceRead("auditor", "principal:auditor", "principal:alice", "auditor"),
+  evidence,
+  now: "2026-09-03T13:05:00Z",
+});
+add("18-evidence-read-not-yet-valid", 18, "negative", "evidence_read", {
+  read: evidenceRead("early", "principal:alice", "principal:alice"),
+  evidence,
+  now: "2026-09-03T12:59:59Z",
+}, { error: "evidence_read_not_yet_valid" });
+add("18-evidence-read-expired", 18, "negative", "evidence_read", {
+  read: evidenceRead("expired", "principal:alice", "principal:alice"),
+  evidence,
+  now: "2026-09-03T14:00:00Z",
+}, { error: "evidence_read_expired" });
 
 add("06-json-duplicate-key", 6, "negative", "strict_parse", {
   raw_json: "{\"schema_version\":\"one\",\"schema_version\":\"two\"}",

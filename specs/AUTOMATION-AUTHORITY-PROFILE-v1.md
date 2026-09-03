@@ -38,6 +38,7 @@ The profile publishes these closed JSON Schema 2020-12 artifacts:
 - `AutomationAuthorizationDecision`
 - `AutomationApproval`
 - `AutomationApprovalEvent`
+- `AutomationConsumptionSnapshot`
 - `AutomationProposal`
 - `AutomationEvidenceRead`
 - common risk, capability, scope, runtime, privacy, and integrity definitions
@@ -96,6 +97,11 @@ MUST authenticate the requesting principal. Decisions, proposal receipts, and
 lifecycle events MUST authenticate Threads authority. Approvals MUST
 authenticate the named approving principal/key. The repository keyring is
 synthetic conformance material and contains public keys only.
+
+`signature_b64` is canonical padded Base64: exactly 88 characters for a
+64-byte Ed25519 signature, ending in `==`, with no whitespace or alternate
+encoding. Decoders MUST reject any spelling that does not decode and re-encode
+to the identical string.
 
 ## 4. Authorization request
 
@@ -194,10 +200,13 @@ validity; approval profile; machine reason codes; producer/verifier identity;
 issue/record times; replay semantics; and privacy/retention.
 
 The reference policy permits R0/R1 only when an unexpired, usage-bounded
-recurring grant matches principal, familiar, automation, definition digest,
-action, risk, capability, and scope. R2 requires per-run approval. Proposal-safe
-R3 degrades; other R3 requires approval. R4 requires protected-owner policy to
-reach per-run approval and otherwise rejects.
+recurring grant matches principal, familiar ID and embodiment digest,
+automation, definition revision and digest, action type and digest, risk,
+capability, scope, project, workspace, runtime ID, runtime descriptor digest,
+and the exact runtime capability snapshot. R2
+requires human approval. Proposal-safe R3 degrades; other R3 requires approval.
+R4 requires protected-owner policy to reach protected-owner per-run approval
+and otherwise rejects.
 
 An R2 request must declare both `deterministic_validation` and `rollback_plan`
 conditions. A request marked `automation_new` or `automation_imported` requires
@@ -212,21 +221,35 @@ proposal-only decision is never consumable for dispatch.
 `AutomationApproval` is immutable signed evidence. It binds:
 
 - approving principal/key and authorized principal;
-- exact request and decision digests;
+- the request and decision digests that created the approval authorization;
 - familiar embodiment;
 - automation ID/revision/digest;
-- occurrence/run/attempt/fence;
+- occurrence/run/attempt/fence for single-use approval;
 - action digest;
 - capabilities and scopes;
 - project/workspace;
 - runtime ID, descriptor digest, and capabilities;
+- profile, policy, and manifest versions/digests;
 - issue/expiry, nonce, rationale privacy;
 - single-use or bounded recurring-use semantics.
 
-Single-use is the default. Recurring approvals require an occurrence prefix,
-expire, are revocable, and are capped at 366 uses. R3/R4 decisions emitted by
-the reference policy request per-run approval; a recurring artifact cannot
-silently change that decision.
+Single-use is the default. For single use, the immutable approval directly
+binds the exact per-run request, decision, occurrence, run, attempt, and fence.
+
+Recurring approval is available only when an R2 decision explicitly sets
+`recurring_allowed: true`. The immutable approval then represents a named
+`grant_id`; its per-run occurrence/run/attempt/fence fields are null. It still
+binds the exact principal, familiar embodiment, automation revision/digest,
+action digest, capabilities/scopes, project/workspace, and runtime snapshot.
+It has a non-wildcard occurrence prefix, expiry, revocation path, and at most
+366 uses. R3 and R4 remain per-run. A recurring approval cannot silently change
+the decision's ceremony.
+
+Every recurring dispatch also supplies the immutable signed grant request and
+decision. Their digests must match the approval, the decision's outcome must be
+`requires_approval`, and it must explicitly set `recurring_allowed: true`.
+The request's capability, scope, R2 risk, runtime, policy, and stable identity
+bindings and the decision's corresponding bindings must match the approval.
 
 Approval state is not rewritten into the approval. It is derived from signed,
 append-only `AutomationApprovalEvent` records chained by sequence and previous
@@ -242,7 +265,28 @@ approved -> consumed | revoked | expired
 
 Only a Threads-authority key may author lifecycle events. A client-authored
 `approved`, receipt, or run state is forged state and must fail. Consumption is
-valid only from `approved` and is atomic with `launch_authorized`.
+valid only from `approved` and is atomic with `launch_authorized`. Single-use
+consumption transitions to `consumed`. Recurring consumption carries the exact
+per-run request/decision/occurrence/run/attempt/fence binding, increments the
+append-only usage count, and returns to `approved` until expiry, revocation, or
+the usage bound:
+
+```text
+approved -- recurring consume(exact run) --> approved
+```
+
+The same occurrence/run consumption cannot be appended twice.
+
+Approval signer roles are ceremony-specific at final dispatch:
+
+- `human_per_run` requires a `principal` key belonging to the authorized
+  principal;
+- `protected_owner_per_run` requires a `protected_owner` key;
+- neither role may substitute for the other.
+
+Requested and approved capabilities must all exist in the bound runtime for
+approval-required flows, at approval validation, evaluation, and final
+dispatch.
 
 Revocation disposition is explicit:
 
@@ -253,6 +297,12 @@ Revocation disposition is explicit:
 
 The latter is deliberately honest: the profile does not claim rollback or
 exactly-once external effects.
+
+Rejection and expiry also have explicit no-launch dispositions:
+`no_launch_rejected` and `no_launch_expired`. Each event carries an
+`occurrence_disposition` with the exact occurrence ID, run ID, and
+`rejected_no_launch` or `expired_no_launch`. They are dispositions, not
+successful runs.
 
 ## 8. Degrade to proposal
 
@@ -282,14 +332,26 @@ Immediately before launch, Coven MUST verify from one immutable snapshot:
 - runtime capability non-downgrade;
 - unchanged policy and manifest versions/digests;
 - unexpired request, decision, and approval;
-- matching approval and `approved` append-only lifecycle head when required;
-- unconsumed request, decision, and approval evidence.
+- the raw authenticated approval lifecycle chain and `approved` head when
+  required; a caller-authored `{state: "approved"}` summary has no authority;
+- a Threads-signed `AutomationConsumptionSnapshot` whose monotonic store
+  revision equals the dispatch snapshot;
+- exactly one matching request adoption, an unconsumed decision digest, and an
+  lifecycle-derived approval usage count/head;
+- that the current recurring occurrence has not already consumed the approval
+  and that remaining usage exists.
+
+The consumption snapshot contains signed request-adoption records,
+decision-consumption digests, and approval head/usage records. Its revision
+must change whenever those stores change, so replaying an older signed snapshot
+fails against the current dispatch revision.
 
 The resulting dispatch-binding digest commits to the request digest, decision
-digest, and exact snapshot. The unique consumption record and launch
+digest, and exact snapshot. The returned required-consumption plan, unique
+decision consumption, approval per-run consumption event, and launch
 authorization must share the daemon's transaction/immutable commit boundary
-where possible. A client must not recompute a decision from partial fields after
-commit.
+where possible. A client must not recompute a decision from partial fields
+after commit.
 
 Changed definition, action, runtime, familiar embodiment, principal, project,
 workspace, policy, manifest, attempt, occurrence, run, or fence refuses
@@ -303,6 +365,8 @@ the requesting principal and proof, subject principal, automation, maximum
 sensitivity, retention classes, validity, and nonce. A principal may read its
 own evidence within those bounds. Cross-principal reads require an out-of-band
 auditor key role. Subject, sensitivity, or retention mismatch fails closed.
+The validator requires trusted `now`; a token is refused before `issued_at` and
+at or after `expires_at`.
 
 Evidence history is append-only. Revocation or expiry adds evidence; it never
 rewrites or deletes the immutable authorization artifacts. Retention enforcement
@@ -318,20 +382,26 @@ The reference validator emits stable codes, including:
   `capability_risk_underclassified`;
 - `scope_too_broad`, `scope_kind_unknown`;
 - `integrity_key_unknown`, `integrity_role_mismatch`,
-  `integrity_digest_mismatch`, `integrity_signature_invalid`;
+  `integrity_digest_mismatch`, `integrity_signature_invalid`,
+  `integrity_signature_noncanonical`;
 - `request_replayed`, `decision_replayed`, `approval_replayed`;
 - `policy_stale`, `manifest_stale`, `previous_approval_stale`;
 - `decision_semantic_mismatch`, `decision_binding_mismatch`;
 - `approval_binding_mismatch`, `approval_definition_changed`,
-  `approval_expired`, `approval_state_invalid`;
+  `approval_expired`, `approval_state_invalid`, `approval_role_mismatch`,
+  `approval_usage_exhausted`;
 - `lifecycle_replay`, `lifecycle_chain_mismatch`,
   `lifecycle_state_forged`, `lifecycle_actor_forged`;
 - `dispatch_stale_fence`, `dispatch_runtime_downgrade`,
-  `dispatch_policy_stale`, `dispatch_manifest_stale`;
+  `dispatch_policy_stale`, `dispatch_manifest_stale`,
+  `dispatch_runtime_capability_missing`;
+- `request_not_adopted`, `approval_lifecycle_required`,
+  `approval_lifecycle_head_mismatch`, `consumption_snapshot_stale`;
 - `proposal_dispatch_forbidden`, `proposal_effect_forbidden`,
   `proposal_success_forged`;
 - `evidence_read_unauthorized`, `evidence_sensitivity_denied`,
-  `evidence_retention_denied`.
+  `evidence_retention_denied`, `evidence_read_not_yet_valid`,
+  `evidence_read_expired`.
 
 The manifest pins the exact expected code for every negative vector. Consumers
 may add diagnostics, but must not reinterpret a named failure as success.

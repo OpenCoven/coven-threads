@@ -10,6 +10,7 @@ import {
   applyLifecycleEvent,
   authorizeEvidenceRead,
   consumeDecision,
+  evaluateAuthorization,
   strictParseJson,
   validateApproval,
   validateAuthorizationRequest,
@@ -136,6 +137,8 @@ function execute(vector, body, keyring) {
       return null;
     case "verify_decision":
       return verifyDecisionBundle(body.request, body.decision, body.policy, { keyring });
+    case "evaluate_request":
+      return evaluateAuthorization(body.request, body.policy, { keyring, unsigned: true });
     case "decision_consumption": {
       let state = null;
       for (let index = 0; index < body.repetitions; index += 1) {
@@ -144,13 +147,17 @@ function execute(vector, body, keyring) {
       return null;
     }
     case "verify_dispatch": {
-      const state = body.events ? lifecycleState(body, keyring) : null;
       return verifyDispatch(
         {
           request: body.request,
           decision: body.decision,
           approval: body.approval ?? null,
-          lifecycle: state,
+          approval_authorization_request:
+            body.approval_authorization_request ?? null,
+          approval_authorization_decision:
+            body.approval_authorization_decision ?? null,
+          lifecycle_events: body.events ?? [],
+          consumption_snapshot: body.consumption_snapshot,
           snapshot: body.snapshot,
         },
         { keyring },
@@ -169,7 +176,7 @@ function execute(vector, body, keyring) {
     case "validate_proposal":
       return validateProposal(body.proposal, { keyring });
     case "evidence_read":
-      return authorizeEvidenceRead(body.read, body.evidence, { keyring });
+      return authorizeEvidenceRead(body.read, body.evidence, { keyring, now: body.now });
     default:
       throw new Error(`unknown manifest operation ${vector.operation}`);
   }

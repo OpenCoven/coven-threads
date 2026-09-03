@@ -55,6 +55,7 @@
               "validate_request",
               "request_adoption",
               "validate_approval",
+              "evaluate_request",
               "verify_decision",
               "decision_consumption",
               "verify_dispatch",

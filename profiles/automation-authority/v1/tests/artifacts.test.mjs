@@ -30,7 +30,7 @@ function assertObjectSchemasAreClosed(schema, path = "$") {
 test("all published JSON Schemas parse and close every object", () => {
   const schemaDirectory = resolve(ROOT, "schemas");
   const schemas = readdirSync(schemaDirectory).filter((name) => name.endsWith(".schema.json"));
-  assert.equal(schemas.length, 9);
+  assert.equal(schemas.length, 10);
   for (const name of schemas) {
     const schema = strictParseJson(readFileSync(resolve(schemaDirectory, name), "utf8"));
     assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");

@@ -35,6 +35,14 @@ Dispatch repeats all material checks against one immutable snapshot so changed
 policy, manifest, identity, definition, runtime, scope, action, or fence cannot
 cross a TOCTOU gap.
 
+Final dispatch accepts no client-authored lifecycle summary. It verifies the
+signed event chain against a signed, revision-bound consumption snapshot.
+`human_per_run` requires the authorized principal's key;
+`protected_owner_per_run` requires a protected-owner key. Recurring R2
+approvals separate immutable grant authorization from exact per-run signed
+consumption evidence and remain occurrence-pattern, expiry, revocation, and
+usage bounded.
+
 ## Ownership
 
 Threads owns classification, capability/scope semantics, decision and approval

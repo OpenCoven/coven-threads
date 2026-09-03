@@ -135,11 +135,20 @@ function policy(overrides = {}) {
     manifest_digest: "sha256:" + "66".repeat(32),
     recurring_grants: [
       {
+        grant_id: "grant:unit-r1",
         principal_id: "principal:alice",
         familiar_id: "familiar:sage",
+        familiar_embodiment_digest: "sha256:" + "11".repeat(32),
         automation_id: "automation:daily-report",
+        definition_revision: 7,
         definition_digest: "sha256:" + "22".repeat(32),
         action_type: "artifact.create",
+        action_digest: "sha256:" + "33".repeat(32),
+        project_id: "project:coven",
+        workspace_id: "workspace:main",
+        runtime_id: "runtime:node",
+        runtime_descriptor_digest: "sha256:" + "44".repeat(32),
+        runtime_capabilities: ["artifact.write"],
         risk_classes: ["R0", "R1"],
         capabilities: ["artifact.write"],
         scopes: [
@@ -157,6 +166,7 @@ function policy(overrides = {}) {
       },
     ],
     protected_owner_approval: false,
+    recurring_approval_allowed: false,
     ...overrides,
   };
 }
@@ -231,14 +241,28 @@ test("narrow R1 recurring authority permits while broad scope fails closed", () 
 test("partial grants preserve denied capabilities and exact narrowed scope", () => {
   const requested = request({
     requested_capabilities: ["analysis.read", "artifact.write"],
+    context: {
+      project_id: "project:coven",
+      workspace_id: "workspace:main",
+      runtime: {
+        id: "runtime:node",
+        descriptor_digest: "sha256:" + "44".repeat(32),
+        capabilities: ["analysis.read", "artifact.write"],
+      },
+    },
   });
-  const decision = evaluateAuthorization(requested, policy(), { keyring });
+  const partialPolicy = policy();
+  partialPolicy.recurring_grants[0].runtime_capabilities = [
+    "analysis.read",
+    "artifact.write",
+  ];
+  const decision = evaluateAuthorization(requested, partialPolicy, { keyring });
   assert.equal(decision.outcome, "permit");
   assert.deepEqual(decision.granted_capabilities, ["artifact.write"]);
   assert.deepEqual(decision.denied_capabilities, [
     { capability: "analysis.read", reason_code: "capability_not_granted" },
   ]);
-  assert.deepEqual(decision.scopes, policy().recurring_grants[0].scopes);
+  assert.deepEqual(decision.scopes, partialPolicy.recurring_grants[0].scopes);
 });
 
 test("proposal downgrade cannot claim or perform protected effects", () => {
@@ -303,6 +327,13 @@ test("approval lifecycle consumption is append-only and replay safe", () => {
       runtime_id: "runtime:node",
       runtime_descriptor_digest: "sha256:" + "44".repeat(32),
       runtime_capabilities: ["artifact.write"],
+      versions: {
+        profile: "1.0.0",
+        policy: "policy:2026-09-03",
+        policy_digest: "sha256:" + "55".repeat(32),
+        manifest: "manifest:1",
+        manifest_digest: "sha256:" + "66".repeat(32),
+      },
       use: { kind: "single_use" },
       issued_at: "2026-09-03T13:05:00Z",
       expires_at: "2026-09-03T14:00:00Z",
@@ -333,6 +364,8 @@ test("approval lifecycle consumption is append-only and replay safe", () => {
       actor: "threads_authority",
       execution_phase: "not_applicable",
       dispatch_disposition: "not_applicable",
+      consumption: null,
+      occurrence_disposition: null,
     },
     "opencoven:automation-approval-event:v1",
     true,
@@ -358,6 +391,8 @@ test("approval lifecycle consumption is append-only and replay safe", () => {
       actor: "threads_authority",
       execution_phase: "not_applicable",
       dispatch_disposition: "not_applicable",
+      consumption: null,
+      occurrence_disposition: null,
     },
     "opencoven:automation-approval-event:v1",
     true,
@@ -383,6 +418,15 @@ test("approval lifecycle consumption is append-only and replay safe", () => {
       actor: "threads_authority",
       execution_phase: "dispatching",
       dispatch_disposition: "launch_authorized",
+      consumption: {
+        request_digest: approval.request_digest,
+        decision_digest: approval.decision_digest,
+        occurrence_id: approval.occurrence_id,
+        run_id: approval.run_id,
+        attempt: approval.attempt,
+        fence_generation: approval.fence_generation,
+      },
+      occurrence_disposition: null,
     },
     "opencoven:automation-approval-event:v1",
     true,
@@ -411,6 +455,7 @@ test("dispatch revalidation detects stale fence, policy, definition, runtime, an
     attempt: req.execution.attempt,
     fence_generation: req.execution.fence_generation,
     action_digest: req.action.digest,
+    runtime_id: req.context.runtime.id,
     runtime_descriptor_digest: req.context.runtime.descriptor_digest,
     runtime_capabilities: req.context.runtime.capabilities,
     project_id: req.context.project_id,
@@ -419,9 +464,42 @@ test("dispatch revalidation detects stale fence, policy, definition, runtime, an
     policy_digest: req.versions.policy_digest,
     manifest: req.versions.manifest,
     manifest_digest: req.versions.manifest_digest,
+    consumption_revision: 7,
   };
+  const consumptionSnapshot = signed(
+    {
+      schema_version: "opencoven.automation-consumption-snapshot/v1",
+      snapshot_id: "consumption:unit",
+      recorded_at: "2026-09-03T13:05:00Z",
+      store_revision: 7,
+      request_adoptions: [
+        {
+          request_digest:
+            "sha256:" + canonicalDigest(req, "opencoven:automation-request:v1"),
+          nonce: req.replay.nonce,
+          adoption_key: req.replay.adoption_key,
+        },
+      ],
+      decision_consumptions: [],
+      approval_heads: [],
+    },
+    "opencoven:automation-consumption-snapshot:v1",
+    true,
+  );
   assert.doesNotThrow(() =>
-    verifyDispatch({ request: req, decision, approval: null, lifecycle: null, snapshot }, { keyring }),
+    verifyDispatch(
+      {
+        request: req,
+        decision,
+        approval: null,
+        approval_authorization_request: null,
+        approval_authorization_decision: null,
+        lifecycle_events: [],
+        consumption_snapshot: consumptionSnapshot,
+        snapshot,
+      },
+      { keyring },
+    ),
   );
   assert.throws(
     () =>
@@ -430,7 +508,10 @@ test("dispatch revalidation detects stale fence, policy, definition, runtime, an
           request: req,
           decision,
           approval: null,
-          lifecycle: null,
+          approval_authorization_request: null,
+          approval_authorization_decision: null,
+          lifecycle_events: [],
+          consumption_snapshot: consumptionSnapshot,
           snapshot: { ...snapshot, fence_generation: snapshot.fence_generation + 1 },
         },
         { keyring },

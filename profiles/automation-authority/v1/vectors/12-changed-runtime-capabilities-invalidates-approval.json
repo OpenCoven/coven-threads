@@ -76,7 +76,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
-      "signature_b64": "X+Tn6C4WkoNSzAx7mtahlFfWOefwSIyba+GCQ5Is8+ekFGf1+ALCeCTFLG+5DbZP43bbLF+VRLJSdhzBo5M8Bw=="
+      "signature_b64": "O68SJRbGIzrVlU7AISG+97zZRZze7FZzTKuli3pb6oQKch8RWNChxirdG9n2sCvf1NWuaE5bljGBNp27Dzj+DA=="
     }
   },
   "decision": {
@@ -153,7 +153,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
-      "signature_b64": "kO4Fnyd8Pt4U6oGIUJFw1mPvnN3LVF+epF0APefnE2LhZ/IHrORmGpCwSRrN5YFviA6RVhTJry4hoh0ZUAKYAw=="
+      "signature_b64": "7d3xJNKg7LcdbDqD9sAgSW0L5di7R/0e3ZWuuCOLWc+o/+zFYTFlM4wk7ZW/80MDFkHfR35tIbJ6H3syeyLSBA=="
     }
   },
   "approval": {
@@ -195,8 +195,16 @@
     "runtime_id": "runtime:node",
     "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
     "runtime_capabilities": [
-      "analysis.read"
+      "analysis.read",
+      "state.mutate"
     ],
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
     "use": {
       "kind": "single_use"
     },
@@ -210,8 +218,8 @@
     "integrity": {
       "alg": "ed25519",
       "key_id": "key:principal:alice",
-      "signed_digest": "6e66280b7d7ff6877839a7d49b754574b6f8476ee26c2adf7b82f772b5732bba",
-      "signature_b64": "+g+n004s/gIBmpkAJF0/+4NKfHW7Ot5LSgtPHpFbutGyoR5iCV1hWI3ctZ/mFWhpaVkdnCyMy2TvDL4C/twRAg=="
+      "signed_digest": "ea0b79c93c92734271cedd5a3305297ef6ee2ca499dc566e4bf8f78232c6cc4e",
+      "signature_b64": "1pDeigPLf9myChexkru+AD1T75bl0B0jJ9XJEj8fEBnFxeELnw2iwGAhyy6Bp2gf1pdAp387+kG2xdqrdKcSAw=="
     }
   },
   "events": [
@@ -231,11 +239,13 @@
       "actor": "threads_authority",
       "execution_phase": "not_applicable",
       "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
-        "signature_b64": "Lw1KY2fkZijCpXST8Xl0AcBScnU7it8zcfe6ZCYlUolHFmazL8GWpmlvBt+teZu5roHibVmsIBANtGsR7qiMDA=="
+        "signed_digest": "884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
+        "signature_b64": "Y7/GkN8K3niu2RjlgOtsTAimlVhnHJ1uOb9EqUwR2CoPfO8qwzE+V/XrEr5TB8zdDqtWYkg7ChfCYJaG+LaDAg=="
       }
     },
     {
@@ -244,9 +254,9 @@
       "approval_id": "approval:request:r2-migration",
       "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
       "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
-      "approval_digest": "sha256:6e66280b7d7ff6877839a7d49b754574b6f8476ee26c2adf7b82f772b5732bba",
+      "approval_digest": "sha256:ea0b79c93c92734271cedd5a3305297ef6ee2ca499dc566e4bf8f78232c6cc4e",
       "sequence": 2,
-      "previous_event_digest": "sha256:9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
+      "previous_event_digest": "sha256:884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
       "from_state": "requested",
       "to_state": "approved",
       "event": "approve",
@@ -254,11 +264,13 @@
       "actor": "threads_authority",
       "execution_phase": "not_applicable",
       "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "2f800aa6e17ad25ae3325da093181e74c33aafe6cce26b4191dcc28bcba463b7",
-        "signature_b64": "k2LtZAk463XswZH2AMAeAPxYkL8cXi2vljXuX0YqbUaW/Qh+/NKQ6u24P+R+BDImMyAGgW6za0bCmwtH2JtwAw=="
+        "signed_digest": "35f29915d19927dc2f6f906ebe0849a615840c1aaedd81562ae1365859428217",
+        "signature_b64": "Bhz9g3iwWvr7m14whkNqJ6R3PRCza8eQZHRVKTcmmi77tTCHK1LnaoLqfB++3O9jsD74Y6x0U087GYtYmvjXBA=="
       }
     }
   ],
@@ -275,6 +287,7 @@
     "attempt": 1,
     "fence_generation": 4,
     "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "runtime_id": "runtime:node",
     "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
     "runtime_capabilities": [
       "state.mutate"
@@ -284,6 +297,36 @@
     "policy": "policy:2026-09-03",
     "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
     "manifest": "manifest:1",
-    "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
-  }
+    "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "consumption_revision": 7
+  },
+  "consumption_snapshot": {
+    "schema_version": "opencoven.automation-consumption-snapshot/v1",
+    "snapshot_id": "consumption:request:r2-migration",
+    "recorded_at": "2026-09-03T13:05:30Z",
+    "store_revision": 7,
+    "request_adoptions": [
+      {
+        "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
+        "nonce": "nonce:r2-migration",
+        "adoption_key": "adopt:r2-migration"
+      }
+    ],
+    "decision_consumptions": [],
+    "approval_heads": [
+      {
+        "approval_id": "approval:request:r2-migration",
+        "head_event_digest": "sha256:35f29915d19927dc2f6f906ebe0849a615840c1aaedd81562ae1365859428217",
+        "usage_count": 0
+      }
+    ],
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:threads:test-authority",
+      "signed_digest": "eefb12fd7301bdfbafc25037db846491abedd09a58f463874f5b9acbc33a56c6",
+      "signature_b64": "NBUmJWexiqNIPNWcN0O5A2Bwulj56GVYF66tGWUdDYbQpe665bx4GjOmGPYJnHWNJWTeHMx4HeXPeEaizpszCA=="
+    }
+  },
+  "approval_authorization_request": null,
+  "approval_authorization_decision": null
 }

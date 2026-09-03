@@ -40,6 +40,13 @@
     "runtime_capabilities": [
       "state.mutate"
     ],
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
     "use": {
       "kind": "single_use"
     },
@@ -53,8 +60,8 @@
     "integrity": {
       "alg": "ed25519",
       "key_id": "key:principal:alice",
-      "signed_digest": "7f15fce695051ecdec61e30c4ca97097e935f25beef23fda71d479ac68d34f0b",
-      "signature_b64": "QTYRoTeNUd+RxEqDVdppFCZ4PW0iBfeNhbfm8uLPgCKXLxnzx5lk0D3YMsqvJkt34GtaecAiRS8/vWuqeySMCg=="
+      "signed_digest": "954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
+      "signature_b64": "e/RzGvNwqiuWK3DHqjl/DoY5oQzSZCvnbY/bYqyjnBjCOFryRGrEgBbLUPcbXtF7KmcEaPn26hxd2NcCxr17CA=="
     }
   },
   "events": [
@@ -74,11 +81,13 @@
       "actor": "threads_authority",
       "execution_phase": "not_applicable",
       "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
-        "signature_b64": "Lw1KY2fkZijCpXST8Xl0AcBScnU7it8zcfe6ZCYlUolHFmazL8GWpmlvBt+teZu5roHibVmsIBANtGsR7qiMDA=="
+        "signed_digest": "884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
+        "signature_b64": "Y7/GkN8K3niu2RjlgOtsTAimlVhnHJ1uOb9EqUwR2CoPfO8qwzE+V/XrEr5TB8zdDqtWYkg7ChfCYJaG+LaDAg=="
       }
     },
     {
@@ -87,9 +96,9 @@
       "approval_id": "approval:request:r2-migration",
       "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
       "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
-      "approval_digest": "sha256:7f15fce695051ecdec61e30c4ca97097e935f25beef23fda71d479ac68d34f0b",
+      "approval_digest": "sha256:954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
       "sequence": 2,
-      "previous_event_digest": "sha256:9aedbafef6027d5cfa1fb1ca90cea2d5336004b6333816fba1a21fc3eded53a3",
+      "previous_event_digest": "sha256:884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
       "from_state": "requested",
       "to_state": "approved",
       "event": "approve",
@@ -97,11 +106,13 @@
       "actor": "threads_authority",
       "execution_phase": "not_applicable",
       "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "87710a25c91b6f51bcac98b2ef0c00592b35c34254bfba15802b7082be77ec56",
-        "signature_b64": "r7SIE5cuaws1urZRs/7RqZHtzfNQOFq96WY9Z35hRc2CBHO+1m4V+ogYev/IQx8r8XwMP7q9KjuBAtXSS+8OAw=="
+        "signed_digest": "aad536d0ee486138b16c57695c4a95fcab17701587d847542316a22a8f9db201",
+        "signature_b64": "SCJ0SNeyPhIgP8eFU5AYVDW7JSFVXjnLrSmSjG/RfIbcTkg6TDnbmUTO5eHziTOQDuHXNwIfTAYhdq0xs9DuDQ=="
       }
     },
     {
@@ -110,9 +121,9 @@
       "approval_id": "approval:request:r2-migration",
       "request_digest": "sha256:909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
       "decision_digest": "sha256:5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
-      "approval_digest": "sha256:7f15fce695051ecdec61e30c4ca97097e935f25beef23fda71d479ac68d34f0b",
+      "approval_digest": "sha256:954e90dbfad0408ef6c0937b0bc33f90e9d14e54358b833c2f71374165184118",
       "sequence": 3,
-      "previous_event_digest": "sha256:87710a25c91b6f51bcac98b2ef0c00592b35c34254bfba15802b7082be77ec56",
+      "previous_event_digest": "sha256:aad536d0ee486138b16c57695c4a95fcab17701587d847542316a22a8f9db201",
       "from_state": "approved",
       "to_state": "revoked",
       "event": "revoke",
@@ -120,11 +131,13 @@
       "actor": "threads_authority",
       "execution_phase": "queued",
       "dispatch_disposition": "cancel_before_launch",
+      "consumption": null,
+      "occurrence_disposition": null,
       "integrity": {
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
-        "signed_digest": "b0bec6be9a53e6668b82b318270ce76e14cee60831a311c8e1f61461f2da9a1b",
-        "signature_b64": "y9Gc47GYO/gWEJ0389axgYwYdpBgGaG2U8gQPXuSqYQnDh/UdXN7lqBgDImMDJcyF4Z/Y9ufVJbA/uhfE8bbAw=="
+        "signed_digest": "99d3fb5b0194df361f7da5e7c9037993bccaecb1e8c24d904f8f00fa46432f5c",
+        "signature_b64": "PUQUVxgRO6HreV6Eq7t7/t/AGyMtAeeTBvckwWSWQ4K9hyJqv81Sd5Fg2K7E0jsyEy6VOY1//GkIhhb1qj5zCw=="
       }
     }
   ]

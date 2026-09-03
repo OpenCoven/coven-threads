@@ -20,6 +20,8 @@
     "actor",
     "execution_phase",
     "dispatch_disposition",
+    "consumption",
+    "occurrence_disposition",
     "integrity"
   ],
   "properties": {
@@ -87,7 +89,75 @@
         "launch_authorized",
         "cancel_before_launch",
         "request_cooperative_cancel",
-        "external_effects_not_rolled_back"
+        "external_effects_not_rolled_back",
+        "no_launch_rejected",
+        "no_launch_expired"
+      ]
+    },
+    "consumption": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "request_digest",
+            "decision_digest",
+            "occurrence_id",
+            "run_id",
+            "attempt",
+            "fence_generation"
+          ],
+          "properties": {
+            "request_digest": {
+              "$ref": "common.schema.json#/$defs/digest"
+            },
+            "decision_digest": {
+              "$ref": "common.schema.json#/$defs/digest"
+            },
+            "occurrence_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "run_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "attempt": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "fence_generation": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        }
+      ]
+    },
+    "occurrence_disposition": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["occurrence_id", "run_id", "disposition"],
+          "properties": {
+            "occurrence_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "run_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "disposition": {
+              "enum": ["rejected_no_launch", "expired_no_launch"]
+            }
+          }
+        }
       ]
     },
     "integrity": {

@@ -26,6 +26,7 @@
     "runtime_id",
     "runtime_descriptor_digest",
     "runtime_capabilities",
+    "versions",
     "use",
     "issued_at",
     "expires_at",
@@ -72,20 +73,48 @@
       "$ref": "common.schema.json#/$defs/identifier"
     },
     "occurrence_id": {
-      "$ref": "common.schema.json#/$defs/identifier"
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      ]
     },
     "run_id": {
-      "$ref": "common.schema.json#/$defs/identifier"
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      ]
     },
     "attempt": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      ]
     },
     "fence_generation": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      ]
     },
     "action_digest": {
       "$ref": "common.schema.json#/$defs/digest"
@@ -111,6 +140,28 @@
     "runtime_capabilities": {
       "$ref": "common.schema.json#/$defs/capabilities"
     },
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "policy", "policy_digest", "manifest", "manifest_digest"],
+      "properties": {
+        "profile": {
+          "const": "1.0.0"
+        },
+        "policy": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "policy_digest": {
+          "$ref": "common.schema.json#/$defs/digest"
+        },
+        "manifest": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "manifest_digest": {
+          "$ref": "common.schema.json#/$defs/digest"
+        }
+      }
+    },
     "use": {
       "oneOf": [
         {
@@ -126,10 +177,13 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "max_uses", "occurrence_prefix"],
+          "required": ["kind", "grant_id", "max_uses", "occurrence_prefix"],
           "properties": {
             "kind": {
               "const": "recurring"
+            },
+            "grant_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
             },
             "max_uses": {
               "type": "integer",
@@ -169,5 +223,57 @@
     "integrity": {
       "$ref": "common.schema.json#/$defs/integrity"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "use": {
+            "properties": {
+              "kind": {
+                "const": "recurring"
+              }
+            },
+            "required": ["kind"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "occurrence_id": {
+            "type": "null"
+          },
+          "run_id": {
+            "type": "null"
+          },
+          "attempt": {
+            "type": "null"
+          },
+          "fence_generation": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "occurrence_id": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "run_id": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "fence_generation": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        }
+      }
+    }
+  ]
 }

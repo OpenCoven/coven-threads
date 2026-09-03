@@ -11,6 +11,13 @@ project/workspace/runtime, and policy/manifest snapshot.
 The profile deliberately does not schedule or run anything. Coven owns durable
 scheduler state, final revalidation, consumption, launch, and effects.
 
+Final revalidation consumes the raw signed approval-event chain plus a
+Threads-signed, revision-bound consumption snapshot. A client-authored
+`approved` summary is never authority. Human approval requires the authorized
+principal's key; R4 protected-owner approval requires a protected-owner key.
+Recurring R2 approval remains narrowly reusable only through exact per-run
+signed consumption evidence and a bounded usage counter.
+
 ## Why proposal-only matters
 
 A familiar may still reason and prepare when it lacks authority to act. A
@@ -21,7 +28,7 @@ new adoption decision before execution.
 ## Portable artifacts
 
 The versioned schemas, validator, public conformance keyring, exact manifest,
-and 62 vectors are under
+and 97 vectors are under
 [`profiles/automation-authority/v1/`](../profiles/automation-authority/v1/).
 The normative contract is
 [`specs/AUTOMATION-AUTHORITY-PROFILE-v1.md`](../specs/AUTOMATION-AUTHORITY-PROFILE-v1.md).
