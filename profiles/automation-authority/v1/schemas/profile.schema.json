@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/profile.schema.json",
+  "title": "OpenCoven Automation Authority Profile v1 artifacts",
+  "oneOf": [
+    {
+      "$ref": "request.schema.json"
+    },
+    {
+      "$ref": "decision.schema.json"
+    },
+    {
+      "$ref": "approval.schema.json"
+    },
+    {
+      "$ref": "approval-event.schema.json"
+    },
+    {
+      "$ref": "proposal.schema.json"
+    },
+    {
+      "$ref": "evidence-read.schema.json"
+    },
+    {
+      "$ref": "consumption-snapshot.schema.json"
+    }
+  ]
+}

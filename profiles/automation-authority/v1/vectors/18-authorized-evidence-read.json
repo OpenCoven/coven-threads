@@ -1,0 +1,31 @@
+{
+  "read": {
+    "schema_version": "opencoven.automation-evidence-read/v1",
+    "read_id": "read:self",
+    "requesting_principal_id": "principal:alice",
+    "authorization_proof_ref": "proof:read:self",
+    "subject_principal_id": "principal:alice",
+    "automation_id": "automation:daily-report",
+    "maximum_sensitivity": "internal",
+    "retention_classes": [
+      "authority_evidence_90d"
+    ],
+    "issued_at": "2026-09-03T13:00:00Z",
+    "expires_at": "2026-09-03T14:00:00Z",
+    "nonce": "read-nonce:self",
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "8fea746c8aca38db2524ebd67025e07c5c7f462738075de227abbc06d6b88c4c",
+      "signature_b64": "u1Ctezu0Uix+/WgbHp8wVAqVan+x35g+3dB7Ejf7pER8s6Tk5SPLk94mpSfguqvQxrI/QrPBQKkQ5vqmFhDtBw=="
+    }
+  },
+  "evidence": {
+    "principal_id": "principal:alice",
+    "automation_id": "automation:daily-report",
+    "sensitivity": "internal",
+    "retention": "authority_evidence_90d",
+    "payload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "now": "2026-09-03T13:05:00Z"
+}

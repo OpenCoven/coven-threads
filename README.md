@@ -25,11 +25,20 @@ User-facing docs live in [`docs/`](docs/README.md):
 - [Concepts](docs/concepts.md) — the vocabulary (Thread, Weave, Strand, Channel), the two-compaction contract, the descriptor-vs-predicate anti-pattern. **Read this first.**
 - [Architecture](docs/architecture.md) — where this layer sits, the enforcement flow, the `ward.audit` store.
 - [Authority model](docs/authority-model.md) — fail-closed, the three verdicts, the tension state machine.
+- [Automation Authority Profile](docs/automation-authority-profile.md) — operation-specific permit / approval / proposal / reject decisions, replay-safe approval evidence, and portable vectors.
 - [Channels and strands](docs/channels-and-strands.md) — the four channels, the five strand kinds, WARD-C1–C7.
 - [Phases](docs/phases.md) — what is frozen, what is implemented, what is active, what is blocked.
 - [FAQ](docs/faq.md) · [Glossary](docs/glossary.md)
 
 The frozen design doc is [`specs/PHASE-0-DESIGN.md`](specs/PHASE-0-DESIGN.md); the docs describe it and never amend it.
+
+The versioned Automation Authority Profile is
+[`specs/AUTOMATION-AUTHORITY-PROFILE-v1.md`](specs/AUTOMATION-AUTHORITY-PROFILE-v1.md),
+with closed schemas, a Node-core reference validator, and its mandatory exact
+conformance manifest under
+[`profiles/automation-authority/v1/`](profiles/automation-authority/v1/).
+Threads defines the authority decision; Coven still owns scheduling,
+persistence, final dispatch, and effects.
 
 ## Why this is not just "OpenTrust"
 

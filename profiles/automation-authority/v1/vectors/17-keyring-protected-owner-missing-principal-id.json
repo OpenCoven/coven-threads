@@ -1,0 +1,71 @@
+{
+  "approval": {
+    "schema_version": "opencoven.automation-approval/v1",
+    "approval_id": "approval:request:r4-identity",
+    "approving_principal": {
+      "id": "principal:owner",
+      "key_ref": "key:protected-owner"
+    },
+    "request_digest": "sha256:2f4daeb1453215da3a7cf51d60a2c5d4660ac40ade9ba4f07a5ebdf6247fb1be",
+    "decision_digest": "sha256:3783da7074feaba67469db5da5de31a5c018ba110674cc4ae8007cd0d745ce5f",
+    "familiar_id": "familiar:sage",
+    "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "authorized_principal_id": "principal:alice",
+    "occurrence_id": "occ:2026-09-03",
+    "run_id": "run:01",
+    "attempt": 1,
+    "fence_generation": 4,
+    "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "capabilities": [
+      "identity.mutate"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "identity/SOUL.md",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "project_id": "project:coven",
+    "workspace_id": "workspace:main",
+    "runtime_id": "runtime:node",
+    "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "runtime_capabilities": [
+      "identity.mutate"
+    ],
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "use": {
+      "kind": "single_use"
+    },
+    "issued_at": "2026-09-03T13:05:00Z",
+    "expires_at": "2026-09-03T14:00:00Z",
+    "nonce": "approval-nonce:request:r4-identity",
+    "rationale": {
+      "text": "Approve this exact operation.",
+      "privacy": "internal"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:protected-owner",
+      "signed_digest": "8b28d6d386d6bf1b05cfc39f34aa9af4879720e1ec1715e0bd4587054321710f",
+      "signature_b64": "x/T6Mq6YdNeLem6siuVfh5TmvFD0p33fLjyKqL9MmsNB6Fx8YBU96KzaCTKjM/InstB9Dx5OuCoXUGLOTGoSCw=="
+    }
+  },
+  "keyring_mutation": {
+    "key_id": "key:protected-owner",
+    "remove": "principal_id"
+  }
+}
