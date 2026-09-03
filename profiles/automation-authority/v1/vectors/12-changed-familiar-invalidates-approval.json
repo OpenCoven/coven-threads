@@ -76,7 +76,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "909d3b4d2ac9f2e522a43b6bb87d9b145c3702a92801ebe2df51ef72ece5632e",
-      "signature_b64": "O68SJRbGIzrVlU7AISG+97zZRZze7FZzTKuli3pb6oQKch8RWNChxirdG9n2sCvf1NWuaE5bljGBNp27Dzj+DA=="
+      "signature_b64": "kDp7Khfz1uMZoIT95tX8GgyJUP5HaNbP3xoTH5z4K/1VkkuCmlM37P0+quHjFj++EBjKDdv+PAeCO3d0zfw7DA=="
     }
   },
   "decision": {
@@ -153,7 +153,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "5235552d6ba0f75f612baffba122dfc1d923649bf000159145ee71cb96d881b3",
-      "signature_b64": "7d3xJNKg7LcdbDqD9sAgSW0L5di7R/0e3ZWuuCOLWc+o/+zFYTFlM4wk7ZW/80MDFkHfR35tIbJ6H3syeyLSBA=="
+      "signature_b64": "1eMx/IGPW1c4shJj/uKf11jSf6M8oWDEg1wAYommLEM4s2PwX1FtVkCMJp71jpf0PvOW+N/tO3UDUVTHEyOfBQ=="
     }
   },
   "approval": {
@@ -218,7 +218,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "73d8e0de338d3f84a9d41ce16dacb205ca5dead62a27d8baa053ead3d3ff3554",
-      "signature_b64": "EEsHTAMlXYsqQB0kxwz6Cr0RPlqOjvj8mY9xiguTD7vW9uzru+5KtdsAWRIIQ50Rcq8z/xEBEY2i5JRGP8ywCA=="
+      "signature_b64": "S5L17k6rXNZSNpF7muiS3IhE5TcAsCEPhN1prV1RZSBCjbVX93jB/BtTJ8kNPHNoDm9ke38BaHFGDUjv4U2cCQ=="
     }
   },
   "events": [
@@ -244,7 +244,7 @@
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
         "signed_digest": "884b299a855abf244eb6f77388a5c29cb189d5ad369c4a98cad7d125834ce951",
-        "signature_b64": "Y7/GkN8K3niu2RjlgOtsTAimlVhnHJ1uOb9EqUwR2CoPfO8qwzE+V/XrEr5TB8zdDqtWYkg7ChfCYJaG+LaDAg=="
+        "signature_b64": "zu2+JtOWdo/s8iSPEuaLTDsavfLixyE9A7A8F1NdOzF1aFXDmne114rHKC/7gLlyA9Xug5cj5SFjdhZP/c1kAg=="
       }
     },
     {
@@ -269,7 +269,7 @@
         "alg": "ed25519",
         "key_id": "key:threads:test-authority",
         "signed_digest": "e81b1193369e78b0612a2ae7e5e39b66060ae55cc157e09f74ce7c42a7e3832c",
-        "signature_b64": "9QdASpZ3nUKFw3yLj8n8j8Ia59bmr7QE5VdDoGN8ofrpiKhxRtsx7+WlH6T+Xcogmo3eAIChI5CbZeoB4KtBCA=="
+        "signature_b64": "t9+6aXkKCjwzfefxfzyFS+7SCPYtNdEqDC4kvyZQc5l6GxN438hYcDTrPIyEFaK1kqWW4etX9aTnN+27WttDDw=="
       }
     }
   ],
@@ -297,7 +297,18 @@
     "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
     "manifest": "manifest:1",
     "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
-    "consumption_revision": 7
+    "consumption_revision": 7,
+    "policy_snapshot": {
+      "now": "2026-09-03T13:05:00Z",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "recurring_grants": [],
+      "protected_owner_approval": false,
+      "recurring_approval_allowed": false
+    },
+    "approval_authorization_policy_snapshot": null
   },
   "consumption_snapshot": {
     "schema_version": "opencoven.automation-consumption-snapshot/v1",
@@ -323,7 +334,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "facac4ef5156a31958782531e0c074afc75bc706df0cc18d66b6ed50a81b7be5",
-      "signature_b64": "hhTVJk17EMJzIixmTlrAbKwl2qY1UelezSOyp63cT9IzGcaJRMwVQx24AP7M/Bz+pGf3LY4T6/jAcw3/5j6lBQ=="
+      "signature_b64": "eyByv6Om4TsaTsFPxzXXr+OQxrqq3S7CpH6FuX1rqx6u1yN0Vpp45ugYshgWxTtE5wlfYfx058h7itK22EjBAA=="
     }
   },
   "approval_authorization_request": null,

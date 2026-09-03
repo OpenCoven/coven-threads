@@ -37,11 +37,20 @@ cross a TOCTOU gap.
 
 Final dispatch accepts no client-authored lifecycle summary. It verifies the
 signed event chain against a signed, revision-bound consumption snapshot.
+It also re-evaluates the request against the policy snapshot pinned in the
+trusted dispatch snapshot and requires the signed decision to match that
+canonical result; signature validity alone is insufficient. Runtime capability
+sets remain exact across request, decision, and dispatch, and grants cannot
+exceed the decision-bound runtime.
 `human_per_run` requires the authorized principal's key;
 `protected_owner_per_run` requires a protected-owner key. Recurring R2
 approvals separate immutable grant authorization from exact per-run signed
 consumption evidence and remain occurrence-pattern, expiry, revocation, and
 usage bounded.
+
+RFC 3339 UTC timestamps are component-validated without calendar
+normalization. Evidence reads reject missing or unknown sensitivity and
+retention metadata before authorization comparisons.
 
 ## Ownership
 

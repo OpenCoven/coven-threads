@@ -57,6 +57,11 @@ the original UTF-8 JSON text before ordinary object decoding and reject:
 These are the profile's I-JSON interoperability requirements. A parser that
 silently keeps the first or last duplicate key does not conform.
 
+Every timestamp is RFC 3339 UTC with a trailing `Z`. Validators MUST reject
+out-of-range components and impossible calendar dates rather than accepting a
+runtime's normalized interpretation (for example, February 30 becoming a March
+instant).
+
 ## 3. Integrity and authentication
 
 Every authority artifact carries:
@@ -327,9 +332,14 @@ proposal.
 Immediately before launch, Coven MUST verify from one immutable snapshot:
 
 - request and decision signatures/digests;
+- the decision is byte-for-byte equivalent, excluding integrity, to the
+  reference evaluation of the request against the pinned policy snapshot; a
+  Threads signature alone does not establish semantic correctness;
 - exact principal, familiar embodiment, automation definition, occurrence,
   run, attempt, fence, action, project, workspace, and runtime;
-- runtime capability non-downgrade;
+- every granted capability exists in the decision-bound runtime, and the
+  decision-bound, request-bound, and current trusted runtime capability sets
+  are exactly equal;
 - unchanged policy and manifest versions/digests;
 - unexpired request, decision, and approval;
 - the raw authenticated approval lifecycle chain and `approved` head when
@@ -340,6 +350,10 @@ Immediately before launch, Coven MUST verify from one immutable snapshot:
   lifecycle-derived approval usage count/head;
 - that the current recurring occurrence has not already consumed the approval
   and that remaining usage exists.
+
+Recurring approval dispatch repeats the same semantic verification for the
+immutable grant decision against its separately pinned authorization policy
+snapshot.
 
 The consumption snapshot contains signed request-adoption records,
 decision-consumption digests, and approval head/usage records. Its revision
@@ -365,6 +379,8 @@ the requesting principal and proof, subject principal, automation, maximum
 sensitivity, retention classes, validity, and nonce. A principal may read its
 own evidence within those bounds. Cross-principal reads require an out-of-band
 auditor key role. Subject, sensitivity, or retention mismatch fails closed.
+Missing or unknown evidence sensitivity or retention metadata is rejected
+before any clearance or retention comparison.
 The validator requires trusted `now`; a token is refused before `issued_at` and
 at or after `expires_at`.
 
@@ -377,7 +393,7 @@ is Coven's storage lane, not a client or Cave decision.
 The reference validator emits stable codes, including:
 
 - `json_duplicate_key`, `json_non_ijson`, `json_unsafe_integer`;
-- `schema_unknown_version`, `schema_unknown_field`;
+- `schema_unknown_version`, `schema_unknown_field`, `schema_timestamp`;
 - `action_unknown`, `capability_unknown`, `action_risk_underclassified`,
   `capability_risk_underclassified`;
 - `scope_too_broad`, `scope_kind_unknown`;
@@ -386,7 +402,9 @@ The reference validator emits stable codes, including:
   `integrity_signature_noncanonical`;
 - `request_replayed`, `decision_replayed`, `approval_replayed`;
 - `policy_stale`, `manifest_stale`, `previous_approval_stale`;
-- `decision_semantic_mismatch`, `decision_binding_mismatch`;
+- `decision_semantic_mismatch`, `decision_binding_mismatch`,
+  `decision_runtime_capability_missing`,
+  `decision_runtime_capabilities_changed`;
 - `approval_binding_mismatch`, `approval_definition_changed`,
   `approval_expired`, `approval_state_invalid`, `approval_role_mismatch`,
   `approval_usage_exhausted`;
@@ -394,13 +412,15 @@ The reference validator emits stable codes, including:
   `lifecycle_state_forged`, `lifecycle_actor_forged`;
 - `dispatch_stale_fence`, `dispatch_runtime_downgrade`,
   `dispatch_policy_stale`, `dispatch_manifest_stale`,
-  `dispatch_runtime_capability_missing`;
+  `dispatch_runtime_capability_missing`,
+  `dispatch_runtime_capabilities_changed`;
 - `request_not_adopted`, `approval_lifecycle_required`,
   `approval_lifecycle_head_mismatch`, `consumption_snapshot_stale`;
 - `proposal_dispatch_forbidden`, `proposal_effect_forbidden`,
   `proposal_success_forged`;
 - `evidence_read_unauthorized`, `evidence_sensitivity_denied`,
-  `evidence_retention_denied`, `evidence_read_not_yet_valid`,
+  `evidence_retention_denied`, `evidence_sensitivity_unknown`,
+  `evidence_retention_unknown`, `evidence_read_not_yet_valid`,
   `evidence_read_expired`.
 
 The manifest pins the exact expected code for every negative vector. Consumers

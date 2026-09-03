@@ -16,11 +16,12 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
     append-only lifecycle, proposal-only, evidence-read, R0–R4,
     capability/scope, replay, privacy, and final-dispatch contracts;
   - domain-separated SHA-256 canonical digests and Ed25519 authentication;
-  - an exact manifest with 97 vectors covering all 18 issue categories plus
+  - an exact manifest with 122 vectors covering all 18 issue categories plus
     duplicate-key, non-I-JSON, broad-scope, risk-lowering, replay,
     protected-owner/auditor roles, authenticated lifecycle heads, recurring
     approval usage, runtime binding, evidence-read validity, and
-    semantic-forgery mutations.
+    semantic-forgery, pinned-policy, runtime-exactness, evidence-metadata, and
+    impossible-calendar timestamp mutations.
 - `AuditEventType::ApplyAudit` variant + `"apply_audit"` tag in `WARD_AUDIT_SCHEMA_SQL`'s CHECK constraint (coven-threads#5).
   - Enables the coven daemon to persist Gate-4 Tier-2 applied-write records into `ward.audit` (downstream: coven#414).
 - `WardAuditRecord::detail` field — nullable JSON column for event-type-specific payload.

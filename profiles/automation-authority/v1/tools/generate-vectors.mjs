@@ -87,6 +87,7 @@ const signer = {
     private_key: auditor.privateKey,
   },
 };
+const policyByDecisionDigest = new Map();
 
 writeFileSync(
   resolve(ROOT, "keyring.json"),
@@ -267,7 +268,12 @@ function policyFor(req, {
 }
 
 function decision(req, policy) {
-  return evaluateAuthorization(req, policy, { keyring });
+  const result = evaluateAuthorization(req, policy, { keyring });
+  policyByDecisionDigest.set(
+    result.integrity.signed_digest,
+    structuredClone(policy),
+  );
+  return result;
 }
 
 function approval(req, dec, overrides = {}, approver = "alice") {
@@ -481,6 +487,36 @@ function add(id, category, kind, operation, body, {
   error = null,
   outcome = null,
 } = {}) {
+  if (operation === "verify_dispatch") {
+    const policySnapshot =
+      body.policy_snapshot ??
+      policyByDecisionDigest.get(body.decision.integrity.signed_digest);
+    if (!policySnapshot) {
+      throw new Error(`verify_dispatch vector ${id} must pin its evaluation policy snapshot`);
+    }
+    body.snapshot.policy_snapshot = structuredClone(policySnapshot);
+    delete body.policy_snapshot;
+    const authorizationPolicySnapshot =
+      body.approval_authorization_policy_snapshot ??
+      (body.approval_authorization_decision
+        ? policyByDecisionDigest.get(
+            body.approval_authorization_decision.integrity.signed_digest,
+          )
+        : null);
+    if (
+      body.approval_authorization_decision &&
+      !authorizationPolicySnapshot
+    ) {
+      throw new Error(
+        `verify_dispatch vector ${id} must pin its recurring authorization policy snapshot`,
+      );
+    }
+    body.snapshot.approval_authorization_policy_snapshot =
+      authorizationPolicySnapshot
+        ? structuredClone(authorizationPolicySnapshot)
+        : null;
+    delete body.approval_authorization_policy_snapshot;
+  }
   if (operation === "verify_dispatch" && !body.consumption_snapshot) {
     body.consumption_snapshot = consumptionSnapshot(
       body.request,
@@ -736,10 +772,11 @@ const partialReq = request({
   runtimeCapabilities: ["analysis.read", "artifact.write"],
 });
 const partialPolicy = policyFor(partialReq, { capabilities: ["artifact.write"] });
+const partialDecision = decision(partialReq, partialPolicy);
 add("08-partial-capability-grant", 8, "positive", "verify_decision", {
   request: partialReq,
   policy: partialPolicy,
-  decision: decision(partialReq, partialPolicy),
+  decision: partialDecision,
 }, { outcome: "permit" });
 
 const proposal = signArtifact(
@@ -791,7 +828,7 @@ add("03-approval-runtime-capability-missing-at-dispatch", 3, "negative", "verify
   approval: r2Approval,
   events: r2ApprovedEvents,
   snapshot: snapshot(r2, { runtime_capabilities: ["analysis.read"] }),
-}, { error: "dispatch_runtime_capability_missing" });
+}, { error: "dispatch_runtime_capabilities_changed" });
 add("10-single-use-approval-consumed", 10, "positive", "lifecycle", {
   approval: r2Approval,
   events: lifecycle(r2Approval, "consume", {
@@ -902,6 +939,26 @@ const recurringSecondPolicy = {
   recurring_approval_allowed: true,
 };
 const recurringSecondDecision = decision(recurringSecondRequest, recurringSecondPolicy);
+const forgedRecurringAuthorizationPayload = structuredClone(recurringGrantDecision);
+forgedRecurringAuthorizationPayload.reason_codes = [
+  "forged_recurring_authorization",
+];
+const forgedRecurringAuthorizationDecision = resign(
+  forgedRecurringAuthorizationPayload,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+const forgedRecurringApproval = approval(
+  recurringGrantRequest,
+  forgedRecurringAuthorizationDecision,
+  {
+    occurrence_id: null,
+    run_id: null,
+    attempt: null,
+    fence_generation: null,
+    use: structuredClone(recurringApproval.use),
+  },
+);
 add("10-recurring-approval-reuses-bounded-authority", 10, "positive", "verify_dispatch", {
   request: recurringSecondRequest,
   decision: recurringSecondDecision,
@@ -920,6 +977,16 @@ add("10-recurring-approval-requires-grant-decision", 10, "negative", "verify_dis
   events: recurringEventsAfterOne,
   snapshot: snapshot(recurringSecondRequest),
 }, { error: "approval_recurring_authorization_missing" });
+add("17-dispatch-refuses-forged-recurring-authorization", 17, "negative", "verify_dispatch", {
+  request: recurringSecondRequest,
+  decision: recurringSecondDecision,
+  approval: forgedRecurringApproval,
+  approval_authorization_request: recurringGrantRequest,
+  approval_authorization_decision: forgedRecurringAuthorizationDecision,
+  approval_authorization_policy_snapshot: recurringApprovalPolicy,
+  events: lifecycle(forgedRecurringApproval),
+  snapshot: snapshot(recurringSecondRequest),
+}, { error: "decision_semantic_mismatch" });
 add("10-recurring-approval-refuses-same-occurrence-replay", 10, "negative", "verify_dispatch", {
   request: recurringGrantRequest,
   decision: recurringGrantDecision,
@@ -988,13 +1055,9 @@ add("11-request-not-yet-valid-at-dispatch", 11, "negative", "verify_dispatch", {
   decision: r1Decision,
   snapshot: snapshot(signedFutureRequest),
 }, { error: "request_not_yet_valid" });
-const futureDecision = structuredClone(r1Decision);
-futureDecision.validity.not_before = "2026-09-03T13:10:00Z";
-const signedFutureDecision = resign(
-  futureDecision,
-  "opencoven:automation-decision:v1",
-  "authority",
-);
+const futureDecisionPolicy = structuredClone(r1Policy);
+futureDecisionPolicy.now = "2026-09-03T13:10:00Z";
+const signedFutureDecision = decision(r1, futureDecisionPolicy);
 add("11-decision-not-yet-valid-at-dispatch", 11, "negative", "verify_dispatch", {
   request: r1,
   decision: signedFutureDecision,
@@ -1228,7 +1291,7 @@ add("14-runtime-capability-downgrade", 14, "negative", "verify_dispatch", {
   request: r1,
   decision: r1Decision,
   snapshot: snapshot(r1, { runtime_capabilities: ["analysis.read"] }),
-}, { error: "dispatch_runtime_downgrade" });
+}, { error: "dispatch_runtime_capabilities_changed" });
 add("14-runtime-substitution", 14, "negative", "verify_dispatch", {
   request: r1,
   decision: r1Decision,
@@ -1305,6 +1368,75 @@ add("17-signed-but-forged-decision-semantics", 17, "negative", "verify_decision"
   policy: r1Policy,
   decision: semanticallyForgedDecision,
 }, { error: "decision_semantic_mismatch" });
+const forgedPermitPayload = structuredClone(r2Decision);
+forgedPermitPayload.outcome = "permit";
+forgedPermitPayload.approval_requirement = null;
+forgedPermitPayload.reason_codes = ["forged_permit"];
+const forgedPermitDecision = resign(
+  forgedPermitPayload,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+add("17-dispatch-refuses-threads-signed-forged-permit", 17, "negative", "verify_dispatch", {
+  request: r2,
+  decision: forgedPermitDecision,
+  policy_snapshot: r2Policy,
+  snapshot: snapshot(r2),
+}, { error: "decision_semantic_mismatch" });
+const widenedPermitPayload = structuredClone(partialDecision);
+widenedPermitPayload.granted_capabilities = ["analysis.read", "artifact.write"];
+widenedPermitPayload.denied_capabilities = [];
+widenedPermitPayload.reason_codes = ["forged_widened_permit"];
+const widenedPermitDecision = resign(
+  widenedPermitPayload,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+add("17-dispatch-refuses-threads-signed-widened-permit", 17, "negative", "verify_dispatch", {
+  request: partialReq,
+  decision: widenedPermitDecision,
+  policy_snapshot: partialPolicy,
+  snapshot: snapshot(partialReq),
+}, { error: "decision_semantic_mismatch" });
+const capabilityOutsideRuntimePayload = structuredClone(r1Decision);
+capabilityOutsideRuntimePayload.granted_capabilities = ["analysis.read", "artifact.write"];
+capabilityOutsideRuntimePayload.reason_codes = ["forged_runtime_capability"];
+const capabilityOutsideRuntimeDecision = resign(
+  capabilityOutsideRuntimePayload,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+add("14-decision-grant-absent-from-bound-runtime", 14, "negative", "verify_dispatch", {
+  request: r1,
+  decision: capabilityOutsideRuntimeDecision,
+  policy_snapshot: r1Policy,
+  snapshot: snapshot(r1, {
+    runtime_capabilities: ["analysis.read", "artifact.write"],
+  }),
+}, { error: "decision_runtime_capability_missing" });
+const changedDecisionRuntimePayload = structuredClone(r1Decision);
+changedDecisionRuntimePayload.bindings.runtime_capabilities = [
+  "analysis.read",
+  "artifact.write",
+];
+const changedDecisionRuntime = resign(
+  changedDecisionRuntimePayload,
+  "opencoven:automation-decision:v1",
+  "authority",
+);
+add("14-decision-runtime-capabilities-must-match-request", 14, "negative", "verify_dispatch", {
+  request: r1,
+  decision: changedDecisionRuntime,
+  policy_snapshot: r1Policy,
+  snapshot: snapshot(r1),
+}, { error: "decision_runtime_capabilities_changed" });
+add("14-dispatch-runtime-capabilities-must-match-request", 14, "negative", "verify_dispatch", {
+  request: r1,
+  decision: r1Decision,
+  snapshot: snapshot(r1, {
+    runtime_capabilities: ["analysis.read", "artifact.write"],
+  }),
+}, { error: "dispatch_runtime_capabilities_changed" });
 const tamperedApproval = structuredClone(r2Approval);
 tamperedApproval.action_digest = digest("9");
 add("17-tampered-approval", 17, "negative", "validate_approval", {
@@ -1377,6 +1509,120 @@ add("18-evidence-read-expired", 18, "negative", "evidence_read", {
   evidence,
   now: "2026-09-03T14:00:00Z",
 }, { error: "evidence_read_expired" });
+for (const [name, field, value, error] of [
+  ["unknown-sensitivity", "sensitivity", "secretish", "evidence_sensitivity_unknown"],
+  ["missing-sensitivity", "sensitivity", undefined, "evidence_sensitivity_unknown"],
+  ["unknown-retention", "retention", "forever", "evidence_retention_unknown"],
+  ["missing-retention", "retention", undefined, "evidence_retention_unknown"],
+]) {
+  const malformedEvidence = structuredClone(evidence);
+  if (value === undefined) delete malformedEvidence[field];
+  else malformedEvidence[field] = value;
+  add(`18-evidence-${name}`, 18, "negative", "evidence_read", {
+    read: evidenceRead(name, "principal:alice", "principal:alice"),
+    evidence: malformedEvidence,
+    now: "2026-09-03T13:05:00Z",
+  }, { error });
+}
+
+const impossibleRequest = structuredClone(r1);
+impossibleRequest.replay.issued_at = "2026-02-30T13:00:00Z";
+add("06-impossible-request-timestamp", 6, "negative", "validate_request", {
+  request: resign(impossibleRequest, "opencoven:automation-request:v1"),
+}, { error: "schema_timestamp" });
+const impossibleDecision = structuredClone(r1Decision);
+impossibleDecision.issued_at = "2026-02-30T13:00:00Z";
+add("06-impossible-decision-timestamp", 6, "negative", "verify_decision", {
+  request: r1,
+  policy: r1Policy,
+  decision: resign(impossibleDecision, "opencoven:automation-decision:v1", "authority"),
+}, { error: "schema_timestamp" });
+const impossibleApproval = structuredClone(r2Approval);
+impossibleApproval.issued_at = "2026-02-30T13:00:00Z";
+add("06-impossible-approval-timestamp", 6, "negative", "validate_approval", {
+  approval: resign(impossibleApproval, "opencoven:automation-approval:v1"),
+}, { error: "schema_timestamp" });
+const impossibleEvent = structuredClone(r2ApprovedEvents[0]);
+impossibleEvent.occurred_at = "2026-02-30T13:00:00Z";
+add("06-impossible-lifecycle-timestamp", 6, "negative", "lifecycle", {
+  approval: r2Approval,
+  events: [
+    resign(impossibleEvent, "opencoven:automation-approval-event:v1", "authority"),
+  ],
+}, { error: "schema_timestamp" });
+const impossibleConsumption = consumptionSnapshot(r1, r1Decision);
+impossibleConsumption.recorded_at = "2026-02-30T13:00:00Z";
+add("06-impossible-consumption-timestamp", 6, "negative", "validate_consumption_snapshot", {
+  consumption_snapshot: resign(
+    impossibleConsumption,
+    "opencoven:automation-consumption-snapshot:v1",
+    "authority",
+  ),
+  now: "2026-09-03T13:06:00Z",
+}, { error: "schema_timestamp" });
+const impossibleProposal = structuredClone(proposal);
+impossibleProposal.created_at = "2026-02-30T13:00:00Z";
+add("06-impossible-proposal-timestamp", 6, "negative", "validate_proposal", {
+  proposal: resign(impossibleProposal, "opencoven:automation-proposal:v1", "authority"),
+}, { error: "schema_timestamp" });
+const impossibleRead = evidenceRead("impossible-time", "principal:alice", "principal:alice");
+impossibleRead.issued_at = "2026-02-30T13:00:00Z";
+add("06-impossible-evidence-read-timestamp", 6, "negative", "evidence_read", {
+  read: resign(impossibleRead, "opencoven:automation-evidence-read:v1"),
+  evidence,
+  now: "2026-09-03T13:05:00Z",
+}, { error: "schema_timestamp" });
+const impossiblePolicy = structuredClone(r1Policy);
+impossiblePolicy.now = "2026-02-30T13:00:00Z";
+add("06-impossible-policy-snapshot-timestamp", 6, "negative", "evaluate_request", {
+  request: r1,
+  policy: impossiblePolicy,
+}, { error: "schema_timestamp" });
+add("06-impossible-dispatch-snapshot-timestamp", 6, "negative", "verify_dispatch", {
+  request: r1,
+  decision: r1Decision,
+  snapshot: snapshot(r1, { now: "2026-02-30T13:00:00Z" }),
+}, { error: "schema_timestamp" });
+add("06-impossible-request-adoption-now", 6, "negative", "request_adoption", {
+  request: r1,
+  repetitions: 1,
+  now: "2026-02-30T13:05:00Z",
+}, { error: "schema_timestamp" });
+add("06-impossible-approval-validation-now", 6, "negative", "validate_approval", {
+  approval: r2Approval,
+  now: "2026-02-30T13:05:00Z",
+}, { error: "schema_timestamp" });
+add(
+  "06-impossible-consumption-validation-now",
+  6,
+  "negative",
+  "validate_consumption_snapshot",
+  {
+    consumption_snapshot: consumptionSnapshot(r1, r1Decision),
+    now: "2026-02-30T13:06:00Z",
+  },
+  { error: "schema_timestamp" },
+);
+add("06-empty-request-adoption-now", 6, "negative", "request_adoption", {
+  request: r1,
+  repetitions: 1,
+  now: "",
+}, { error: "schema_timestamp" });
+add("06-empty-approval-validation-now", 6, "negative", "validate_approval", {
+  approval: r2Approval,
+  now: "",
+}, { error: "schema_timestamp" });
+add(
+  "06-empty-consumption-validation-now",
+  6,
+  "negative",
+  "validate_consumption_snapshot",
+  {
+    consumption_snapshot: consumptionSnapshot(r1, r1Decision),
+    now: "",
+  },
+  { error: "schema_timestamp" },
+);
 
 add("06-json-duplicate-key", 6, "negative", "strict_parse", {
   raw_json: "{\"schema_version\":\"one\",\"schema_version\":\"two\"}",

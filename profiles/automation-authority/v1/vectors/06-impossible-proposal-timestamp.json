@@ -1,0 +1,22 @@
+{
+  "proposal": {
+    "schema_version": "opencoven.automation-proposal/v1",
+    "proposal_id": "proposal:r3-publication",
+    "request_digest": "sha256:4e27d2c617d81e4f1dd8e1eeca51fa2839e36d88272468f960faa47bf1303e2c",
+    "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "intended_target": "https://api.example.invalid/v1/releases",
+    "status": "not_executed",
+    "protected_effects_performed": false,
+    "result_claim": "proposal_only",
+    "requires_new_adoption": true,
+    "content_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "created_at": "2026-02-30T13:00:00Z",
+    "privacy": "internal",
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:threads:test-authority",
+      "signed_digest": "153e706e46c1e0d521e2e29ec5d7bc5323fceac2b39f00a7d7ed5432c9081943",
+      "signature_b64": "yezvYnAHUlUMoltkkLkERmCIPfPo/L0tpjHt/Vg+Z4lMDzKU992eFEn+ZXaQi7sV6sGtc6EoTgwjb5lAjESkCQ=="
+    }
+  }
+}

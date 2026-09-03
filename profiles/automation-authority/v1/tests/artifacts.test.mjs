@@ -38,6 +38,17 @@ test("all published JSON Schemas parse and close every object", () => {
   }
 });
 
+test("published timestamp schema rejects impossible Gregorian dates", () => {
+  const common = strictParseJson(
+    readFileSync(resolve(ROOT, "schemas/common.schema.json"), "utf8"),
+  );
+  const timestamp = new RegExp(common.$defs.timestamp.pattern);
+  assert.equal(timestamp.test("2026-02-30T13:00:00Z"), false);
+  assert.equal(timestamp.test("2024-02-29T13:00:00Z"), true);
+  assert.equal(timestamp.test("2100-02-29T13:00:00Z"), false);
+  assert.equal(timestamp.test("2000-02-29T13:00:00Z"), true);
+});
+
 test("keyring publishes public verification keys only", () => {
   const keyring = strictParseJson(readFileSync(resolve(ROOT, "keyring.json"), "utf8"));
   for (const key of Object.values(keyring.keys)) {

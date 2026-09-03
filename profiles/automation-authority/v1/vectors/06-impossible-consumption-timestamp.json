@@ -1,0 +1,24 @@
+{
+  "consumption_snapshot": {
+    "schema_version": "opencoven.automation-consumption-snapshot/v1",
+    "snapshot_id": "consumption:request:r1-recurring",
+    "recorded_at": "2026-02-30T13:00:00Z",
+    "store_revision": 7,
+    "request_adoptions": [
+      {
+        "request_digest": "sha256:347355ba249f96172f2de2f86c1a7b1396f95ec46d7d4a75b51f9275a138654f",
+        "nonce": "nonce:r1-recurring",
+        "adoption_key": "adopt:r1-recurring"
+      }
+    ],
+    "decision_consumptions": [],
+    "approval_heads": [],
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:threads:test-authority",
+      "signed_digest": "93363a005243efd46ed9d4252f4964997e238079d9679de05b91e0eb37a45f2f",
+      "signature_b64": "/dz8VqO9LGiU0ycUV1oPAmr4fV3xBJnmN4q3aToyit8b2gPlk2Vm9wHHyNRIFwPZJzE27NEW5KFrpkBRaWpXAw=="
+    }
+  },
+  "now": "2026-09-03T13:06:00Z"
+}

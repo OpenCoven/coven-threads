@@ -441,7 +441,8 @@ test("approval lifecycle consumption is append-only and replay safe", () => {
 
 test("dispatch revalidation detects stale fence, policy, definition, runtime, and approval", () => {
   const req = request();
-  const decision = evaluateAuthorization(req, policy(), { keyring });
+  const evaluationPolicy = policy();
+  const decision = evaluateAuthorization(req, evaluationPolicy, { keyring });
   const snapshot = {
     now: "2026-09-03T13:06:00Z",
     principal_id: req.principal.id,
@@ -465,6 +466,8 @@ test("dispatch revalidation detects stale fence, policy, definition, runtime, an
     manifest: req.versions.manifest,
     manifest_digest: req.versions.manifest_digest,
     consumption_revision: 7,
+    policy_snapshot: evaluationPolicy,
+    approval_authorization_policy_snapshot: null,
   };
   const consumptionSnapshot = signed(
     {

@@ -390,9 +390,44 @@ function requireEnum(value, allowed, path) {
 }
 
 function requireTimestamp(value, path) {
-  requireString(value, path);
-  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(value) || Number.isNaN(Date.parse(value))) {
+  if (typeof value !== "string" || value.length === 0) {
     fail("schema_timestamp", "expected an RFC 3339 UTC timestamp", path);
+  }
+  ensureUnicodeScalarString(value, path);
+  const match =
+    /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d+))?Z$/.exec(value);
+  if (!match) {
+    fail("schema_timestamp", "expected an RFC 3339 UTC timestamp", path);
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  const [year, month, day, hour, minute, second] = [
+    yearText,
+    monthText,
+    dayText,
+    hourText,
+    minuteText,
+    secondText,
+  ].map(Number);
+  const normalized = new Date(0);
+  normalized.setUTCHours(0, 0, 0, 0);
+  normalized.setUTCFullYear(year, month - 1, day);
+  normalized.setUTCHours(hour, minute, second, 0);
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    normalized.getUTCFullYear() !== year ||
+    normalized.getUTCMonth() !== month - 1 ||
+    normalized.getUTCDate() !== day ||
+    normalized.getUTCHours() !== hour ||
+    normalized.getUTCMinutes() !== minute ||
+    normalized.getUTCSeconds() !== second
+  ) {
+    fail("schema_timestamp", "expected a real RFC 3339 UTC calendar instant", path);
   }
 }
 
@@ -736,10 +771,11 @@ export function validateAuthorizationRequest(value, { keyring } = {}) {
 
 export function adoptAuthorizationRequest(value, state = null, { keyring, now } = {}) {
   validateAuthorizationRequest(value, { keyring });
-  if (now && Date.parse(now) < Date.parse(value.replay.issued_at)) {
+  if (now !== undefined) requireTimestamp(now, "$.trusted_now");
+  if (now !== undefined && Date.parse(now) < Date.parse(value.replay.issued_at)) {
     fail("request_not_yet_valid", "request has not reached its issue time");
   }
-  if (now && Date.parse(now) >= Date.parse(value.replay.expires_at)) {
+  if (now !== undefined && Date.parse(now) >= Date.parse(value.replay.expires_at)) {
     fail("request_expired", "request has expired");
   }
   const current = state ?? { nonces: [], adoption_keys: [], request_digests: [] };
@@ -1207,6 +1243,17 @@ export function validateDecision(value, { keyring } = {}) {
     "$.decision.outcome",
   );
   validateCapabilitiesOrEmpty(value.granted_capabilities, "$.decision.granted_capabilities");
+  const boundRuntimeCapabilities = new Set(value.bindings.runtime_capabilities);
+  if (
+    value.granted_capabilities.some(
+      (capability) => !boundRuntimeCapabilities.has(capability),
+    )
+  ) {
+    fail(
+      "decision_runtime_capability_missing",
+      "decision grants a capability absent from its bound runtime",
+    );
+  }
   validateCapabilitiesOrEmpty(value.degraded_capabilities, "$.decision.degraded_capabilities");
   requireArray(value.denied_capabilities, "$.decision.denied_capabilities");
   value.denied_capabilities.forEach((denial, index) => {
@@ -1381,7 +1428,8 @@ export function validateConsumptionSnapshot(value, { keyring, now } = {}) {
   requireString(value.snapshot_id, "$.consumption_snapshot.snapshot_id");
   requireTimestamp(value.recorded_at, "$.consumption_snapshot.recorded_at");
   requireInteger(value.store_revision, "$.consumption_snapshot.store_revision", 1);
-  if (now && Date.parse(value.recorded_at) > Date.parse(now)) {
+  if (now !== undefined) requireTimestamp(now, "$.trusted_now");
+  if (now !== undefined && Date.parse(value.recorded_at) > Date.parse(now)) {
     fail("consumption_snapshot_from_future", "consumption snapshot is newer than trusted now");
   }
   requireArray(value.request_adoptions, "$.consumption_snapshot.request_adoptions");
@@ -1586,13 +1634,14 @@ export function validateApproval(value, { keyring, now } = {}) {
   }
   requireTimestamp(value.issued_at, "$.issued_at");
   requireTimestamp(value.expires_at, "$.expires_at");
+  if (now !== undefined) requireTimestamp(now, "$.trusted_now");
   if (Date.parse(value.expires_at) <= Date.parse(value.issued_at)) {
     fail("approval_invalid_interval", "approval expiry must be after issue time");
   }
-  if (now && Date.parse(now) < Date.parse(value.issued_at)) {
+  if (now !== undefined && Date.parse(now) < Date.parse(value.issued_at)) {
     fail("approval_not_yet_valid", "approval has not reached its issue time");
   }
-  if (now && Date.parse(now) >= Date.parse(value.expires_at)) {
+  if (now !== undefined && Date.parse(now) >= Date.parse(value.expires_at)) {
     fail("approval_expired", "approval has expired");
   }
   requireString(value.nonce, "$.nonce");
@@ -1952,6 +2001,82 @@ function assertBinding(name, actual, expected, code) {
   if (actual !== expected) fail(code, `${name} changed after authorization`);
 }
 
+function sameStringSet(left, right) {
+  return (
+    canonicalize([...left].sort()) ===
+    canonicalize([...right].sort())
+  );
+}
+
+function validateDispatchSnapshot(snapshot) {
+  requireObject(snapshot, "$.dispatch_bundle.snapshot");
+  const fields = [
+    "now",
+    "principal_id",
+    "familiar_id",
+    "familiar_embodiment_digest",
+    "automation_id",
+    "definition_revision",
+    "definition_digest",
+    "occurrence_id",
+    "run_id",
+    "attempt",
+    "fence_generation",
+    "action_digest",
+    "runtime_id",
+    "runtime_descriptor_digest",
+    "runtime_capabilities",
+    "project_id",
+    "workspace_id",
+    "policy",
+    "policy_digest",
+    "manifest",
+    "manifest_digest",
+    "consumption_revision",
+    "policy_snapshot",
+    "approval_authorization_policy_snapshot",
+  ];
+  required(snapshot, fields, "$.dispatch_bundle.snapshot");
+  closed(snapshot, fields, "$.dispatch_bundle.snapshot");
+  requireTimestamp(snapshot.now, "$.dispatch_bundle.snapshot.now");
+  for (const name of [
+    "principal_id",
+    "familiar_id",
+    "automation_id",
+    "occurrence_id",
+    "run_id",
+    "runtime_id",
+    "project_id",
+    "workspace_id",
+    "policy",
+    "manifest",
+  ]) {
+    requireString(snapshot[name], `$.dispatch_bundle.snapshot.${name}`);
+  }
+  for (const name of [
+    "familiar_embodiment_digest",
+    "definition_digest",
+    "action_digest",
+    "runtime_descriptor_digest",
+    "policy_digest",
+    "manifest_digest",
+  ]) {
+    requireDigestHex(snapshot[name], `$.dispatch_bundle.snapshot.${name}`);
+  }
+  requireInteger(snapshot.definition_revision, "$.dispatch_bundle.snapshot.definition_revision", 1);
+  requireInteger(snapshot.attempt, "$.dispatch_bundle.snapshot.attempt", 1);
+  requireInteger(snapshot.fence_generation, "$.dispatch_bundle.snapshot.fence_generation", 1);
+  requireInteger(snapshot.consumption_revision, "$.dispatch_bundle.snapshot.consumption_revision", 1);
+  validateCapabilities(snapshot.runtime_capabilities, "$.dispatch_bundle.snapshot.runtime_capabilities");
+  requireObject(snapshot.policy_snapshot, "$.dispatch_bundle.snapshot.policy_snapshot");
+  if (snapshot.approval_authorization_policy_snapshot !== null) {
+    requireObject(
+      snapshot.approval_authorization_policy_snapshot,
+      "$.dispatch_bundle.snapshot.approval_authorization_policy_snapshot",
+    );
+  }
+}
+
 export function verifyDispatch(bundle, { keyring } = {}) {
   requireObject(bundle, "$.dispatch_bundle");
   required(
@@ -1993,9 +2118,32 @@ export function verifyDispatch(bundle, { keyring } = {}) {
     snapshot,
   } = bundle;
   requireArray(lifecycleEvents, "$.dispatch_bundle.lifecycle_events");
-  requireTimestamp(snapshot.now, "$.dispatch_bundle.snapshot.now");
+  validateDispatchSnapshot(snapshot);
   validateAuthorizationRequest(request, { keyring });
   validateDecision(decision, { keyring });
+  if (
+    !sameStringSet(
+      decision.bindings.runtime_capabilities,
+      request.context.runtime.capabilities,
+    )
+  ) {
+    fail(
+      "decision_runtime_capabilities_changed",
+      "decision runtime capabilities do not exactly match the request",
+    );
+  }
+  if (
+    !sameStringSet(
+      snapshot.runtime_capabilities,
+      request.context.runtime.capabilities,
+    )
+  ) {
+    fail(
+      "dispatch_runtime_capabilities_changed",
+      "dispatch runtime capabilities do not exactly match the request",
+    );
+  }
+  verifyDecisionBundle(request, decision, snapshot.policy_snapshot, { keyring });
   if (Date.parse(snapshot.now) < Date.parse(request.replay.issued_at)) {
     fail("request_not_yet_valid", "dispatch request has not reached its issue time");
   }
@@ -2183,14 +2331,23 @@ export function verifyDispatch(bundle, { keyring } = {}) {
       fail("approval_recurring_not_allowed", "decision requires a single per-run approval");
     }
     if (approval.use.kind === "recurring") {
-      if (!approvalAuthorizationRequest || !approvalAuthorizationDecision) {
+      if (
+        !approvalAuthorizationRequest ||
+        !approvalAuthorizationDecision ||
+        !snapshot.approval_authorization_policy_snapshot
+      ) {
         fail(
           "approval_recurring_authorization_missing",
-          "recurring approval requires its immutable grant request and decision",
+          "recurring approval requires its immutable grant request, decision, and policy snapshot",
         );
       }
       validateAuthorizationRequest(approvalAuthorizationRequest, { keyring });
-      validateDecision(approvalAuthorizationDecision, { keyring });
+      verifyDecisionBundle(
+        approvalAuthorizationRequest,
+        approvalAuthorizationDecision,
+        snapshot.approval_authorization_policy_snapshot,
+        { keyring },
+      );
       const authorizationRequestDigest =
         `sha256:${canonicalDigest(approvalAuthorizationRequest, DOMAIN.request)}`;
       const authorizationDecisionDigest =
@@ -2285,7 +2442,8 @@ export function verifyDispatch(bundle, { keyring } = {}) {
       }
     } else if (
       approvalAuthorizationRequest !== null ||
-      approvalAuthorizationDecision !== null
+      approvalAuthorizationDecision !== null ||
+      snapshot.approval_authorization_policy_snapshot !== null
     ) {
       fail(
         "approval_recurring_authorization_unexpected",
@@ -2417,6 +2575,7 @@ export function verifyDispatch(bundle, { keyring } = {}) {
       approval !== null ||
       approvalAuthorizationRequest !== null ||
       approvalAuthorizationDecision !== null ||
+      snapshot.approval_authorization_policy_snapshot !== null ||
       lifecycleEvents.length !== 0
     ) {
       fail("approval_unexpected", "non-approval decision cannot carry approval authority");
@@ -2580,6 +2739,32 @@ export function authorizeEvidenceRead(value, evidence, { keyring, now } = {}) {
   }
   if (value.requesting_principal_id !== value.subject_principal_id && key.role !== "auditor") {
     fail("evidence_read_unauthorized", "cross-principal evidence read requires auditor authority");
+  }
+  requireObject(evidence, "$.evidence");
+  if (
+    !Object.hasOwn(evidence, "sensitivity") ||
+    !Object.hasOwn(SENSITIVITY, evidence.sensitivity)
+  ) {
+    fail(
+      "evidence_sensitivity_unknown",
+      "evidence sensitivity is missing or unknown",
+      "$.evidence.sensitivity",
+    );
+  }
+  const retentionClasses = [
+    "ephemeral_24h",
+    "authority_evidence_90d",
+    "authority_evidence_1y",
+  ];
+  if (
+    !Object.hasOwn(evidence, "retention") ||
+    !retentionClasses.includes(evidence.retention)
+  ) {
+    fail(
+      "evidence_retention_unknown",
+      "evidence retention is missing or unknown",
+      "$.evidence.retention",
+    );
   }
   if (evidence.principal_id !== value.subject_principal_id || evidence.automation_id !== value.automation_id) {
     fail("evidence_subject_mismatch", "evidence does not match the authorized subject");

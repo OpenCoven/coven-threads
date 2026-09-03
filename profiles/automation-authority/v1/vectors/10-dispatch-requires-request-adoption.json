@@ -73,7 +73,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "347355ba249f96172f2de2f86c1a7b1396f95ec46d7d4a75b51f9275a138654f",
-      "signature_b64": "H2T+pa/gBsHBz0lMDlpEmcHkb+lgtqpByIJ+zXHGjdX3UTVO/3b/ZDm83EWrKFSismMGD6ov1Xv3Vie56p+3Aw=="
+      "signature_b64": "7jPumcS8BY6p5/LApqd4RJhkeFhRPfnNwmQeMYaflHdp/pZM75n0PxAC8T6Fog6cxrbOErEWsah7Yybu06UODw=="
     }
   },
   "decision": {
@@ -152,7 +152,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "c321a4f067a3195c70e9b8686b815554c2fdbad1141edcd68525e569da929779",
-      "signature_b64": "94fRLwdO0kpxC3Zx+F48ylS1gjd4jgmOgltBJ58+mlBdBJdNRXBaeht+LhMGMlM+kP0XnmiRgtp8FMdC/Z6TCw=="
+      "signature_b64": "ZxUwu2uMDiBWq/pTlONWDjDGZnyKffqegcPC5oKNNCL/G4AMP1Ig6slz8u3J/rM/WbFNXsbiYfvqoStHcx7mBA=="
     }
   },
   "approval": null,
@@ -169,7 +169,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "a0f134fca407c06569d6af28cd3f654bc9fdb53f8f25618dd56b9cfeba14f5ac",
-      "signature_b64": "yvKLvezPbwzYwmRWjmWSGYeOPkERfB64NtNutTXzeh4J0KrS+R/BWS95dbYxZpEYhnL5Ns3VaR2kk3eO2FqLDA=="
+      "signature_b64": "ypIHuk8Hr/PdhVrUjPIn4w5ElyJ4zEnq6oyQ5PhVkfhBdxa5LdDf73wx3uHGeUZpmYvKms6gP8xJu/v2LesjDw=="
     }
   },
   "snapshot": {
@@ -196,7 +196,56 @@
     "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
     "manifest": "manifest:1",
     "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
-    "consumption_revision": 7
+    "consumption_revision": 7,
+    "policy_snapshot": {
+      "now": "2026-09-03T13:05:00Z",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "recurring_grants": [
+        {
+          "grant_id": "grant:request:r1-recurring",
+          "principal_id": "principal:alice",
+          "familiar_id": "familiar:sage",
+          "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "automation_id": "automation:daily-report",
+          "definition_revision": 7,
+          "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "action_type": "artifact.create",
+          "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "project_id": "project:coven",
+          "workspace_id": "workspace:main",
+          "runtime_id": "runtime:node",
+          "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "runtime_capabilities": [
+            "artifact.write"
+          ],
+          "risk_classes": [
+            "R0",
+            "R1"
+          ],
+          "capabilities": [
+            "artifact.write"
+          ],
+          "scopes": [
+            {
+              "kind": "filesystem",
+              "root": "workspace",
+              "path": "reports/2026-09-03.md",
+              "access": "write",
+              "recursive": false
+            }
+          ],
+          "expires_at": "2026-10-01T00:00:00Z",
+          "max_uses": 31,
+          "uses": 1
+        }
+      ],
+      "protected_owner_approval": false,
+      "recurring_approval_allowed": false
+    },
+    "approval_authorization_policy_snapshot": null
   },
   "approval_authorization_request": null,
   "approval_authorization_decision": null

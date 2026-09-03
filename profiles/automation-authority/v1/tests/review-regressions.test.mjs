@@ -101,3 +101,161 @@ test("evidence reads reject not-yet-valid and expired signed tokens using truste
       error.code === "evidence_read_expired",
   );
 });
+
+test("dispatch rejects a Threads-signed decision that is not the pinned policy result", () => {
+  const vector = read("vectors/17-dispatch-refuses-threads-signed-forged-permit.json");
+  assert.throws(
+    () =>
+      profile.verifyDispatch(
+        {
+          request: vector.request,
+          decision: vector.decision,
+          approval: null,
+          approval_authorization_request: null,
+          approval_authorization_decision: null,
+          lifecycle_events: [],
+          consumption_snapshot: vector.consumption_snapshot,
+          snapshot: vector.snapshot,
+        },
+        { keyring },
+      ),
+    (error) =>
+      error instanceof profile.AuthorityError &&
+      error.code === "decision_semantic_mismatch",
+  );
+});
+
+test("decision and dispatch runtime capability snapshots remain exact", () => {
+  for (const [file, code] of [
+    [
+      "vectors/14-decision-runtime-capabilities-must-match-request.json",
+      "decision_runtime_capabilities_changed",
+    ],
+    [
+      "vectors/14-dispatch-runtime-capabilities-must-match-request.json",
+      "dispatch_runtime_capabilities_changed",
+    ],
+  ]) {
+    const vector = read(file);
+    assert.throws(
+      () =>
+        profile.verifyDispatch(
+          {
+            request: vector.request,
+            decision: vector.decision,
+            approval: null,
+            approval_authorization_request: null,
+            approval_authorization_decision: null,
+            lifecycle_events: [],
+            consumption_snapshot: vector.consumption_snapshot,
+            snapshot: vector.snapshot,
+          },
+          { keyring },
+        ),
+      (error) =>
+        error instanceof profile.AuthorityError &&
+        error.code === code,
+    );
+  }
+});
+
+test("evidence reads reject missing authority metadata before comparison", () => {
+  for (const [file, code] of [
+    ["vectors/18-evidence-missing-sensitivity.json", "evidence_sensitivity_unknown"],
+    ["vectors/18-evidence-missing-retention.json", "evidence_retention_unknown"],
+  ]) {
+    const vector = read(file);
+    assert.throws(
+      () =>
+        profile.authorizeEvidenceRead(vector.read, vector.evidence, {
+          keyring,
+          now: vector.now,
+        }),
+      (error) =>
+        error instanceof profile.AuthorityError &&
+        error.code === code,
+    );
+  }
+});
+
+test("timestamps reject impossible UTC calendar dates", () => {
+  const vector = read("vectors/06-impossible-request-timestamp.json");
+  assert.throws(
+    () => profile.validateAuthorizationRequest(vector.request, { keyring }),
+    (error) =>
+      error instanceof profile.AuthorityError &&
+      error.code === "schema_timestamp",
+  );
+  const approvalNow = read("vectors/06-impossible-approval-validation-now.json");
+  assert.throws(
+    () =>
+      profile.validateApproval(approvalNow.approval, {
+        keyring,
+        now: approvalNow.now,
+      }),
+    (error) =>
+      error instanceof profile.AuthorityError &&
+      error.code === "schema_timestamp",
+  );
+  const consumptionNow = read(
+    "vectors/06-impossible-consumption-validation-now.json",
+  );
+  assert.throws(
+    () =>
+      profile.validateConsumptionSnapshot(
+        consumptionNow.consumption_snapshot,
+        {
+          keyring,
+          now: consumptionNow.now,
+        },
+      ),
+    (error) =>
+      error instanceof profile.AuthorityError &&
+      error.code === "schema_timestamp",
+  );
+  const adoptionNow = read("vectors/06-impossible-request-adoption-now.json");
+  assert.throws(
+    () =>
+      profile.adoptAuthorizationRequest(adoptionNow.request, null, {
+        keyring,
+        now: adoptionNow.now,
+      }),
+    (error) =>
+      error instanceof profile.AuthorityError &&
+      error.code === "schema_timestamp",
+  );
+  for (const [file, invoke] of [
+    [
+      "vectors/06-empty-request-adoption-now.json",
+      (vector) =>
+        profile.adoptAuthorizationRequest(vector.request, null, {
+          keyring,
+          now: vector.now,
+        }),
+    ],
+    [
+      "vectors/06-empty-approval-validation-now.json",
+      (vector) =>
+        profile.validateApproval(vector.approval, {
+          keyring,
+          now: vector.now,
+        }),
+    ],
+    [
+      "vectors/06-empty-consumption-validation-now.json",
+      (vector) =>
+        profile.validateConsumptionSnapshot(vector.consumption_snapshot, {
+          keyring,
+          now: vector.now,
+        }),
+    ],
+  ]) {
+    const emptyNow = read(file);
+    assert.throws(
+      () => invoke(emptyNow),
+      (error) =>
+        error instanceof profile.AuthorityError &&
+        error.code === "schema_timestamp",
+    );
+  }
+});

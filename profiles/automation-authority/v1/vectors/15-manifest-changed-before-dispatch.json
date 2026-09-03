@@ -73,7 +73,7 @@
       "alg": "ed25519",
       "key_id": "key:principal:alice",
       "signed_digest": "347355ba249f96172f2de2f86c1a7b1396f95ec46d7d4a75b51f9275a138654f",
-      "signature_b64": "H2T+pa/gBsHBz0lMDlpEmcHkb+lgtqpByIJ+zXHGjdX3UTVO/3b/ZDm83EWrKFSismMGD6ov1Xv3Vie56p+3Aw=="
+      "signature_b64": "7jPumcS8BY6p5/LApqd4RJhkeFhRPfnNwmQeMYaflHdp/pZM75n0PxAC8T6Fog6cxrbOErEWsah7Yybu06UODw=="
     }
   },
   "decision": {
@@ -152,7 +152,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "c321a4f067a3195c70e9b8686b815554c2fdbad1141edcd68525e569da929779",
-      "signature_b64": "94fRLwdO0kpxC3Zx+F48ylS1gjd4jgmOgltBJ58+mlBdBJdNRXBaeht+LhMGMlM+kP0XnmiRgtp8FMdC/Z6TCw=="
+      "signature_b64": "ZxUwu2uMDiBWq/pTlONWDjDGZnyKffqegcPC5oKNNCL/G4AMP1Ig6slz8u3J/rM/WbFNXsbiYfvqoStHcx7mBA=="
     }
   },
   "snapshot": {
@@ -179,7 +179,56 @@
     "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
     "manifest": "manifest:1",
     "manifest_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
-    "consumption_revision": 7
+    "consumption_revision": 7,
+    "policy_snapshot": {
+      "now": "2026-09-03T13:05:00Z",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "recurring_grants": [
+        {
+          "grant_id": "grant:request:r1-recurring",
+          "principal_id": "principal:alice",
+          "familiar_id": "familiar:sage",
+          "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "automation_id": "automation:daily-report",
+          "definition_revision": 7,
+          "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "action_type": "artifact.create",
+          "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "project_id": "project:coven",
+          "workspace_id": "workspace:main",
+          "runtime_id": "runtime:node",
+          "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "runtime_capabilities": [
+            "artifact.write"
+          ],
+          "risk_classes": [
+            "R0",
+            "R1"
+          ],
+          "capabilities": [
+            "artifact.write"
+          ],
+          "scopes": [
+            {
+              "kind": "filesystem",
+              "root": "workspace",
+              "path": "reports/2026-09-03.md",
+              "access": "write",
+              "recursive": false
+            }
+          ],
+          "expires_at": "2026-10-01T00:00:00Z",
+          "max_uses": 31,
+          "uses": 1
+        }
+      ],
+      "protected_owner_approval": false,
+      "recurring_approval_allowed": false
+    },
+    "approval_authorization_policy_snapshot": null
   },
   "consumption_snapshot": {
     "schema_version": "opencoven.automation-consumption-snapshot/v1",
@@ -199,7 +248,7 @@
       "alg": "ed25519",
       "key_id": "key:threads:test-authority",
       "signed_digest": "1449f19646f133cd5eb00284b5cc55d066f3ff7dcade9d47bbe9fedcaf585713",
-      "signature_b64": "Pe0imWHGshRWMB+IBWGP6yyF+Qnit2yuIom6PQRMSSua5kFotlpJc93kEIL8AELsVZ08z0pB6f/oK1z8Jl6cAA=="
+      "signature_b64": "La4t9/E+WeHCx1X4JrmBJKGnWUZfbGafd+5WAvcMQ/g5bJuUllUtAVmNzj36n379g0J9YvrUAX6epkRBEkkCBA=="
     }
   },
   "approval_authorization_request": null,

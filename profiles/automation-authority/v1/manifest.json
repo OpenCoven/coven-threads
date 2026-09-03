@@ -151,7 +151,7 @@
       "operation": "verify_dispatch",
       "expected": {
         "ok": false,
-        "error_code": "dispatch_runtime_capability_missing",
+        "error_code": "dispatch_runtime_capabilities_changed",
         "outcome": null
       }
     },
@@ -276,6 +276,42 @@
       }
     },
     {
+      "id": "06-empty-approval-validation-now",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-empty-approval-validation-now.json",
+      "operation": "validate_approval",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-empty-consumption-validation-now",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-empty-consumption-validation-now.json",
+      "operation": "validate_consumption_snapshot",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-empty-request-adoption-now",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-empty-request-adoption-now.json",
+      "operation": "request_adoption",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
       "id": "06-forged-principal-string",
       "category": 6,
       "kind": "negative",
@@ -284,6 +320,150 @@
       "expected": {
         "ok": false,
         "error_code": "principal_key_mismatch",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-approval-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-approval-timestamp.json",
+      "operation": "validate_approval",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-approval-validation-now",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-approval-validation-now.json",
+      "operation": "validate_approval",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-consumption-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-consumption-timestamp.json",
+      "operation": "validate_consumption_snapshot",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-consumption-validation-now",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-consumption-validation-now.json",
+      "operation": "validate_consumption_snapshot",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-decision-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-decision-timestamp.json",
+      "operation": "verify_decision",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-dispatch-snapshot-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-dispatch-snapshot-timestamp.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-evidence-read-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-evidence-read-timestamp.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-lifecycle-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-lifecycle-timestamp.json",
+      "operation": "lifecycle",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-policy-snapshot-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-policy-snapshot-timestamp.json",
+      "operation": "evaluate_request",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-proposal-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-proposal-timestamp.json",
+      "operation": "validate_proposal",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-request-adoption-now",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-request-adoption-now.json",
+      "operation": "request_adoption",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
+        "outcome": null
+      }
+    },
+    {
+      "id": "06-impossible-request-timestamp",
+      "category": 6,
+      "kind": "negative",
+      "file": "06-impossible-request-timestamp.json",
+      "operation": "validate_request",
+      "expected": {
+        "ok": false,
+        "error_code": "schema_timestamp",
         "outcome": null
       }
     },
@@ -912,6 +1092,42 @@
       }
     },
     {
+      "id": "14-decision-grant-absent-from-bound-runtime",
+      "category": 14,
+      "kind": "negative",
+      "file": "14-decision-grant-absent-from-bound-runtime.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "decision_runtime_capability_missing",
+        "outcome": null
+      }
+    },
+    {
+      "id": "14-decision-runtime-capabilities-must-match-request",
+      "category": 14,
+      "kind": "negative",
+      "file": "14-decision-runtime-capabilities-must-match-request.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "decision_runtime_capabilities_changed",
+        "outcome": null
+      }
+    },
+    {
+      "id": "14-dispatch-runtime-capabilities-must-match-request",
+      "category": 14,
+      "kind": "negative",
+      "file": "14-dispatch-runtime-capabilities-must-match-request.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "dispatch_runtime_capabilities_changed",
+        "outcome": null
+      }
+    },
+    {
       "id": "14-runtime-capability-downgrade",
       "category": 14,
       "kind": "negative",
@@ -919,7 +1135,7 @@
       "operation": "verify_dispatch",
       "expected": {
         "ok": false,
-        "error_code": "dispatch_runtime_downgrade",
+        "error_code": "dispatch_runtime_capabilities_changed",
         "outcome": null
       }
     },
@@ -1056,6 +1272,42 @@
       }
     },
     {
+      "id": "17-dispatch-refuses-forged-recurring-authorization",
+      "category": 17,
+      "kind": "negative",
+      "file": "17-dispatch-refuses-forged-recurring-authorization.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "decision_semantic_mismatch",
+        "outcome": null
+      }
+    },
+    {
+      "id": "17-dispatch-refuses-threads-signed-forged-permit",
+      "category": 17,
+      "kind": "negative",
+      "file": "17-dispatch-refuses-threads-signed-forged-permit.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "decision_semantic_mismatch",
+        "outcome": null
+      }
+    },
+    {
+      "id": "17-dispatch-refuses-threads-signed-widened-permit",
+      "category": 17,
+      "kind": "negative",
+      "file": "17-dispatch-refuses-threads-signed-widened-permit.json",
+      "operation": "verify_dispatch",
+      "expected": {
+        "ok": false,
+        "error_code": "decision_semantic_mismatch",
+        "outcome": null
+      }
+    },
+    {
       "id": "17-forged-lifecycle-head-cannot-dispatch",
       "category": 17,
       "kind": "negative",
@@ -1152,6 +1404,30 @@
       }
     },
     {
+      "id": "18-evidence-missing-retention",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-evidence-missing-retention.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_retention_unknown",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-evidence-missing-sensitivity",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-evidence-missing-sensitivity.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_sensitivity_unknown",
+        "outcome": null
+      }
+    },
+    {
       "id": "18-evidence-read-expired",
       "category": 18,
       "kind": "negative",
@@ -1172,6 +1448,30 @@
       "expected": {
         "ok": false,
         "error_code": "evidence_read_not_yet_valid",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-evidence-unknown-retention",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-evidence-unknown-retention.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_retention_unknown",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-evidence-unknown-sensitivity",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-evidence-unknown-sensitivity.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_sensitivity_unknown",
         "outcome": null
       }
     },

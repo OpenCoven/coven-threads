@@ -14,6 +14,7 @@ import {
   strictParseJson,
   validateApproval,
   validateAuthorizationRequest,
+  validateConsumptionSnapshot,
   validateProposal,
   verifyDecisionBundle,
   verifyDispatch,
@@ -134,6 +135,12 @@ function execute(vector, body, keyring) {
     }
     case "validate_approval":
       validateApproval(body.approval, { keyring, now: body.now });
+      return null;
+    case "validate_consumption_snapshot":
+      validateConsumptionSnapshot(body.consumption_snapshot, {
+        keyring,
+        now: body.now,
+      });
       return null;
     case "verify_decision":
       return verifyDecisionBundle(body.request, body.decision, body.policy, { keyring });
