@@ -130,7 +130,7 @@ must close with a typed terminal reason (§5.2).
 | Thread does not cover `Channel::Deliberate` | reject | `ChannelNotCovered` |
 | Thread snapped | reject | `ThreadSnapped` |
 | Weave pattern predicate does not hold | reject | `WeaveBroken` |
-| Surface degraded / frayed strand | reject | `SurfaceDegraded` |
+| Surface degraded at this surface | reject | `SurfaceDegraded` |
 | Validator panicked | reject | `ValidatorPanic` |
 
 **Lifecycle terminations — `WindowCloseReason`:**
