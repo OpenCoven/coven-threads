@@ -169,9 +169,7 @@ descriptive, gate results are enforcing.
 
 A promotion write routed through §3.1 emits the full Phase-5 sequence:
 `proposal_submitted` → `proposal_window_opened` → exactly one terminal event
-(`proposal_approved`/`applied`, `proposal_vetoed`/`vetoed`, or
-`proposal_rejected` with `evidence_diverged` | `revalidation_failed` |
-`superseded`). No opened window may be left without a typed close.
+(`proposal_approved`/`applied`, `proposal_vetoed`/`vetoed`, or `proposal_rejected` with `evidence_diverged`, `revalidation_failed`, or `superseded`). No opened window may be left without a typed close.
 
 > **Cross-bead dependency:** `threads-980` is open precisely because rejection
 > branches currently emit `window_close=None`. Promotion writes inherit that
