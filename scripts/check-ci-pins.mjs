@@ -17,8 +17,14 @@ export function checkCiPins(workflow, toolchain) {
   const lines = workflow.split(/\r?\n/);
   let rustActions = 0;
   for (let index = 0; index < lines.length; index += 1) {
-    const action = lines[index].match(/^(\s*)(-\s+)?uses:\s*(.+)$/);
-    if (!action) continue;
+    const line = lines[index].replace(/\s+#.*$/, "");
+    const action = line.match(/^(\s*)(-\s+)?uses:\s*(.+)$/);
+    if (!action) {
+      if (!line.trimStart().startsWith("#") && /(?:^|[\s{,])["']?uses["']?\s*:/.test(line)) {
+        throw new Error(`line ${index + 1}: actions require literal block-style uses declarations`);
+      }
+      continue;
+    }
     const reference = scalar(action[3]);
     if (reference.startsWith("./")) continue;
     if (!/^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/.test(reference)) {

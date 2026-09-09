@@ -43,6 +43,19 @@ test("checks every Rust step rather than accepting one matching reference", () =
   );
 });
 
+test("rejects unsupported action declarations rather than overlooking mutable refs", () => {
+  for (const declaration of [
+    "      - { uses: actions/checkout@v6 }\n",
+    '      - "uses": actions/checkout@v6\n',
+    "      - uses:\n",
+  ]) {
+    assert.throws(
+      () => checkCiPins(rust + declaration, "1.88.0"),
+      /literal block-style/,
+    );
+  }
+});
+
 for (const replacement of [
   "",
   "          # toolchain: 1.88.0\n",
