@@ -162,7 +162,7 @@ carrying `entry_hash` and `source_attestation`.
 `source_attestation` is coven-memory's assertion of provenance — where the
 promoted content came from in the substrate. It is **evidence, not authority**.
 The daemon records it; the daemon does not trust it to make the permit decision.
-This is the same predicate-vs-descriptor discipline as §2.2: attestation is
+This is the same predicate-vs-descriptor discipline as PHASE-0-DESIGN §2.2: attestation is
 descriptive, gate results are enforcing.
 
 ### 5.2 Proposal lifecycle
