@@ -21,9 +21,7 @@ It is one seam, described once, referenced from both repos.
 
 PHASE-0-DESIGN §3.3.1 anti-non-negotiable governs and is quoted verbatim:
 
-> `coven-threads` does not own retrieval, promotion, or dreaming. It owns
-> *authority over writes to the protected surface, gated by the weave*.
-
+> **Anti-non-negotiable:** `coven-threads` does not own retrieval, promotion, or dreaming. It owns *authority over writes to the protected surface, gated by the weave*. Scope creep here fragments the atomic-ship trio. Hold the line.
 Therefore:
 
 | Concern | Owner |
