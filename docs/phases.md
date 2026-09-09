@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-09: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved implementation blockers.** Daemon and Cave release tags include the earlier integration. Draft fixes and a real-daemon smoke harness exist, but full boundary proof and the independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-09: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. Published draft fixes now have bounded real-daemon evidence, but full boundary acceptance and the independent coherence/freeze decisions remain outstanding.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
@@ -25,10 +25,12 @@ no release contains Threads is obsolete, as is the `v0.1.2` dependency reference
 The readiness foundation merged in #34 (`db0049b`). The
 [E2E contract](testing/e2e-contract.md) and
 [compatibility manifest](../e2e/compatibility.toml) still distinguish core tests
-from a required pinned daemon gate. OpenCoven/coven#931 is an **unmerged advisory
-smoke harness**, not proof that all eight journeys pass. Deterministic scheduler
-control and supported scheduled-proposal publication remain runtime
-prerequisites. Persisted-envelope fixtures cannot substitute for intake.
+from a required pinned daemon gate. OpenCoven/coven#931 is an **unmerged
+integration checkpoint**, not full J1–J8 acceptance. Deterministic scheduler
+control and supported scheduled publication are implemented in drafts
+OpenCoven/coven#968 and OpenCoven/coven#972 and exercised together through the
+real daemon. The stable compatibility pin remains unchanged; local integration
+does not make an unreviewed downstream revision a required gate.
 
 ## Phase 0 — Design `[FROZEN]`
 
@@ -95,7 +97,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 | Bead | Blocking finding | Status |
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
-| `threads-okc` | identity predicates must run at intake and delayed/restart replay | open; OpenCoven/coven#885, no open implementation PR in this review |
+| `threads-okc` | identity predicates must run at intake and delayed/restart replay | in progress; draft OpenCoven/coven#969 (`0e94e9c`), issue OpenCoven/coven#885 |
 | `threads-980` | every opened window needs exactly one typed terminal close | in progress; draft OpenCoven/coven#932 / issue OpenCoven/coven#886 |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | open; draft OpenCoven/coven#933 / issue OpenCoven/coven#887 |
 | `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | open; OpenCoven/coven#888 |
@@ -104,29 +106,78 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 confirmed the four findings then. It is not a current test result and cannot
 waive independent review of subsequent changes.
 
-**Current delivery:** the harness and two production fixes are separate draft
-checkpoints that can advance independently. Shared process/restart mechanics
-belong in OpenCoven/coven#931; protected-route assertions belong with
-OpenCoven/coven#933; terminal-close assertions belong with OpenCoven/coven#932.
-The production fixes overlap in audit-reservation cleanup and early validation,
-so green individual branches do not establish their integration. Full closure
-requires real-daemon red-to-green evidence, including `superseded`, duplicate
-recovery, and all five terminal families.
+**Current delivery, as of 2026-09-09:** the runtime prerequisites this section
+previously described as missing are now implemented as unmerged drafts, not
+absent: identity-predicate activation is draft OpenCoven/coven#969 (`0e94e9c`),
+supported canonical scheduled publication with an explicit minimum-visibility
+window is draft OpenCoven/coven#972 (`7a5f4244`), and an isolated deterministic
+daemon-boundary test clock is draft OpenCoven/coven#968 (`8a4f2b7`). Two CI
+prerequisites for exercising these against a real daemon are also drafted:
+Windows daemon-lifecycle readiness (draft OpenCoven/coven#970, `cbd5626a`) and
+authenticated Ubuntu-only apt source isolation (draft OpenCoven/coven#973,
+`c731cada`, whose hosted run
+[34388895012](https://github.com/OpenCoven/coven/actions/runs/34388895012)
+passed in full). None of these five prerequisite drafts is merged; treat them as
+drafted fixes, not closed prerequisites.
 
-**Runtime prerequisites, not missing upstream contracts:** at Coven
-`380e765e40e9f84771a805d51a64c06fe79c3110`, migration compiles retired identity
-invariants but retains them only in the backup; the active
+**Hosted readiness evidence:** the initial Windows response-timeout repair
+passed on OpenCoven/coven#970 at `9b591e4e`. A later pre-connect pipe timeout
+on OpenCoven/coven#933 required another bounded retry fix, `cbd5626a`.
+Its affected protected-route lineage at `3d2c06d0` now passes the full
+[CI run 34394040609](https://github.com/OpenCoven/coven/actions/runs/34394040609),
+including Windows and the PR gate. Scheduled publication at `cf8df046` also
+contains both Windows prerequisites. This is evidence for the named revisions,
+not a blanket assertion about every subsequent draft head.
+
+**Published integrated evidence:** OpenCoven/coven#931 now contains
+`c226656dbb2b5b344eab1625cc9dfe31fe1fe9e6`, with this Threads checkout at
+`c3bd46bc` proven by `cargo metadata`. The selected authority suite passed
+189 tests. The complete feature-enabled Unix daemon target passed all 15 tests
+on three consecutive runs. It covers canonical corpus migration and intake,
+exact minimum visibility and deadline, restart, all five typed terminal
+families, replacement-only apply after explicit supersession, no-window human
+approval, contradictory human/opened-window history, invalid identity at
+intake, unsupported duplicate-surface input, and reviewed drift. The bounded
+write journey asserts a validation verdict and exact logged before/after hashes
+and byte count.
+
+The eight-case replay/restart loop covers veto, materialized drift, unavailable
+Ward, changed/unavailable identity, rotated principal binding, and changed or
+removed regional approval policy. Actual daemon failures exposed and drove
+repairs for predicate failures without terminal closes, stale principal
+binding, identity checks skipped at reviewed intake, stale approval policy,
+and socket publication before private permissions were installed
+(OpenCoven/coven#974). The socket repair retains client ownership checks and
+passes deterministic no-clobber/private-publication regressions.
+
+This is still bounded evidence: signed principal authorization, changed runtime
+bindings, aggregate multi-file atomic visibility, Windows daemon journeys,
+Cave acceptance, and the reviewed required-pin gate are not certified. Linux
+and the existing macOS push CI lane now invoke the feature-enabled daemon target;
+the new integration head's hosted result is separate from its local evidence.
+None of this closes the four root remediation gates or substitutes for Nova
+or Val.
+
+**Runtime prerequisites, now drafted rather than missing:** at Coven
+`380e765e40e9f84771a805d51a64c06fe79c3110`, migration compiled retired identity
+invariants but retained them only in the backup, with the active
 [`WardConfig`](https://github.com/OpenCoven/coven/blob/380e765e40e9f84771a805d51a64c06fe79c3110/crates/coven-cli/src/ward.rs#L273-L293)
-does not activate them, and
+not activating them and
 [`threads_gate.rs`](https://github.com/OpenCoven/coven/blob/380e765e40e9f84771a805d51a64c06fe79c3110/crates/coven-cli/src/threads_gate.rs#L188-L203)
-supplies no candidate identity context. The scheduler and recovery commitment
-already exist, but
-[`production staging`](https://github.com/OpenCoven/coven/blob/380e765e40e9f84771a805d51a64c06fe79c3110/crates/coven-cli/src/threads_gate.rs#L1047-L1065)
-still publishes legacy pending envelopes rather than the scheduled envelope
-carrying classification and replay evidence. Activate the existing typed
-identity contracts, wire supported scheduled publication, and provide
-deterministic daemon-boundary time; do not replace these gaps with test-only
-constructors or a new identity model.
+supplying no candidate identity context; production staging at that checkpoint
+still published legacy pending envelopes rather than a scheduled envelope
+carrying classification and replay evidence. Draft OpenCoven/coven#969 targets
+identity activation, draft OpenCoven/coven#972 targets scheduled publication,
+and draft OpenCoven/coven#968 targets deterministic daemon-boundary time —
+each remains an open, unmerged draft. The integrated evidence above exercises
+their supported runtime paths, but is not independent human closure. Do not
+replace these contracts with test-only constructors or a new identity model.
+
+**Draft checkpoint scope:** OpenCoven/coven#931 is now the combined integration
+checkpoint, including cross-lane repairs not present on every standalone draft.
+OpenCoven/coven#932 and OpenCoven/coven#933 retain their scoped terminal and
+protected-route history. Reconcile overlapping commits before merging; green
+individual branches are not interchangeable with the integrated result.
 
 **Related work outside the sign-off blocker set:** `threads-xpo` tracks the
 missing daemon promotion-channel path; `threads-55s` depends on it for auditable
