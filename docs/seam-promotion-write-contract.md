@@ -1,19 +1,23 @@
 # SEAM CONTRACT — promotion-write ↔ weave
 
-**Bead:** `threads-ot6` (this repo) · mirrors `cmem-r59` (`OpenCoven/coven-memory`)
-**Status:** `[DRAFT — Echo authored 2026-08-06; pending Cody agreement on implementation shape]`
-**Co-owners:** Echo (contract language) · Cody (implementation shape)
+**Bead:** `threads-ot6` (this repo) · coven-memory mirror bead unresolved; repo-owned coven-memory docs track the seam as `SEAM` (see `threads-5mn`)
+**Status:** `[NORMATIVE FOR WHEN BUILT — contract text only; no conforming implementation exists today]`
+**Co-owners:** Echo (contract language) · Cody (language-correctness review only)
 
 ---
 
 ## 0. What this contract is for
 
-`coven memory promote` (coven-memory M2) produces a write. That write lands on a
-surface `coven-threads` guards. This document is the **single** integration
-contract between the substrate side that decides *what* to promote and the
-authority side that decides *whether the write is permitted*.
+`coven memory promote` is planned coven-memory M2 work, not a shipping command.
+When that promotion surface produces a write, and that write lands on a surface
+`coven-threads` guards, this document is the **single** integration contract
+between the substrate side that decides *what* to promote and the authority side
+that decides *whether the write is permitted*.
 
-It is one seam, described once, referenced from both repos.
+Unless a paragraph explicitly says it is describing current observed behavior,
+the sections below are normative for a conforming future implementation.
+
+It is one seam, described once, and tracked in both repos.
 
 ---
 
@@ -21,9 +25,7 @@ It is one seam, described once, referenced from both repos.
 
 PHASE-0-DESIGN §3.3.1 anti-non-negotiable governs and is quoted verbatim:
 
-> `coven-threads` does not own retrieval, promotion, or dreaming. It owns
-> *authority over writes to the protected surface, gated by the weave*.
-
+> **Anti-non-negotiable:** `coven-threads` does not own retrieval, promotion, or dreaming. It owns *authority over writes to the protected surface, gated by the weave*. Scope creep here fragments the atomic-ship trio. Hold the line.
 Therefore:
 
 | Concern | Owner |
@@ -32,7 +34,8 @@ Therefore:
 | Candidate selection, ranking, dedup, dreaming | coven-memory |
 | Promotion trigger and cadence | coven-memory |
 | Whether a promotion write may commit | coven-threads (via daemon) |
-| Classification, gates, approval ceremony, audit | coven-threads (via daemon) |
+| Classification, gate, approval, and audit-record contracts | coven-threads |
+| Staging, commit-time replay, filesystem writes, and audit persistence | coven daemon |
 
 `coven-threads` MUST NOT gain a promotion policy. `coven-memory` MUST NOT gain a
 permit decision. Neither side may infer the other's answer.
@@ -48,7 +51,8 @@ derived structures is detected by re-derivation, not by gating.
 
 ## 2. Channel — `Channel::Deliberate`
 
-A promotion write is submitted on `Channel::Deliberate`.
+For a conforming promotion implementation, the effective channel MUST be
+`Channel::Deliberate`.
 
 This is not a new decision; PHASE-0-DESIGN §2.4 already defines the channel as
 *"deliberate compaction (promotion, dreaming, memory flush). Familiar-initiated,
@@ -60,8 +64,14 @@ neither side re-litigates it.
 ceremony. They are orthogonal and both first-class. A promotion write being
 `Deliberate` says nothing about which ceremony clears it.
 
-`coven-memory` declares the channel; the daemon revalidates it. A submission
-arriving with any other channel for a promotion write is rejected, not coerced.
+`Channel::Deliberate` is normative contract language here, not a description of
+current daemon behavior.
+
+**NOT YET IMPLEMENTED — `threads-xpo`:** current daemon code does not expose a
+promotion submission path and does not reach `Channel::Deliberate`. When the
+boundary exists, any caller-supplied channel label is descriptive only: the
+daemon MUST authoritatively determine or revalidate the effective channel and
+reject a mismatch rather than coerce it.
 
 ---
 
@@ -73,9 +83,11 @@ target is advisory; materialized target is authoritative (Gate 4).
 ### 3.1 Proposal-eligible target (Tier 1–3)
 
 Runs the normal Phase-5 pipeline: `ProposalClassification` → gates → staging →
-`ApprovalPath` → veto window → live Gate-4 replay → apply.
+`ApprovalPath` → applicable approval ceremony → live Gate-4 replay → apply.
+Only the veto-window approval paths open a window; escalation to a human path
+does not create one.
 
-**Recommended default ceremony:** `ApprovalPath::FamiliarCoherence { veto }`.
+**[PROPOSED] Recommended default ceremony:** `ApprovalPath::FamiliarCoherence { veto }`.
 
 Rationale: promotion is familiar-initiated compaction of the familiar's own
 memory. The familiar-coherence gate is the ceremony whose question ("does this
@@ -84,9 +96,10 @@ still cohere with who this familiar is?") matches what promotion actually risks.
 that would catch semantic drift. Human paths are too heavy for routine promotion
 and would make the feature unusable at cadence.
 
-`[PROPOSED — needs Cody agreement, then Nova]` This default is a floor, not a
-ceiling. Highest ceremony still wins for the proposal as a unit: a promotion
-write touching a high-risk semantic region elevates normally.
+This default remains proposed pending Cody's language review and later Nova
+ratification. It is a floor, not a ceiling. Highest ceremony still wins for the
+proposal as a unit: a promotion write touching a high-risk semantic region
+elevates normally.
 
 ### 3.2 Protected target (Tier 0)
 
@@ -106,8 +119,8 @@ as a promotion outcome.
 > `threads-dgg` exists precisely because current `coven` still stages and
 > approves protected SOUL.md edits through `/threads/proposals` after a principal
 > fingerprint is supplied. Until `threads-dgg` closes, §3.2 describes intended
-> behavior, not observed behavior. **This contract must not be marked satisfied
-> while that gap is open.**
+> behavior, not observed behavior. A language-only review of this document
+> cannot certify the runtime behavior; that proof remains in `threads-lm4`.
 
 ---
 
@@ -123,6 +136,9 @@ proposal pipeline; `WindowCloseReason` (audit layer, trigger-enforced) is the
 *lifecycle* vocabulary — the write entered the pipeline and its opened window
 must close with a typed terminal reason (§5.2).
 
+Before any `RejectReason` mapping applies, a frayed thread returns
+`Verdict::DegradeToProposal`; fray is staged, not encoded as a reject reason.
+
 **Admission rejections — `RejectReason`:**
 
 | Condition | Verdict | Existing `RejectReason` |
@@ -132,7 +148,7 @@ must close with a typed terminal reason (§5.2).
 | Thread does not cover `Channel::Deliberate` | reject | `ChannelNotCovered` |
 | Thread snapped | reject | `ThreadSnapped` |
 | Weave pattern predicate does not hold | reject | `WeaveBroken` |
-| Surface degraded / frayed strand | reject | `SurfaceDegraded` |
+| Surface degraded at this surface | reject | `SurfaceDegraded` |
 | Validator panicked | reject | `ValidatorPanic` |
 
 **Lifecycle terminations — `WindowCloseReason`:**
@@ -158,22 +174,24 @@ and the reason kind, never the guarded content.
 
 ### 5.1 Admission
 
-A committed promotion write emits `memory_entry_admitted` (RFC-0001 §5.6),
-carrying `entry_hash` and `source_attestation`.
+A committed promotion write emits `memory_entry_admitted`, carrying
+`entry_hash` and `source_attestation`.
 
 `source_attestation` is coven-memory's assertion of provenance — where the
 promoted content came from in the substrate. It is **evidence, not authority**.
 The daemon records it; the daemon does not trust it to make the permit decision.
-This is the same predicate-vs-descriptor discipline as §2.2: attestation is
+This is the same predicate-vs-descriptor discipline as PHASE-0-DESIGN §2.2: attestation is
 descriptive, gate results are enforcing.
 
 ### 5.2 Proposal lifecycle
 
-A promotion write routed through §3.1 emits the full Phase-5 sequence:
+A promotion write routed through a veto-window approval path in §3.1 emits:
 `proposal_submitted` → `proposal_window_opened` → exactly one terminal event
-(`proposal_approved`/`applied`, `proposal_vetoed`/`vetoed`, or
-`proposal_rejected` with `evidence_diverged` | `revalidation_failed` |
-`superseded`). No opened window may be left without a typed close.
+(`proposal_approved`/`applied`, `proposal_vetoed`/`vetoed`, or `proposal_rejected` with `evidence_diverged`, `revalidation_failed`, or `superseded`). No opened window may be left without a typed close.
+
+Human approval paths do not emit `proposal_window_opened` and have no
+`window_close` payload. They must not be substituted for an already-open
+window to evade its terminal-close obligation.
 
 > **Cross-bead dependency:** `threads-980` is open precisely because rejection
 > branches currently emit `window_close=None`. Promotion writes inherit that
@@ -186,8 +204,8 @@ constructs its row with `channel: None`.
 
 This contract requires promotion writes to be `Channel::Deliberate`, and requires
 that fact to be *auditable*. As written, the admission row cannot distinguish a
-promotion-driven admission from any other. That is a legibility hole in exactly
-the ledger WARD-C6 exists to keep coherent.
+promotion-driven admission from any other. That is a legibility hole in the
+single daemon-owned `ward.audit` store Phase 0 §3.4 exists to keep coherent.
 
 **Requested change (Cody):** `for_memory_entry_admitted` should accept and record
 the channel. Filed as a follow-up bead rather than patched here, since it touches
@@ -207,18 +225,29 @@ the audit row shape and belongs with the other audit work.
 
 ---
 
-## 7. Acceptance
+## 7. Language-only acceptance
 
-This contract is satisfied when:
+This document satisfies the language-only acceptance criteria when:
 
-1. Echo and Cody both agree to the language (Cody's agreement outstanding).
-2. `threads-ot6` and `cmem-r59` each reference this file.
-3. §3.2 is *observably* true — gated on `threads-dgg`.
-4. §5.2 emits typed terminal closes — gated on `threads-980`.
-5. §5.3 records channel on admission rows.
+1. Echo and Cody both agree the language as a specification; Cody's review is
+   limited to language correctness, not an implementation shape for a command
+   that does not yet exist.
+2. §2 stays explicit that it is normative for when built and carries the
+   `NOT YET IMPLEMENTED — threads-xpo` marker while no
+   `Channel::Deliberate` submission path exists.
+3. This document does not ratify a phantom coven-memory mirror ID. It may point
+   to `threads-5mn` and the coven-memory `SEAM` tracker row, but it MUST NOT
+   invent a bead identifier.
+4. §3.1 stays marked `[PROPOSED]`; the default ceremony is not frozen as a
+   decision here.
+5. This section stays aligned with `threads-ot6` so the bead and contract do
+   not encode divergent gates.
+6. The status header continues to say the contract is normative for when built
+   and that no conforming implementation exists today.
 
-Items 3 and 4 are inherited, not introduced. This seam does not create those
-gaps; it is blocked behind them, and saying so is the honest version.
+Observed-runtime proof for protected-route prohibition, typed terminal closes,
+and admission-channel audit remains outside this bead (`threads-lm4`,
+`threads-dgg`, `threads-980`, `threads-55s`).
 
 ---
 
@@ -227,7 +256,9 @@ _Sage review pass, 2026-08-06: §4 split into the two actual vocabularies —
 both against `validate.rs` and `audit.rs`. The original table implied one
 rejection vocabulary where the code has two. No semantic change._
 
-_Echo, 2026-08-06. Drafted from the coven-threads side only — `coven-memory` is
-outside this session's filesystem boundary, so every claim about the substrate
-side is stated as an expectation for Cody and the coven-memory owner to confirm,
-not as verified fact._
+_Echo, 2026-08-06. Original draft was written from the coven-threads side only.
+Repository-owned coven-memory docs checked in this review confirm the seam
+exists and is tracked there as `SEAM`, but they do not establish a specific
+mirror bead ID or ratify the rest of the substrate-side behavior. `threads-5mn`
+remains open for the exact linkage, and implementation claims on the memory side
+still need Cody plus the coven-memory owner to confirm._
