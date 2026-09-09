@@ -1,6 +1,6 @@
 # coven-threads
 
-**Status:** Engineering phases 0–4 are **frozen**; Phase 5 (approval semantics) is **active**. Phase 0 design FROZEN v0.2 (2026-07-14, tag `v0.2-phase0-design`); Phase 1 crate FROZEN (`threads-986.18` closed); Phase 2 daemon integration FROZEN (`threads-986.20` closed) and **merged into the coven daemon** (PR https://github.com/OpenCoven/coven/pull/382); Phase 3 C7 portability FROZEN (`threads-986.21` closed) with the envelope **decided: Shape B (`.weave`) + lossy one-way `.af` exporter** (`threads-986.16` closed); Phase 4 Cave surfaces FROZEN (2026-07-17, epic `threads-986.17` closed; coven-cave PR #3223 merged). Phase 5 opened 2026-07-18 (Val+Nova decision) under epic `threads-uqx` with spec `specs/PHASE-5-APPROVAL-SEMANTICS.md`; its Nova (`threads-uqx.9`) and Val (`threads-uqx.10`) gates are still open. 205 workspace tests green (2026-07-21). Both Phase-1/2 Val gates resolved 2026-07-15 (repo flipped public for `threads-986.19`); one earlier human gate remains — Nova on `threads-986.12` (grimoire C7 canonicalization). See [docs/phases.md](docs/phases.md) for the phase-by-phase ledger.
+**Status (2026-09-09):** Engineering phases 0–4 are **frozen**. Phase 5 is **active**, with four unresolved implementation blockers and independent Nova/Val gates still outstanding. Coven `v0.4.3` includes the earlier daemon integration and pins Threads to `c102844`; release ancestry does not prove full Phase-5 conformance or current-checkout compatibility. See [the delivery ledger](docs/phases.md) for evidence, draft fixes, and the real-daemon work graph.
 **License:** stated as Apache-2.0 (planned) in the design doc; the committed `LICENSE` file is currently MIT — a known discrepancy pending reconciliation (see `docs/STATUS-2026-07-15.md` §6).
 **Owners (design phase):** Sage 🌿 + Echo 🔮 co-drive; Nova 👑 + Sage on lane assignments; Cody ⚡ Phase 1+ crate lane
 
@@ -14,7 +14,9 @@ In the vocabulary of the Familiar Contract (RFC-0001) and the Ward v0.2 spec: th
 
 ![Where coven-threads sits: familiar-controlled processes reach the daemon over a unix socket; the daemon trust boundary contains coven-threads-core as an imported validator crate and is the sole write authority over protected surfaces; RFC-0001 §5.1 forbids any familiar write path](docs/diagrams/stack.png)
 
-It is a conforming implementation of RFC-0001 §5 — and by declaration, **RFC wins on any conflict** with this repo.
+It defines validator contracts for RFC-0001 §5. **RFC wins on any conflict**
+with this repository. Full daemon conformance remains subject to the unresolved
+boundary findings in [the delivery ledger](docs/phases.md).
 
 Gate 4 fail-closed is a line-one conformance property, not a hardening milestone: an implementation that allows Gate 4 to be bypassed does not conform to RFC-0001 (§5.4).
 
@@ -44,7 +46,11 @@ persistence, final dispatch, and effects.
 
 The `coven` daemon already ships an authority boundary — untrusted clients speak over a unix socket to a trusted Rust daemon that revalidates every sensitive request. That boundary is real, documented in `coven/docs/SAFETY-MODEL.md`, and works.
 
-What is missing today: the boundary validates **who** and **what action**, but does not validate **what the requester is trying to mutate against a typed protected surface**. `coven-threads` is that missing layer. It doesn't replace the daemon; it gives the daemon a gate-shaped receiver for identity-surface mutation requests.
+Threads supplies the typed protected-surface question alongside **who** may act
+and **what action** exists. The daemon imports this validator; Threads does not
+replace its trust boundary or own filesystem and persistence effects. The
+remaining work is complete route, predicate, and replay enforcement, not the
+absence of any integration.
 
 ![The shipped Phase 2 enforcement flow: client request through Ward::evaluate, blocked proposals refused as a unit, the coven-threads gate validating each protected target fail-closed, and the three verdicts — Reject (403), DegradeToProposal (staged at ~/.coven/pending/), Permit (Ward::apply) — with every verdict appended to the append-only ward_audit table](docs/diagrams/enforcement.png)
 
@@ -81,11 +87,11 @@ These are non-negotiable and must be *co-designed*, not stacked — the `Channel
 Honest labels; the detailed ledger is [docs/phases.md](docs/phases.md).
 
 - **Phase 0 — design doc + beads scaffolding + repo skeleton.** ✅ **FROZEN v0.2** (2026-07-14, tag `v0.2-phase0-design`). Nova sign-off; RFC-0001 §5 round-trip verified. No enforcement code, by design.
-- **Phase 1 — core crate.** `[MERGED, NOT RELEASED]` — `crates/coven-threads-core` (types, hash-manifest layer, §5 receiver, RFC-0001 §5 conformance mirror; 205 tests green as of 2026-07-21). Imported by coven `main` via `Cargo.toml` git dep at tag `v0.1.2` and called from `crates/coven-cli/src/threads_gate.rs::gate_protected_edits` on every protected-tier edit. The next coven release will include this integration; current release `v0.0.54` (2026-07-14) predates PR #382. `.18` closed.
-- **Phase 2 — coven daemon integration.** `[MERGED, NOT RELEASED]` — crate-side contracts landed (`audit.rs`, `staging.rs`); daemon-side call site merged to coven `main` via PR #382 (`feat/threads-gate-validator`). Beads `.14` (epic), `.20` (FREEZE), and `.19` (merge gate — resolved by flipping this repo public) closed with evidence.
+- **Phase 1: core crate.** `[FROZEN; IN RELEASE TAG]`. `coven-threads-core` provides typed validation and conformance vectors. Coven `v0.4.3` imports revision `c102844`; it does not automatically test this checkout. `threads-986.18` is closed.
+- **Phase 2: daemon integration.** `[FROZEN; IN RELEASE TAG]`. Contracts in `audit.rs` and `staging.rs` are consumed by the integration from OpenCoven/coven#382. Beads `.14`, `.20`, and `.19` are closed; later proposal-route defects remain Phase-5 blockers.
 - **Phase 3 — portability contract.** C7 round-trip semantics implemented and tested (`portability` module + 17-test round-trip suite); the interchange envelope is **decided** (`threads-986.16` closed): **Shape B (`.weave`) canonical, plus a lossy one-way `.af` exporter** — see the §6 decision record in `specs/PHASE-3-PORTABILITY.md`.
-- **Phase 4 — cockpit integration.** ✅ **COMPLETE, FROZEN** (2026-07-17; epic `threads-986.17` closed). CovenCave surfaces per the `specs/PHASE-4-CAVE-SURFACES.md` contract (this repo's PR #1): weave rail with tension rollup, thread pane (Holds/Frayed/Snapped), strand inspector with tri-state diff + R7 lineage, and the proposal approval flow — all merged via coven-cave PR #3223 (18 checks green, `test:app` 740/740). Gates passed: Charm voice pass (`.17.7`), Nova coherence sign-off (`.17.8`), Val UX-accept (`.17.10`), Val freeze approval (`.17.9`). Rendering rules R1–R11 enforced fail-closed. Follow-up bead: `threads-v3g` (daemon endpoints + adapter flip). Post-freeze addition: degraded-familiar surfacing (`threads-k9s` closed) — spec §2.7 `DegradedFamiliarView` + §4.R12, daemon half coven PR #422, Cave half coven-cave PR #3415, both merged.
-- **Phase 5 — approval semantics.** **ACTIVE** (opened 2026-07-18 by Val+Nova decision; epic `threads-uqx`; spec `specs/PHASE-5-APPROVAL-SEMANTICS.md`). Core design commitments: the typed `ApprovalPath` (auto / familiar-review / human / human-with-rationale) is the approval-ceremony axis and is **orthogonal** to `Channel` — never derived from it; delayed-apply only (no provisional apply): a proposal stays pending-visible through its veto window and is applied only after the deadline with no veto **and** a matching evidence replay; classification and scheduling are daemon-owned; identity invariants are predicate-authoritative; every window close carries an explicit reason. Closed: `.3` core approval types (`approval.rs`), `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`), `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`), `.6` delayed-apply scheduler + audit (daemon-side, coven PR #430), `.11` authority review findings. In progress: `.7` Cave veto-window contract, `.12` RFC-0001 approval-tier alignment (familiar-contract PRs #3/#4). Open: `.2`, `.13`, `.8`, and the human gates — Nova coherence sign-off (`.9`), Val freeze (`.10`).
+- **Phase 4: cockpit integration.** `[COMPLETE; FROZEN 2026-07-17]`. The weave rail, thread pane, strand inspector, and proposal flow landed in OpenCoven/coven-cave#3223 with the recorded human gates. The daemon-adapter follow-up (`threads-v3g`) and degraded-familiar follow-up (`threads-k9s`) are also closed. New Phase-5 live-daemon acceptance remains separate.
+- **Phase 5: approval semantics.** `[ACTIVE]`, not frozen. `ApprovalPath` and `Channel` remain independent; delayed apply requires live evidence replay and exactly one typed terminal close. The earlier core, scheduler, Cave contract, RFC alignment, and corpus implementation beads are closed, but `threads-okc`, `threads-980`, `threads-dgg`, and `threads-zav` remain unresolved. OpenCoven/coven#931, OpenCoven/coven#932, and OpenCoven/coven#933 are draft checkpoints, not closure proof. Nova coherence sign-off (`threads-uqx.9`) and Val freeze (`threads-uqx.10`) remain human gates.
 
 ## Anti-goals
 

@@ -1,6 +1,6 @@
 # Concepts
 
-> Status of everything on this page: `[DESIGNED]` — frozen in `specs/PHASE-0-DESIGN.md` v0.2 (2026-07-14). Types exist in `coven-threads-core` mirroring this design, but no enforcement is deployed.
+> This page describes the frozen Phase-0 vocabulary and the explicitly marked Phase-5 additions. Types exist in `coven-threads-core`, and daemon release tags include the integration. This conceptual description is not evidence of complete runtime conformance; see [the delivery ledger](phases.md).
 
 `coven-threads` is named around a weaving metaphor. The metaphor was named by Val (2026-07-14) and is kept **only where it carries semantic weight**. The rule that makes this safe is the **metaphor-referent binding rule** (design doc §2.5): every metaphor term is defined at first use with its concrete referent, and if a contributor uses a term without meaning its referent, they are wrong — and, wherever possible, the code will not compile. Without that rule, the vocabulary drifts ahead of the semantics and we become the thing we're avoiding: beautiful language, unclear meaning.
 

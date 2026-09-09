@@ -1,10 +1,34 @@
 # Phases
 
-> This page is the honest status ledger. Labels used throughout: `[FROZEN]` (design complete and change-controlled), `[MERGED]` (landed on the `main` branch of a downstream system that will call this crate at runtime once cut into a release; buildable and integration-tested but **not in a released binary** yet), `[RELEASED]` (in a tagged downstream release users can install), `[ENGINEERING FROZEN]` (code complete, tests green, awaiting one named decision to reach a deployed system), `[ACTIVE]` (open engineering phase with in-flight beads), `[BLOCKED]` (waiting on a named decision), `[NOT STARTED]`.
+> This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> The one-sentence truth: **phases 0–4 are frozen, Phase 5 (approval semantics) is active but its sign-off gate was refused on 2026-07-29 and the four named remediation beads are still open and unclaimed, everything downstream is merged but not in a released binary — no enforcement exists anywhere in production.** No released daemon in the wild calls this code. If a doc or deck implies otherwise, this page wins.
+> **As of 2026-09-09: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved implementation blockers.** Daemon and Cave release tags include the earlier integration. Draft fixes and a real-daemon smoke harness exist, but full boundary proof and the independent coherence/freeze decisions remain outstanding.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
+
+## Release and verification evidence
+
+[Coven `v0.4.3`](https://github.com/OpenCoven/coven/releases/tag/v0.4.3),
+published 2026-09-02, resolves to
+`8baa9c9b722a3a9553c6ed39b7e1ba2296ced95a`. Its
+[`coven-cli` manifest](https://github.com/OpenCoven/coven/blob/8baa9c9b722a3a9553c6ed39b7e1ba2296ced95a/crates/coven-cli/Cargo.toml)
+pins `coven-threads-core` to `c102844`. Its ancestry includes the scheduler
+merge from OpenCoven/coven#430 and schema adoption from OpenCoven/coven#675.
+[Cave `v0.4.1`](https://github.com/OpenCoven/coven-cave/releases/tag/v0.4.1),
+published 2026-09-09, includes the Phase-5 corrections from
+OpenCoven/coven-cave#3628.
+
+These are source-provenance facts, not certification of installed binaries,
+deployment configuration, or all Phase-5 invariants. The historical claim that
+no release contains Threads is obsolete, as is the `v0.1.2` dependency reference.
+
+The readiness foundation merged in #34 (`db0049b`). The
+[E2E contract](testing/e2e-contract.md) and
+[compatibility manifest](../e2e/compatibility.toml) still distinguish core tests
+from a required pinned daemon gate. OpenCoven/coven#931 is an **unmerged advisory
+smoke harness**, not proof that all eight journeys pass. Deterministic scheduler
+control and supported scheduled-proposal publication remain runtime
+prerequisites. Persisted-envelope fixtures cannot substitute for intake.
 
 ## Phase 0 — Design `[FROZEN]`
 
@@ -14,30 +38,31 @@ Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relatio
 
 The frozen doc is change-controlled. These docs describe it; they do not amend it.
 
-## Phase 1 — Core crate `[MERGED, NOT RELEASED]`
+## Phase 1 — Core crate `[FROZEN; IN RELEASE TAG]`
 
 **Scope (beads `threads-986.6`–`.11`, Cody's Rust lane):** the `coven-threads-core` crate — `Strand`, `Thread`, `Weave`, `Channel`, `TensionState` types; the `PatternPredicate` trait with its derived `describe()` introspection; the hash-manifest layer (Merkle over strand hashes in canonical `(surface_path, writer_id)` order); and the RFC-0001 §5 conformance test suite mirrored into Rust.
 
-**Status:** landed on `main` (commit `86550d8`), beads `986.6`–`.11` closed with evidence; **Phase 1 FREEZE recorded in `threads-986.18` (closed).** The full workspace test suite is green — 205 tests as of 2026-07-21 (174 unit, 17 C7 round-trip, 14 §5 conformance; plus 1 ignored doc-test). The count has grown past the Phase-1 freeze baseline because the crate now also carries the Phase 5 approval-semantics modules (see Phase 5 below). `unsafe_code = "forbid"` at the workspace level.
+**Status:** landed on `main` at `86550d8`; beads `986.6`–`.11` and the Phase 1 freeze (`threads-986.18`) are closed. The 2026-07-21 checkpoint recorded 205 tests (174 unit, 17 C7 round-trip, and 14 §5 conformance, plus one ignored doc-test). That historical count is not the current suite size. `unsafe_code = "forbid"` at the workspace level.
 
 **What "implemented" does not mean:** the crate is a library. It has no side effects by design — no filesystem verification, no audit writes, no staging I/O. Until a daemon calls it (Phase 2), it enforces nothing.
 
-## Phase 2 — Daemon integration `[FROZEN; MERGED TO COVEN MAIN]`
+## Phase 2 — Daemon integration `[FROZEN; IN RELEASE TAG]`
 
 **Scope:** the validator call site inside the `coven` daemon's existing socket handling; the `DegradeToProposal` staging path at `~/.coven/pending/`; the `ward.audit` table live in `coven.sqlite3`; the notification protocol to the principal.
 
 **Status, in two halves:**
 
 - **Crate side — landed** (commit `5e68957`): `audit.rs` defines the `ward.audit` record shape and DDL (append-only via triggers, RFC-0001 §5.6 event vocabulary); `staging.rs` defines the pending-proposal record shape. The crate owns the *contracts*; the daemon owns the connection, the writes, and the directory.
-- **Daemon side — merged** `[MERGED, NOT RELEASED]`: the validator call site (on `POST /familiars/{id}/edits`), staging path, and the live audit table landed on coven `main` via **PR https://github.com/OpenCoven/coven/pull/382** (branch `feat/threads-gate-validator`, squash-merged 2026-07-15). The Phase 2 epic bead `threads-986.14` is **closed** (engineering complete), **`threads-986.20` (Phase 2 FREEZE) is closed**, and **`threads-986.19` (merge gate) is closed** — resolved by flipping `coven-threads` public so coven CI can fetch the pinned git dependency (deny.toml `[sources]` allow-lists it). Cross-repo write authority for the branch work itself was already gated and Val-granted (bead `threads-986.15`, closed).
+- **Daemon side** `[IN RELEASE TAG]`: the validator call site, staging path, and audit table landed via OpenCoven/coven#382 and are present in the release ancestry above. The Phase 2 epic `threads-986.14`, freeze `threads-986.20`, and merge gate `threads-986.19` are closed. The merge gate was resolved by making this repository public so downstream CI could fetch the pinned dependency. This does not close the later protected-proposal route defect, `threads-dgg`.
 
-Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built from coven `main` now flows through this gate.
+The daemon calls the validator on protected edits. That integration does not
+establish that every proposal, replay, or recovery route satisfies Phase 5.
 
 ## Phase 3 — Portability format `[ENGINEERING FROZEN; ENVELOPE DECIDED]`
 
 **Scope:** the Coven Familiar Portability Format — the artifact a familiar exports to and imports from, with C7 enforced across the round-trip.
 
-**Status:** **Phase 3 FREEZE recorded in `threads-986.21` (closed).** The *semantics* are implemented and tested (`portability.rs` + the `c7_roundtrip.rs` suite, 17 tests as of 2026-07-21): the `PortableWeave` envelope, the `SerializationContract` with its drift-visible contract hash, `export_weave`/`import_weave` with the full fail-visibly matrix (tamper → hash mismatch; version skew, contract skew, duplicate pairs → typed refusals; import never widens authority). The *interchange encoding* is **decided** (`threads-986.16` closed, 2026-07-15): **Shape B — the net-new `.weave` envelope — is canonical**, plus a clearly-marked lossy one-way `.af` exporter for Letta handoff (follow-up bead `threads-jq4`; no `.af` import path, ever). Decision record: `specs/PHASE-3-PORTABILITY.md` §6.
+**Status:** the Phase 3 freeze (`threads-986.21`) and envelope decision (`threads-986.16`) are closed. `PortableWeave`, `SerializationContract`, and `export_weave`/`import_weave` implement the C7 round-trip and fail-visible behavior in `portability.rs` and `c7_roundtrip.rs`. The canonical format is `.weave`. The explicitly lossy, one-way `.af` exporter also landed: `threads-jq4` closed with merged #2 (`5b4a51a`). There is no `.af` import path. See `specs/PHASE-3-PORTABILITY.md` §6.
 
 **Not `.af`-compatible — documented divergence.** Whatever shape wins, the format will not be a compatible `.af` round-trip surface. The reason is factual, source-verified 2026-07-14 against `letta-ai/letta/main/letta/serialize_schemas/pydantic_agent_schema.py`: Letta's `CoreMemoryBlockSchema` has no protection field, and the runtime `read_only` flag is stripped at export. An artifact format that cannot represent the protection contract cannot satisfy C7 — silent downgrade on import is precisely the failure mode C7 exists to refuse. This is a neutral engineering constraint, not a judgment of `.af` for its own goals; see the [FAQ](faq.md#why-isnt-it-af-compatible).
 
@@ -45,7 +70,7 @@ Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built f
 
 **Scope (epic `threads-986.17`, closed):** cockpit surfaces in Coven Cave — the weave rail view, a thread detail pane with tension state, strand inspection, and the proposal approval flow for staged writes from `~/.coven/pending/`. Charm owned the voice/copy pass on all four surfaces.
 
-**Status:** **complete and FROZEN, 2026-07-17.** The surface contract is `specs/PHASE-4-CAVE-SURFACES.md` (this repo's PR #1). All four surfaces — the weave rail with tension rollup, the thread pane (Holds/Frayed/Snapped), the strand inspector with tri-state diff + R7 lineage, and the proposal approval flow — merged via **coven-cave PR #3223** (18 checks green, `test:app` 740/740). The freeze gates were real: Charm voice pass (`threads-986.17.7`), Nova coherence sign-off (`.17.8`), Val UX-accept (`.17.10`), and Val freeze approval (`.17.9`). Rendering rules R1–R11 are enforced fail-closed. Follow-up bead: `threads-v3g` (daemon endpoints + adapter flip — the surfaces render against an adapter until the daemon HTTP endpoints land).
+**Status:** **complete and frozen, 2026-07-17.** The surface contract is `specs/PHASE-4-CAVE-SURFACES.md` (#1). The weave rail, thread pane, strand inspector, and proposal approval flow merged in OpenCoven/coven-cave#3223. The recorded freeze gates were Charm's voice pass (`threads-986.17.7`), Nova's coherence sign-off (`.17.8`), and Val's UX acceptance (`.17.10`) and freeze (`.17.9`). The adapter follow-up `threads-v3g` is also closed, through OpenCoven/coven#408, OpenCoven/coven#409, and OpenCoven/coven-cave#3362. The earlier fixtures-first description is no longer current.
 
 **Post-freeze addition:** degraded-familiar surfacing (`threads-k9s`, closed) — spec §2.7 `DegradedFamiliarView` + rendering rule §4.R12; daemon half merged as coven PR #422, Cave half as coven-cave PR #3415.
 
@@ -60,37 +85,77 @@ Every `POST /familiars/{id}/edits` touching a tier-0 surface on a daemon built f
 - **Classification and scheduling are daemon-owned.** The crate defines the types and predicates; the daemon classifies, schedules, and applies.
 - **Identity invariants are predicate-authoritative** (the descriptor-vs-predicate rule from [concepts.md](concepts.md) applies here too).
 
-**Ledger, as of 2026-08-09:**
+**Ledger, as of 2026-09-09:**
 
 - **Closed:** `.3` core approval types — `ApprovalPath`, `ApprovalPathKind`, `VetoWindow`, `ProposalClassification` (`approval.rs`); `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`); `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`); `.6` delayed-apply scheduler + audit — implemented **daemon-side in coven PR #430** (daemon-owned classification and scheduler, deadline/minimum-visible revalidation, fail-closed committed-evidence replay, cross-platform conditional atomic writes, startup recovery); `.11` authority review findings resolved; `.2` RFC closure/provenance amendments; `.7` Cave veto-window contract; `.8` implementation and migration fidelity; `.12` RFC-0001 approval-tier alignment; `.13` authorized retired-Ward migration fixture. The proposal/decision-record PR #6 merged 2026-07-27 as `091607f`.
-- **Open — and this is the whole of Phase 5's remaining state:** `.9` Nova coherence sign-off gate and `.10` Val freeze gate. Both are human gates that agents must never simulate. Related: `threads-3xd` — RFC-0001 amendments (§5.5 closure precondition + §4.2 predicate (iv) provenance).
+- **Open human gates:** `.9` Nova coherence sign-off and `.10` Val freeze. They are not the whole remaining implementation scope: the four remediation beads below still block sign-off. Agents must never simulate either decision.
 
 **Nova's sign-off is BLOCKED, not pending (2026-07-29).** This is the single most important fact about Phase 5 and it is easy to miss from the bead counts alone. Nova ran independent core and integration reviews against coven `f3cd322`, coven-threads `091607f`, merged coven PRs #430/#464, merged Cave PRs #3581/#3628, and familiar-contract PRs #3/#4, and **refused sign-off**. The design choices were explicitly affirmed as coherent — Channel and `ApprovalPath` remain separate axes, delayed apply is correct, Cave stays thin and fail-closed. What blocks is implementation, in five named beads:
 
 | Bead | Blocking finding | Status |
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
-| `threads-okc` | identity predicates not wired into daemon mutation/replay; accepted migrated invariants remain backup-only | open, unclaimed |
-| `threads-980` | opened veto windows can reach rejection branches with no typed close detail | open, unclaimed |
-| `threads-dgg` | protected `SOUL.md` changes still stage/approve through a proposal route, contrary to RFC-0001 §5.4 | open, unclaimed |
-| `threads-zav` | retired-Ward corpus does not prove end-to-end schedulability | open, unclaimed |
+| `threads-okc` | identity predicates must run at intake and delayed/restart replay | open; OpenCoven/coven#885, no open implementation PR in this review |
+| `threads-980` | every opened window needs exactly one typed terminal close | in progress; draft OpenCoven/coven#932 / issue OpenCoven/coven#886 |
+| `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | open; draft OpenCoven/coven#933 / issue OpenCoven/coven#887 |
+| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | open; OpenCoven/coven#888 |
 
-**Re-verified 2026-08-09 (Echo):** all four open blockers are **still true** against current coven `main` `59c5be4` — 129 commits after the commit Nova reviewed. None of the four has been claimed or started, and none of the relevant code paths changed in that range. Nova's findings transfer verbatim to current code; she does not need to re-review. Evidence with file:line is recorded on `threads-uqx.9`. Caveat stated there and repeated here: that was static verification (code read against the recorded claims), not a test run.
+**Historical review:** Echo's 2026-08-09 static review at Coven `59c5be4`
+confirmed the four findings then. It is not a current test result and cannot
+waive independent review of subsequent changes.
 
-So Phase 5 is `[ACTIVE]` in name but **stalled on unclaimed remediation work**, not on either human gate. `.10` cannot ripen until `.9` clears, and `.9` cannot clear until the four beads close.
+**Current delivery:** the harness and two production fixes are separate draft
+checkpoints that can advance independently. Shared process/restart mechanics
+belong in OpenCoven/coven#931; protected-route assertions belong with
+OpenCoven/coven#933; terminal-close assertions belong with OpenCoven/coven#932.
+The production fixes overlap in audit-reservation cleanup and early validation,
+so green individual branches do not establish their integration. Full closure
+requires real-daemon red-to-green evidence, including `superseded`, duplicate
+recovery, and all five terminal families.
 
-**Related open beads not in the gate chain** (none block `.9`): `threads-xpo` `Channel::Deliberate` is unreachable from the daemon; `threads-55s` record channel on `memory_entry_admitted` rows (blocked by `xpo`); `threads-ot6` promotion-write ↔ weave seam contract (draft PR #25, awaiting Cody); `threads-76z` schema permits an unapprovable proposal the Rust types forbid (awaiting a Nova ruling); `threads-bnu` unpinned local Rust toolchain; `threads-t6t` no secret-scanning CI; `threads-5rr` familiar inbox + handoff ledger.
+**Runtime prerequisites, not missing upstream contracts:** at Coven
+`380e765e40e9f84771a805d51a64c06fe79c3110`, migration compiles retired identity
+invariants but retains them only in the backup; the active
+[`WardConfig`](https://github.com/OpenCoven/coven/blob/380e765e40e9f84771a805d51a64c06fe79c3110/crates/coven-cli/src/ward.rs#L273-L293)
+does not activate them, and
+[`threads_gate.rs`](https://github.com/OpenCoven/coven/blob/380e765e40e9f84771a805d51a64c06fe79c3110/crates/coven-cli/src/threads_gate.rs#L188-L203)
+supplies no candidate identity context. The scheduler and recovery commitment
+already exist, but
+[`production staging`](https://github.com/OpenCoven/coven/blob/380e765e40e9f84771a805d51a64c06fe79c3110/crates/coven-cli/src/threads_gate.rs#L1047-L1065)
+still publishes legacy pending envelopes rather than the scheduled envelope
+carrying classification and replay evidence. Activate the existing typed
+identity contracts, wire supported scheduled publication, and provide
+deterministic daemon-boundary time; do not replace these gaps with test-only
+constructors or a new identity model.
+
+**Related work outside the sign-off blocker set:** `threads-xpo` tracks the
+missing daemon promotion-channel path; `threads-55s` depends on it for auditable
+admission channels. `threads-ot6` is draft #25, with `threads-5mn` tracking its
+upstream work reference and `threads-lm4` tracking runtime conformance.
+`threads-76z` was reopened because its purported fix, #27, was closed **without
+merge** and superseded by stricter terminal-close work. Do not resurrect its
+null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` still tracks
+absent secret/privacy CI. `threads-5rr` is an unratified design proposal, not
+authorization to add an audit event.
+
+### Repository governance still outstanding
+
+#31 tracks required pinned daemon checks, deterministic time, OS/Cave acceptance,
+Action SHA pins, and measured coverage/flake targets. The 2026-09-09 GitHub
+snapshot reports `main` as unprotected and no repository rulesets. CI and
+CODEOWNERS files do not themselves enforce branch protection. The readiness
+foundation is merged, but these governance items remain open.
 
 ## Summary table
 
 | Phase | What it is | Status | Gate to next step |
 |---|---|---|---|
 | 0 | Design doc + scaffold | `[FROZEN]` v0.2, tag `v0.2-phase0-design` | — (done) |
-| 1 | `coven-threads-core` crate | `[MERGED, NOT RELEASED]` — imported by coven `main` (Cargo.toml git dep at tag `v0.1.2`); the running coven daemon binary (release `v0.0.54`, 2026-07-14) predates PR #382 and does not yet call it; 205 tests green (2026-07-21); `.18` closed | — (frozen) |
-| 2 | Daemon integration | `[MERGED, NOT RELEASED]`, `.14` + `.20` + `.19` closed; PR #382 merged 2026-07-15 as commit `f745117`; next coven release will include it (current release `v0.0.54` predates the merge) | — (release-cut) |
-| 3 | Portability format | `[ENGINEERING FROZEN]`, `.21` + `.16` closed; envelope `[DECIDED: Shape B + lossy .af export]` | follow-up `threads-jq4` (exporter) |
-| 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`, epic `threads-986.17` closed; coven-cave PR #3223 merged (18 checks green, `test:app` 740/740); Charm `.17.7`, Nova `.17.8`, Val `.17.10` + `.17.9` gates passed; post-freeze `threads-k9s` closed (coven PR #422 + coven-cave PR #3415) | follow-up `threads-v3g` (daemon endpoints + adapter flip) |
-| 5 | Approval semantics | `[ACTIVE]` since 2026-07-18 — but **sign-off refused 2026-07-29** and no remediation work is claimed. Epic `threads-uqx`; `.2`–`.8`/`.11`/`.12`/`.13` closed; **only `.9` + `.10` remain**. Nova named five implementation blockers; `threads-3jx` closed, and `threads-okc`/`980`/`dgg`/`zav` are open and unclaimed (all four re-verified still true 2026-08-09 vs coven `59c5be4`) | close the four remediation beads → Nova sign-off (`.9`) → Val freeze (`.10`) |
+| 1 | `coven-threads-core` crate | `[FROZEN; IN RELEASE TAG]`; Coven `v0.4.3` pins `c102844`; `.18` closed | Current-checkout daemon compatibility still needs proof |
+| 2 | Daemon integration | `[FROZEN; IN RELEASE TAG]`; `.14`, `.20`, and `.19` closed | Phase-5 route and replay defects remain separate |
+| 3 | Portability format | `[ENGINEERING FROZEN]`; `.21`, `.16`, and exporter follow-up `threads-jq4` closed | No `.af` import or authority-preserving `.af` round-trip |
+| 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`; `threads-986.17`, adapter follow-up `threads-v3g`, and degraded-familiar follow-up `threads-k9s` closed | New Phase-5 live-daemon acceptance remains separate |
+| 5 | Approval semantics | `[ACTIVE]`; sign-off refused 2026-07-29; four remediation beads remain unresolved, with draft harness and fix work underway | Real-daemon remediation evidence, then independent Nova sign-off (`.9`) and Val freeze (`.10`) |
 
 ## Known housekeeping discrepancies
 
