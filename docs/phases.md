@@ -159,8 +159,13 @@ the original refusal, failed-outcome, cleanup, and deadline assertions.
 This is still bounded evidence: signed principal authorization, changed runtime
 bindings, aggregate multi-file atomic visibility, Windows daemon journeys,
 Cave acceptance, and the reviewed required-pin gate are not certified. Linux
-and the existing macOS push CI lane now invoke the feature-enabled daemon target;
-the new integration head's hosted result is separate from its local evidence.
+and the existing macOS push CI lane now invoke the feature-enabled daemon target.
+Integration checkpoint `345d4cf0` passed the full
+[hosted CI run 34396479737](https://github.com/OpenCoven/coven/actions/runs/34396479737),
+including the Linux real-daemon step, Windows workspace suite, and PR gate.
+Scheduled-publication checkpoint `e139023f` also passed its full
+[hosted run 34396479783](https://github.com/OpenCoven/coven/actions/runs/34396479783).
+The Windows workspace result is not Windows daemon-journey parity.
 None of this closes the four root remediation gates or substitutes for Nova
 or Val.
 
