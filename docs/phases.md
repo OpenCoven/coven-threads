@@ -74,7 +74,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 
 **Status:** **complete and frozen, 2026-07-17.** The surface contract is `specs/PHASE-4-CAVE-SURFACES.md` (#1). The weave rail, thread pane, strand inspector, and proposal approval flow merged in OpenCoven/coven-cave#3223. The recorded freeze gates were Charm's voice pass (`threads-986.17.7`), Nova's coherence sign-off (`.17.8`), and Val's UX acceptance (`.17.10`) and freeze (`.17.9`). The adapter follow-up `threads-v3g` is also closed, through OpenCoven/coven#408, OpenCoven/coven#409, and OpenCoven/coven-cave#3362. The earlier fixtures-first description is no longer current.
 
-**Post-freeze addition:** degraded-familiar surfacing (`threads-k9s`, closed) — spec §2.7 `DegradedFamiliarView` + rendering rule §4.R12; daemon half merged as coven PR #422, Cave half as coven-cave PR #3415.
+**Post-freeze addition:** degraded-familiar surfacing (`threads-k9s`, closed) — spec §2.7 `DegradedFamiliarView` + rendering rule §4.R12; daemon half merged as OpenCoven/coven#422, Cave half as OpenCoven/coven-cave#3415.
 
 ## Phase 5 — Approval semantics `[ACTIVE]`
 
@@ -89,10 +89,10 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 
 **Ledger, as of 2026-09-09:**
 
-- **Closed:** `.3` core approval types — `ApprovalPath`, `ApprovalPathKind`, `VetoWindow`, `ProposalClassification` (`approval.rs`); `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`); `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`); `.6` delayed-apply scheduler + audit — implemented **daemon-side in coven PR #430** (daemon-owned classification and scheduler, deadline/minimum-visible revalidation, fail-closed committed-evidence replay, cross-platform conditional atomic writes, startup recovery); `.11` authority review findings resolved; `.2` RFC closure/provenance amendments; `.7` Cave veto-window contract; `.8` implementation and migration fidelity; `.12` RFC-0001 approval-tier alignment; `.13` authorized retired-Ward migration fixture. The proposal/decision-record PR #6 merged 2026-07-27 as `091607f`.
+- **Closed:** `.3` core approval types — `ApprovalPath`, `ApprovalPathKind`, `VetoWindow`, `ProposalClassification` (`approval.rs`); `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`); `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`); `.6` delayed-apply scheduler + audit — implemented **daemon-side in OpenCoven/coven#430** (daemon-owned classification and scheduler, deadline/minimum-visible revalidation, fail-closed committed-evidence replay, cross-platform conditional atomic writes, startup recovery); `.11` authority review findings resolved; `.2` RFC closure/provenance amendments; `.7` Cave veto-window contract; `.8` implementation and migration fidelity; `.12` RFC-0001 approval-tier alignment; `.13` authorized retired-Ward migration fixture. The proposal/decision-record PR #6 merged 2026-07-27 as `091607f`.
 - **Open human gates:** `.9` Nova coherence sign-off and `.10` Val freeze. They are not the whole remaining implementation scope: the four remediation beads below still block sign-off. Agents must never simulate either decision.
 
-**Nova's sign-off is BLOCKED, not pending (2026-07-29).** This is the single most important fact about Phase 5 and it is easy to miss from the bead counts alone. Nova ran independent core and integration reviews against coven `f3cd322`, coven-threads `091607f`, merged coven PRs #430/#464, merged Cave PRs #3581/#3628, and familiar-contract PRs #3/#4, and **refused sign-off**. The design choices were explicitly affirmed as coherent — Channel and `ApprovalPath` remain separate axes, delayed apply is correct, Cave stays thin and fail-closed. What blocks is implementation, in five named beads:
+**Nova's sign-off is BLOCKED, not pending (2026-07-29).** This is the single most important fact about Phase 5 and it is easy to miss from the bead counts alone. Nova ran independent core and integration reviews against coven `f3cd322`, coven-threads `091607f`, merged OpenCoven/coven#430 and OpenCoven/coven#464, merged OpenCoven/coven-cave#3581 and OpenCoven/coven-cave#3628, and OpenCoven/familiar-contract#3 and OpenCoven/familiar-contract#4, and **refused sign-off**. The design choices were explicitly affirmed as coherent — Channel and `ApprovalPath` remain separate axes, delayed apply is correct, Cave stays thin and fail-closed. What blocks is implementation, in five named beads:
 
 | Bead | Blocking finding | Status |
 |---|---|---|
@@ -130,9 +130,9 @@ contains both Windows prerequisites. This is evidence for the named revisions,
 not a blanket assertion about every subsequent draft head.
 
 **Published integrated evidence:** OpenCoven/coven#931 now contains
-`c226656dbb2b5b344eab1625cc9dfe31fe1fe9e6`, with this Threads checkout at
-`c3bd46bc` proven by `cargo metadata`. The selected authority suite passed
-189 tests. The complete feature-enabled Unix daemon target passed all 15 tests
+`345d4cf0c2314ab70cbf843fee84e0db7776ec6d`, with this Threads checkout at
+`c3bd46bc` proven by `cargo metadata`. The expanded authority/intake suite passed
+218 tests. The complete feature-enabled Unix daemon target passed all 15 tests
 on three consecutive runs. It covers canonical corpus migration and intake,
 exact minimum visibility and deadline, restart, all five typed terminal
 families, replacement-only apply after explicit supersession, no-window human
@@ -149,6 +149,12 @@ binding, identity checks skipped at reviewed intake, stale approval policy,
 and socket publication before private permissions were installed
 (OpenCoven/coven#974). The socket repair retains client ownership checks and
 passes deterministic no-clobber/private-publication regressions.
+
+The bounded read-only engineering review of the integrated authority code found
+no high-confidence introduced correctness defects. Hosted full-suite follow-up
+also corrected a mismatched synthetic fixture and a prompt-failure test that
+omitted a valid during-write termination outcome. These corrections preserve
+the original refusal, failed-outcome, cleanup, and deadline assertions.
 
 This is still bounded evidence: signed principal authorization, changed runtime
 bindings, aggregate multi-file atomic visibility, Windows daemon journeys,
