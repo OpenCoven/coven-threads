@@ -110,7 +110,7 @@ waive independent review of subsequent changes.
 previously described as missing are now implemented as unmerged drafts, not
 absent: identity-predicate activation is draft OpenCoven/coven#969 (`0e94e9c`),
 supported canonical scheduled publication with an explicit minimum-visibility
-window is draft OpenCoven/coven#972 (`7a5f4244`), and an isolated deterministic
+window is draft OpenCoven/coven#972 (`e139023f`), and an isolated deterministic
 daemon-boundary test clock is draft OpenCoven/coven#968 (`8a4f2b7`). Two CI
 prerequisites for exercising these against a real daemon are also drafted:
 Windows daemon-lifecycle readiness (draft OpenCoven/coven#970, `cbd5626a`) and
@@ -125,7 +125,7 @@ passed on OpenCoven/coven#970 at `9b591e4e`. A later pre-connect pipe timeout
 on OpenCoven/coven#933 required another bounded retry fix, `cbd5626a`.
 Its affected protected-route lineage at `3d2c06d0` now passes the full
 [CI run 34394040609](https://github.com/OpenCoven/coven/actions/runs/34394040609),
-including Windows and the PR gate. Scheduled publication at `cf8df046` also
+including Windows and the PR gate. Scheduled publication at `e139023f` also
 contains both Windows prerequisites. This is evidence for the named revisions,
 not a blanket assertion about every subsequent draft head.
 
@@ -157,8 +157,8 @@ omitted a valid during-write termination outcome. These corrections preserve
 the original refusal, failed-outcome, cleanup, and deadline assertions.
 
 This is still bounded evidence: signed principal authorization, changed runtime
-bindings, aggregate multi-file atomic visibility, Windows daemon journeys,
-Cave acceptance, and the reviewed required-pin gate are not certified. Linux
+bindings, final authority-check/commit snapshot consistency, Windows daemon
+journeys, Cave acceptance, and the reviewed required-pin gate are not certified. Linux
 and the existing macOS push CI lane now invoke the feature-enabled daemon target.
 Integration checkpoint `345d4cf0` passed the full
 [hosted CI run 34396479737](https://github.com/OpenCoven/coven/actions/runs/34396479737),
@@ -168,6 +168,28 @@ Scheduled-publication checkpoint `e139023f` also passed its full
 The Windows workspace result is not Windows daemon-journey parity.
 None of this closes the four root remediation gates or substitutes for Nova
 or Val.
+
+**Acceptance continuation:** the approved engineering work now has two separate
+daemon-owned lanes. OpenCoven/coven#976 (`threads-8pz.12`) extends the existing
+journeys to Windows owner-local IPC; a Windows workspace pass alone remains
+insufficient. OpenCoven/coven#977 (`threads-8pz.13`) investigates and repairs the
+final validated-snapshot/commit binding, including deterministic authority
+changes between validation and conditional writes. Both require actual daemon
+evidence before closure.
+
+The latter obligation is the [E2E contract](testing/e2e-contract.md) section 7
+snapshot requirement, not an additional requirement for globally simultaneous
+multi-file visibility. J1 separately requires an atomic intended-file change.
+Existing conditional-write regression tests do not, by themselves, prove that
+unchanged identity sources and the committed approval binding share the final
+validated snapshot.
+
+Upstream Coven has merged the bounded consumer projection in
+OpenCoven/coven#953 and verifiable receipt reads in OpenCoven/coven#975.
+The production trusted runtime adapter remains owned by OpenCoven/coven#857.
+The projection is evidence, not a new authorization path; its availability
+does not certify changed-runtime or signed-authorization journeys. Engineering
+approval does not replace the independent coherence review or freeze.
 
 **Runtime prerequisites, now drafted rather than missing:** at Coven
 `380e765e40e9f84771a805d51a64c06fe79c3110`, migration compiled retired identity
