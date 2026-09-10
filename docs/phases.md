@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-09: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. Published draft fixes now have bounded real-daemon evidence, but full boundary acceptance and the independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-10: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. Published draft fixes now include native Windows and final-commit journeys, but the recorded combined Windows run has startup failures. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
@@ -130,7 +130,7 @@ including Windows and the PR gate. Scheduled publication at `e139023f` also
 contains both Windows prerequisites. This is evidence for the named revisions,
 not a blanket assertion about every subsequent draft head.
 
-**Published integrated evidence:** OpenCoven/coven#931 now contains
+**Earlier published integrated evidence:** OpenCoven/coven#931 contained
 `345d4cf0c2314ab70cbf843fee84e0db7776ec6d`, with this Threads checkout at
 `c3bd46bc` proven by `cargo metadata`. The expanded authority/intake suite passed
 218 tests. The complete feature-enabled Unix daemon target passed all 15 tests
@@ -182,19 +182,45 @@ home/socket-identity startup failure. These later results do not invalidate
 the named hosted checkpoint above; they prevent extending its green status to
 the continuing integration work.
 
-**Acceptance continuation:** the approved engineering work now has two separate
-daemon-owned lanes. OpenCoven/coven#976 (`threads-8pz.12`) extends the existing
-journeys to Windows owner-local IPC; a Windows workspace pass alone remains
-insufficient. OpenCoven/coven#977 (`threads-8pz.13`) investigates and repairs the
-final validated-snapshot/commit binding, including deterministic authority
-changes between validation and conditional writes. Both require actual daemon
-evidence before closure.
+**Current acceptance continuation:** OpenCoven/coven#978 (Windows owner-local
+IPC) and OpenCoven/coven#979 (final validated-snapshot/commit binding) are merged
+into draft OpenCoven/coven#931, not Coven main. The final-commit identity-drift
+journey is wired into the shared harness. There are 15 daemon journeys on each
+platform; the old standalone HTTP parser test moved to production-client
+coverage.
 
-The `threads-8pz.13` checkpoint records only the test seam integrated locally
-at `24fff607`, retaining pre-fix production behavior for a real-daemon red case.
-The daemon support case is not yet wired into the shared harness. Separate
-local production-fix and unit-test evidence does not establish an executed
-daemon red/fix/green result with the current Threads override.
+At published daemon head `fd610f6`,
+[run 34461979876](https://github.com/OpenCoven/coven/actions/runs/34461979876)
+executed all 15 journeys on native Windows, with 23 passed scenario manifests,
+including final-commit identity drift. Its actual synthetic merge was
+`6daed594ffb36eea681adce0da090adaef48f812`; Windows used committed Threads
+`c3bd46b`, not a current-checkout override. Overall CI remained red on separate
+adoption-fixture timeouts.
+
+The macOS socket-alias failure was reproduced and repaired at `42f5e71`:
+discovery preserves the published socket leaf beneath the canonical home
+instead of retaining a removed temporary hard-link alias. Ownership,
+permissions, symlink rejection, and peer-identity checks remain intact.
+Test-only cancellation diagnostics subsequently landed through
+OpenCoven/coven#993 (`0a7040a7`), and fixture store initialization matching daemon
+startup landed through OpenCoven/coven#996 (`98cfa9ce`). Neither change raises
+deadlines or establishes a production cancellation/adoption defect.
+
+The recorded combined head `d4653f14` passes 41 selected adoption/identity/commit
+unit cases and all 15 default-parallel daemon journeys locally with current
+Threads `2d21254` proven active by Cargo metadata.
+[Run 34466364843](https://github.com/OpenCoven/coven/actions/runs/34466364843)
+passes the Windows workspace and clock-feature unit steps, but fails four
+daemon journeys on startup-health timeouts (11 passed, four failed). Available
+setup-failure artifacts do not establish the failing startup phase; diagnostic
+retention is being repaired before claiming a runtime fix.
+
+OpenCoven/coven#976 and OpenCoven/coven#977 remain open for reviewed integration
+and acceptance. Independent engineering review of the bounded authority diff
+is not Nova's coherence review. Earlier native green, local override evidence,
+and component PR success cannot be transferred to a different combined head.
+Browser acceptance still requires OpenCoven/coven-cave#5256's real-daemon
+project, not mocked route composition or disappearance from a pending queue.
 
 The latter obligation is the [E2E contract](testing/e2e-contract.md) section 7
 snapshot requirement, not an additional requirement for globally simultaneous
@@ -237,31 +263,41 @@ admission channels. `threads-ot6` is draft #25, with `threads-5mn` tracking its
 upstream work reference and `threads-lm4` tracking runtime conformance.
 `threads-76z` was reopened because its purported fix, #27, was closed **without
 merge** and superseded by stricter terminal-close work. Do not resurrect its
-null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` still tracks
-absent secret/privacy CI. `threads-5rr` is an unratified design proposal, not
+null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` now tracks
+the remaining privacy-enforcement ruling after secret scanning landed in #41.
+`threads-5rr` is an unratified design proposal, not
 authorization to add an audit event.
 
 ### Repository governance still outstanding
 
 #31 tracks required pinned daemon checks, deterministic time, OS/Cave acceptance,
-Action SHA pins, and measured coverage/flake targets. The 2026-09-09 GitHub
+Action SHA pins, and measured coverage/flake targets. The 2026-09-10 GitHub
 snapshot reports `main` as unprotected and no repository rulesets. CI and
 CODEOWNERS files do not themselves enforce branch protection. The readiness
 foundation is merged, but these governance items remain open.
 
-Draft #38 (`bea19f4e`), tracked in #37 and `threads-8pz.14`, pins the existing
+#38 merged as `af013612`; #37 is closed. It pins the existing
 external CI actions and preserves explicit Rust 1.88.0 inputs in every
 toolchain step. Its repository checker has regression coverage for mutable
 refs, missing or divergent inputs, and unsupported declarations. It does not
-add branch protection, secret/privacy scanning, a coverage ratchet, or a
-reviewed downstream gate; those obligations remain separate.
+add branch protection, a coverage ratchet, or a reviewed downstream gate.
+
+#41 merged as `2d21254`, deploying checksum-pinned Gitleaks with index and
+reachable `HEAD`-history scanning, sanitized diagnostics, and synthetic
+regressions. Actual PR CI `34465028325` and merged-main CI `34465519559` passed.
+The separate Copilot review workflow `34465035137` is not CI evidence.
+Draft #40 now adds only independent privacy enforcement and its rollout
+documentation. Its policy conflicts with one source-reference path in the
+frozen Phase-5 specification; no exemption or frozen-spec amendment was made.
+#39 remains open for that decision. Secret-scanning success is not privacy
+acceptance, and neither job creates required-check policy.
 
 ## Summary table
 
 | Phase | What it is | Status | Gate to next step |
 |---|---|---|---|
 | 0 | Design doc + scaffold | `[FROZEN]` v0.2, tag `v0.2-phase0-design` | — (done) |
-| 1 | `coven-threads-core` crate | `[FROZEN; IN RELEASE TAG]`; Coven `v0.4.3` pins `c102844`; `.18` closed | Current-checkout daemon compatibility still needs proof |
+| 1 | `coven-threads-core` crate | `[FROZEN; IN RELEASE TAG]`; Coven `v0.4.3` pins `c102844`; `.18` closed | Reviewed required stable-pin daemon gate remains open |
 | 2 | Daemon integration | `[FROZEN; IN RELEASE TAG]`; `.14`, `.20`, and `.19` closed | Phase-5 route and replay defects remain separate |
 | 3 | Portability format | `[ENGINEERING FROZEN]`; `.21`, `.16`, and exporter follow-up `threads-jq4` closed | No `.af` import or authority-preserving `.af` round-trip |
 | 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`; `threads-986.17`, adapter follow-up `threads-v3g`, and degraded-familiar follow-up `threads-k9s` closed | New Phase-5 live-daemon acceptance remains separate |
