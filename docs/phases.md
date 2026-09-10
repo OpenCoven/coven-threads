@@ -15,7 +15,8 @@ published 2026-09-02, resolves to
 pins `coven-threads-core` to `c102844`. Its ancestry includes the scheduler
 merge from OpenCoven/coven#430 and schema adoption from OpenCoven/coven#675.
 [Cave `v0.4.1`](https://github.com/OpenCoven/coven-cave/releases/tag/v0.4.1),
-published 2026-09-09, includes the Phase-5 corrections from
+published 2026-09-09, resolves to
+`9366009e028ff10e7130c3d7824fe8d55e15323f`. Its ancestry includes the Phase-5 corrections from
 OpenCoven/coven-cave#3628.
 
 These are source-provenance facts, not certification of installed binaries,
@@ -66,7 +67,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 
 **Status:** the Phase 3 freeze (`threads-986.21`) and envelope decision (`threads-986.16`) are closed. `PortableWeave`, `SerializationContract`, and `export_weave`/`import_weave` implement the C7 round-trip and fail-visible behavior in `portability.rs` and `c7_roundtrip.rs`. The canonical format is `.weave`. The explicitly lossy, one-way `.af` exporter also landed: `threads-jq4` closed with merged #2 (`5b4a51a`). There is no `.af` import path. See `specs/PHASE-3-PORTABILITY.md` §6.
 
-**Not `.af`-compatible — documented divergence.** Whatever shape wins, the format will not be a compatible `.af` round-trip surface. The reason is factual, source-verified 2026-07-14 against `letta-ai/letta/main/letta/serialize_schemas/pydantic_agent_schema.py`: Letta's `CoreMemoryBlockSchema` has no protection field, and the runtime `read_only` flag is stripped at export. An artifact format that cannot represent the protection contract cannot satisfy C7 — silent downgrade on import is precisely the failure mode C7 exists to refuse. This is a neutral engineering constraint, not a judgment of `.af` for its own goals; see the [FAQ](faq.md#why-isnt-it-af-compatible).
+**Not `.af`-compatible: documented divergence.** The decided `.weave` format and lossy `.af` exporter do not provide a compatible `.af` round-trip surface. The reason is factual, source-verified 2026-07-14 against `letta-ai/letta/main/letta/serialize_schemas/pydantic_agent_schema.py`: Letta's `CoreMemoryBlockSchema` has no protection field, and the runtime `read_only` flag is stripped at export. An artifact format that cannot represent the protection contract cannot satisfy C7. Silent downgrade on import is precisely the failure mode C7 exists to refuse. This is a neutral engineering constraint, not a judgment of `.af` for its own goals; see the [FAQ](faq.md#why-isnt-it-af-compatible).
 
 ## Phase 4 — Coven Cave UX `[COMPLETE; FROZEN 2026-07-17]`
 
@@ -97,7 +98,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 | Bead | Blocking finding | Status |
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
-| `threads-okc` | identity predicates must run at intake and delayed/restart replay | in progress; draft OpenCoven/coven#969 (`0e94e9c`), issue OpenCoven/coven#885 |
+| `threads-okc` | identity predicates must run at intake and delayed/restart replay | open in Beads; implementation drafted in OpenCoven/coven#969 (`0e94e9c`), issue OpenCoven/coven#885 |
 | `threads-980` | every opened window needs exactly one typed terminal close | in progress; draft OpenCoven/coven#932 / issue OpenCoven/coven#886 |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | open; draft OpenCoven/coven#933 / issue OpenCoven/coven#887 |
 | `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | open; OpenCoven/coven#888 |
@@ -169,6 +170,18 @@ The Windows workspace result is not Windows daemon-journey parity.
 None of this closes the four root remediation gates or substitutes for Nova
 or Val.
 
+**Later integration evidence is not green:** the
+[follow-up report on OpenCoven/coven#976](https://github.com/OpenCoven/coven/issues/976#issuecomment-5609267577)
+records 11 passing and four failing default-parallel daemon tests at local
+integration revision `299afacf`, including macOS transport error 35
+(`Resource temporarily unavailable`). A
+[serialized diagnostic rerun](https://github.com/OpenCoven/coven/issues/976#issuecomment-5609324318)
+passed the four selected cases at the same revision, but it is not a production
+fix or replacement acceptance result. The reports also identify a strict
+home/socket-identity startup failure. These later results do not invalidate
+the named hosted checkpoint above; they prevent extending its green status to
+the continuing integration work.
+
 **Acceptance continuation:** the approved engineering work now has two separate
 daemon-owned lanes. OpenCoven/coven#976 (`threads-8pz.12`) extends the existing
 journeys to Windows owner-local IPC; a Windows workspace pass alone remains
@@ -176,6 +189,12 @@ insufficient. OpenCoven/coven#977 (`threads-8pz.13`) investigates and repairs th
 final validated-snapshot/commit binding, including deterministic authority
 changes between validation and conditional writes. Both require actual daemon
 evidence before closure.
+
+The `threads-8pz.13` checkpoint records only the test seam integrated locally
+at `24fff607`, retaining pre-fix production behavior for a real-daemon red case.
+The daemon support case is not yet wired into the shared harness. Separate
+local production-fix and unit-test evidence does not establish an executed
+daemon red/fix/green result with the current Threads override.
 
 The latter obligation is the [E2E contract](testing/e2e-contract.md) section 7
 snapshot requirement, not an additional requirement for globally simultaneous
@@ -230,6 +249,13 @@ snapshot reports `main` as unprotected and no repository rulesets. CI and
 CODEOWNERS files do not themselves enforce branch protection. The readiness
 foundation is merged, but these governance items remain open.
 
+Draft #38 (`bea19f4e`), tracked in #37 and `threads-8pz.14`, pins the existing
+external CI actions and preserves explicit Rust 1.88.0 inputs in every
+toolchain step. Its repository checker has regression coverage for mutable
+refs, missing or divergent inputs, and unsupported declarations. It does not
+add branch protection, secret/privacy scanning, a coverage ratchet, or a
+reviewed downstream gate; those obligations remain separate.
+
 ## Summary table
 
 | Phase | What it is | Status | Gate to next step |
@@ -246,6 +272,5 @@ foundation is merged, but these governance items remain open.
 Tracked in `docs/STATUS-2026-07-15.md` and worth knowing when reading the repo:
 
 - **License mismatch:** the design doc and README say *Apache-2.0 (planned)*; the committed `LICENSE` file is MIT (with a separate `PATENTS` file). Needs a deliberate reconciliation; until then, treat the license as unsettled.
-- **`.bak` files in `specs/`:** three pre-freeze backups sit beside the frozen doc; git history already preserves them.
 - **`PHASE-0-DESIGN.md` §9 is headed "Open questions (need resolution before v0.2 freeze)" — but v0.2 froze on 2026-07-14 with all four still listed.** Recorded here rather than fixed, because the design doc is frozen and change-controlled; this page describes it and does not amend it. Three of the four were settled by events after the freeze: §9.2 (Phase 2 daemon-integration ownership) resolved when Phase 2 merged as coven PR #382; §9.3 (portability format Shape A vs B) resolved 2026-07-15 as **Shape B**, recorded in `specs/PHASE-3-PORTABILITY.md` §6; §9.4 (Phase 4 UI/UX) resolved by `specs/PHASE-4-CAVE-SURFACES.md` and the 2026-07-17 Phase 4 freeze. §9.1 (whether federation forces a fourth `fabric` level) is genuinely still open and still correctly deferred. The heading is what is stale, not the content — a reader who trusts it will think four live blockers stand in front of a freeze that already happened.
 - **`Channel::Deliberate` is specified but unreachable.** `PHASE-0-DESIGN.md` §2.4 and non-negotiable #4 (the two-compaction contract) treat `Deliberate` and `Forced` as distinct channels with distinct survival requirements. `Forced` is woven into the daemon's `PROTECTED_CHANNELS`; `Deliberate` is referenced nowhere in coven, and every channel value the daemon constructs is a hardcoded `Channel::Mutation`. Tracked as `threads-xpo`. Relevant when reading §2.4 or the promotion-write seam contract, both of which describe intent that no code path can currently express.
