@@ -20,19 +20,22 @@ Read `../coven/docs/SAFETY-MODEL.md`. `coven-threads` inherits the daemon's trus
 
 Every accepted `Permit` result MUST be reproducible from the inputs: the request, the weave state at request time, and the strand-verification results. Non-reproducible acceptances are bugs.
 
-## Repository secret and privacy CI
+## Repository secret scanning and privacy rollout
 
-The `Secret and privacy guard` job in `.github/workflows/ci.yml` runs on
+The `Secret scanning` job in `.github/workflows/ci.yml` runs on
 pull requests and pushes to `main`. It needs no private stores, Beads database,
 credentials, or downstream checkout. Third-party Actions retain immutable
 commit pins and the existing explicit Rust toolchain parity checks.
 
-**Rollout status (#39):** the proposed privacy policy currently rejects a
+**Separate privacy rollout (#39, draft #40):** the proposed privacy policy rejects a
 pre-existing runtime-path example in the frozen Phase-5 specification. This is
-a policy/example conflict, not a claim of exposed personal data. The guard
-remains blocked pending a maintainer-approved policy clarification or a
-change-controlled example correction. No exemption or frozen-spec edit is
-included in this CI slice.
+a policy/example conflict, not a claim of exposed personal data. Privacy
+enforcement is not enabled in this secret-scanning job; its checker and
+synthetic regressions are included for reproducible policy evaluation.
+Draft #40 remains blocked pending a maintainer-approved policy clarification
+or a change-controlled example correction. This independently deployable
+secret-scanning slice neither waives that requirement nor claims privacy
+acceptance. No exemption or frozen-spec edit is included.
 
 From the repository root:
 
@@ -40,8 +43,9 @@ From the repository root:
 bash scripts/install-gitleaks.sh /tmp/threads-guard-bin
 export PATH="/tmp/threads-guard-bin:$PATH"
 node --test scripts/tests/*.test.mjs scripts/tests/secret-guard.integration.mjs
-node scripts/privacy-guard.mjs
 node scripts/secret-guard.mjs
+# Manual proposed-policy evaluation; currently blocked as documented above.
+node scripts/privacy-guard.mjs
 ```
 
 The installer supports Linux x86-64 (CI) and macOS arm64. Gitleaks 8.30.1
@@ -49,7 +53,7 @@ archives are verified against SHA-256 digests committed in the installer
 before extraction. Updating the version requires reviewing and updating both
 the version file and digests; the guard rejects version skew.
 
-**Scope:** privacy scans every stage-zero Git index blob and filename, not
+**Scope:** the manual privacy checker scans every stage-zero Git index blob and filename, not
 unstaged or untracked files. Clean checkout CI therefore covers the submitted
 tree. Stage intended changes before local scanning. Secret scanning covers
 the same index via a permission-restricted temporary snapshot plus every

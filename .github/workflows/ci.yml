@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  privacy:
-    name: Secret and privacy guard
+  secrets:
+    name: Secret scanning
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -28,8 +28,6 @@ jobs:
           echo "$RUNNER_TEMP/threads-guard-bin" >> "$GITHUB_PATH"
       - name: Synthetic guard regressions
         run: node --test scripts/tests/*.test.mjs scripts/tests/secret-guard.integration.mjs
-      - name: Indexed privacy scan
-        run: node scripts/privacy-guard.mjs
       - name: Indexed and full HEAD-history secret scans
         if: ${{ !cancelled() }}
         run: node scripts/secret-guard.mjs
