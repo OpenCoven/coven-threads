@@ -40,10 +40,8 @@ if [[ "${toolchain_pin%.*}" != "$cargo_msrv" ]]; then
   exit 1
 fi
 
-if ! grep -Fq "dtolnay/rust-toolchain@${toolchain_pin}" .github/workflows/ci.yml; then
-  echo "error: CI Rust pin does not match rust-toolchain.toml (${toolchain_pin})" >&2
-  exit 1
-fi
+node scripts/check-ci-pins.mjs "$toolchain_pin"
+node --test scripts/tests/*.test.mjs
 
 if ! grep -Eq '^ref = "[0-9a-f]{40}"$' e2e/compatibility.toml; then
   echo "error: e2e/compatibility.toml must pin Coven to a full 40-character commit SHA" >&2
