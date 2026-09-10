@@ -43,10 +43,12 @@ permit decision. Neither side may infer the other's answer.
 
 **Corollary from §3.3.2 (source-authoritative retrieval):** a promotion write
 targets a *source-authoritative surface* only. No thread terminates on a
-promoted view, retrieval cache, or index. If a promotion write's declared target
-is a derived structure, it is outside this contract entirely — it needs no weave
-authority, because nothing has authority to be tampered with there. Tampering on
-derived structures is detected by re-derivation, not by gating.
+promoted view, retrieval cache, or index. A write is outside this contract only
+when daemon-owned canonical materialization establishes that it touches
+exclusively derived structures, not a source-authoritative or protected surface.
+A caller's derived-target label cannot establish that exemption; unresolved
+targets fail closed. Tampering on derived structures is detected by
+re-derivation, not by gating the derived structure itself.
 
 ---
 
@@ -94,8 +96,16 @@ Rationale: promotion is familiar-initiated compaction of the familiar's own
 memory. The familiar-coherence gate is the ceremony whose question ("does this
 still cohere with who this familiar is?") matches what promotion actually risks.
 `AutoRegression` is too thin — promotion has no deterministic regression suite
-that would catch semantic drift. Human paths are too heavy for routine promotion
-and would make the feature unusable at cadence.
+that would catch semantic drift. The proposal aims to avoid unnecessary human
+ceremonies for routine promotion; it does not waive required human authorization.
+
+RFC-0001 §3.4 still governs continuity-bearing admissions: loop-originated
+entries, including sleep-time or reflection output, MUST carry explicit human
+authorization before admission, regardless of provenance validity. Unknown
+origin is treated as loop-originated; unknown continuity-bearing status is
+treated as continuity-bearing. Familiar coherence or an unvetoed window is not
+a substitute for that authorization. Admission evidence follows §5.1 below;
+these requirements do not make protected targets proposal-eligible.
 
 This default remains proposed pending Cody's language review and later Nova
 ratification. It is a floor, not a ceiling. Highest ceremony still wins for the
@@ -116,7 +126,8 @@ authorized path outside `ApprovalPath`, audited as `principal_authorized_write`.
 It is not reachable by `coven memory promote` and coven-memory MUST NOT offer it
 as a promotion outcome.
 
-> **Cross-bead dependency:** this clause inherits whatever `threads-dgg` lands.
+> **Cross-bead dependency:** the implementation in `threads-dgg` must conform
+> to this clause and its governing RFC/Phase-5 requirements, not redefine them.
 > `threads-dgg` exists precisely because current `coven` still stages and
 > approves protected SOUL.md edits through `/threads/proposals` after a principal
 > fingerprint is supplied. Until `threads-dgg` closes, §3.2 describes intended
@@ -130,15 +141,19 @@ as a promotion outcome.
 Every ambiguity resolves to reject. Never to permit, never to a default surface,
 never to LLM judgment.
 
-Two existing vocabularies cover every edge, at the two stages where a promotion
-write can die. They are distinct types and must not be conflated: `RejectReason`
-(`validate.rs`) is the *admission* vocabulary — the write never enters the
-proposal pipeline; `WindowCloseReason` (audit layer, trigger-enforced) is the
-*lifecycle* vocabulary — the write entered the pipeline and its opened window
-must close with a typed terminal reason (§5.2).
+The following tables distinguish validator admission failures from terminal
+closes of opened veto windows. `RejectReason` (`validate.rs`) names validator
+rejections; `WindowCloseReason` (`approval.rs`, recorded by the audit layer)
+names terminal reasons for opened windows (§5.2). These are not an exhaustive
+vocabulary for every daemon rejection: a human/no-window path does not acquire
+a window close merely because a proposal is rejected.
 
-Before any `RejectReason` mapping applies, a frayed thread returns
-`Verdict::DegradeToProposal`; fray is staged, not encoded as a reject reason.
+The validator checks surface registration and writer binding before checking
+the thread under the requested channel. Uncovered channels and snapped threads
+reject; a fray result returns `Verdict::DegradeToProposal` before weave-coherence
+evaluation, not a `RejectReason`. Under Phase-5 §4, the daemon may stage on fray
+only for proposal-eligible targets. Degradation does not override §3.2's
+protected-target rejection.
 
 **Admission rejections — `RejectReason`:**
 
@@ -152,18 +167,17 @@ Before any `RejectReason` mapping applies, a frayed thread returns
 | Surface degraded at this surface | reject | `SurfaceDegraded` |
 | Validator panicked | reject | `ValidatorPanic` |
 
-**Lifecycle terminations — `WindowCloseReason`:**
+**Opened-window terminations — `WindowCloseReason`:**
 
 | Condition | Verdict | Existing `WindowCloseReason` |
 | --- | --- | --- |
 | Materialized target ≠ declared target (Gate-4 replay divergence) | reject | `evidence_diverged` |
-| Evidence cannot be re-derived at deadline | reject | `evidence_diverged` |
+| Evidence cannot be re-derived at deadline | reject | `revalidation_failed` |
 | Live revalidation fails at apply time | reject | `revalidation_failed` |
 | A newer proposal supersedes this one | reject | `superseded` |
 
-No new reason is required in either vocabulary. That is deliberate — if the
-promotion seam needed its own rejection vocabulary, it would be evidence the seam
-had grown policy it should not own.
+The listed conditions use existing reasons. This seam does not define a new
+rejection vocabulary or replace the daemon's other admission checks.
 
 **Rejection output constraint:** a rejection concerning a protected target MUST
 NOT echo protected values back to the caller. coven-memory receives the verdict
@@ -178,11 +192,25 @@ and the reason kind, never the guarded content.
 A committed promotion write emits `memory_entry_admitted`, carrying
 `entry_hash` and `source_attestation`.
 
-`source_attestation` is coven-memory's assertion of provenance — where the
-promoted content came from in the substrate. It is **evidence, not authority**.
-The daemon records it; the daemon does not trust it to make the permit decision.
-This is the same predicate-vs-descriptor discipline as PHASE-0-DESIGN §2.2: attestation is
-descriptive, gate results are enforcing.
+Under RFC-0001 §3.4 and §5.6, `source_attestation` MUST identify a prior committed
+Ward state or principal-authorized write event in the append-only audit log.
+Before admission, the daemon MUST validate that provenance: resolve the referent,
+check its required evidence fields, and re-check its required hash fields under
+RFC-0001 §5.6.1. Unresolved referents, missing required evidence, or invalid
+provenance anchors MUST be rejected, not merely recorded. A substrate-origin
+description alone does not satisfy this field.
+
+The attestation is **evidence, not authority**: validated provenance does not
+replace authorization or the gates. For loop-originated continuity-bearing
+entries (§3.1), the `memory_entry_admitted` event MUST additionally carry the
+`principal_authorization` required by RFC-0001 §3.4 and §5.6.
+`entry_hash` follows RFC-0001 §5.6.1: SHA-256 over the admitted entry's exact
+canonical UTF-8 bytes, without wrapper or newline normalization.
+
+This preserves PHASE-0-DESIGN §2.2's predicate-vs-descriptor discipline:
+caller assertions are not enforcing predicates. These are future admission
+requirements, not a claim that the current audit-row constructor validates
+provenance or supplies the required human-authorization evidence.
 
 ### 5.2 Proposal lifecycle
 
