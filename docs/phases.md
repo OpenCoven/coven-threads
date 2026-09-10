@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-10: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. Published draft fixes now include native Windows and final-commit journeys, but the recorded combined Windows run has startup failures. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-10: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. The latest recorded draft checkpoint passes native Windows journeys, but earlier startup failures remain unexplained; green observations are not a reliability repair. Two bounded production fixes have landed independently. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
@@ -98,10 +98,10 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 | Bead | Blocking finding | Status |
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
-| `threads-okc` | identity predicates must run at intake and delayed/restart replay | open in Beads; implementation drafted in OpenCoven/coven#969 (`0e94e9c`), issue OpenCoven/coven#885 |
-| `threads-980` | every opened window needs exactly one typed terminal close | in progress; draft OpenCoven/coven#932 / issue OpenCoven/coven#886 |
-| `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | open; draft OpenCoven/coven#933 / issue OpenCoven/coven#887 |
-| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | open; OpenCoven/coven#888 |
+| `threads-okc` | identity predicates must run at intake and delayed/restart replay | blocked on reviewed integration; OpenCoven/coven#969 incorporated into draft OpenCoven/coven#931; issue OpenCoven/coven#885 |
+| `threads-980` | every opened window needs exactly one typed terminal close | blocked on reviewed integration; OpenCoven/coven#932 incorporated into draft OpenCoven/coven#931; issue OpenCoven/coven#886 |
+| `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | blocked on reviewed integration; OpenCoven/coven#933 incorporated into draft OpenCoven/coven#931; issue OpenCoven/coven#887 |
+| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | blocked on reviewed integration; draft OpenCoven/coven#931; issue OpenCoven/coven#888 |
 
 **Historical review:** Echo's 2026-08-09 static review at Coven `59c5be4`
 confirmed the four findings then. It is not a current test result and cannot
@@ -206,14 +206,50 @@ OpenCoven/coven#993 (`0a7040a7`), and fixture store initialization matching daem
 startup landed through OpenCoven/coven#996 (`98cfa9ce`). Neither change raises
 deadlines or establishes a production cancellation/adoption defect.
 
-The recorded combined head `d4653f14` passes 41 selected adoption/identity/commit
+The earlier combined head `d4653f14` passes 41 selected adoption/identity/commit
 unit cases and all 15 default-parallel daemon journeys locally with current
 Threads `2d21254` proven active by Cargo metadata.
 [Run 34466364843](https://github.com/OpenCoven/coven/actions/runs/34466364843)
 passes the Windows workspace and clock-feature unit steps, but fails four
 daemon journeys on startup-health timeouts (11 passed, four failed). Available
-setup-failure artifacts do not establish the failing startup phase; diagnostic
-retention is being repaired before claiming a runtime fix.
+setup-failure artifacts at that checkpoint did not establish the failing
+startup phase. Subsequent retention repairs preserve failed startup events,
+partial schema/status evidence, and fixed-category timing observations.
+
+**Independently landed production repairs:** OpenCoven/coven#998
+(`ce5e7b1367b2b15cc016b37a546f358685d05130`) makes runtime-evidence schema
+initialization atomic, with caller-owned transaction and commit-failure
+rollback coverage. Schema SQL and durability are unchanged.
+OpenCoven/coven#1003 (`dabeab9556c2051890203620ac65685ce1d5156c`) lands the
+macOS published-socket repair described above. These fixes are on Coven main,
+not merely in the integration draft; neither establishes Windows startup
+reliability or closes a Phase-5 remediation gate.
+
+**Latest recorded integration evidence:** draft OpenCoven/coven#931 at
+`8576f41e6d622f63a3576b85bd2d3142776e59ca` passed
+[CI run 34489425644](https://github.com/OpenCoven/coven/actions/runs/34489425644).
+Native Windows executed 20 target cases: 15 daemon journeys and five
+artifact regressions, plus 152 selected feature-unit cases. Artifact
+`10157780426` contains 28 passed scenario manifests, all identifying the
+clean synthetic merge `0d8ccfca1725475b5e45f2ec47d8c4c2c45bc89d`.
+Hosted Windows uses committed Threads `c3bd46b`, not a local-checkout override.
+Earlier local override evidence remains separately scoped to its recorded head.
+
+OpenCoven/coven#1000 isolates evidence outside the build cache and qualifies
+both storage roots and uploaded names by workflow run and attempt. Earlier
+artifacts contained cached historical manifests; count only exact-provenance
+evidence, and retrieve older commit-only artifact names by artifact ID.
+The isolation implementation is verified in the draft, not yet on main.
+
+Startup causation remains unresolved. In
+[run 34482201141](https://github.com/OpenCoven/coven/actions/runs/34482201141),
+two feature-off initial startups failed after pipe binding and before status
+publication; the later feature-enabled target passed, without canceling those
+failures. OpenCoven/coven#1001 adds bounded launch-budget and store-phase
+measurements. Its two recorded successful diagnostic attempts did not reproduce
+the failure. Diagnostic I/O can perturb timing; missing markers alone do not
+prove blocking or process survival. No deadline increase, retry-to-green claim,
+or first-attempt stability certification follows from these observations.
 
 OpenCoven/coven#976 and OpenCoven/coven#977 remain open for reviewed integration
 and acceptance. Independent engineering review of the bounded authority diff
