@@ -323,11 +323,12 @@ add branch protection, a coverage ratchet, or a reviewed downstream gate.
 reachable `HEAD`-history scanning, sanitized diagnostics, and synthetic
 regressions. Actual PR CI `34465028325` and merged-main CI `34465519559` passed.
 The separate Copilot review workflow `34465035137` is not CI evidence.
-Draft #40 now adds only independent privacy enforcement and its rollout
-documentation. Its policy conflicts with one source-reference path in the
-frozen Phase-5 specification; no exemption or frozen-spec amendment was made.
-#39 remains open for that decision. Secret-scanning success is not privacy
-acceptance, and neither job creates required-check policy.
+PR #40 adds independent privacy enforcement and its rollout documentation.
+The 2026-09-11 approved source-reference correction removes a private runtime
+location from the Phase-5 historical sources while preserving its provenance
+role. It does not weaken the guard or change a normative decision. #39 remains
+open until reviewed landing; required-check activation remains a separate
+step. Secret-scanning success is not privacy acceptance.
 
 ## Summary table
 
