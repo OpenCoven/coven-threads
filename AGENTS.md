@@ -1,4 +1,4 @@
-# AGENTS.md — coven-threads
+# coven-threads agent guide
 
 `coven-threads` is OpenCoven's **protected-authority validator**. It defines the
 typed gate, weave, approval, audit-schema, and portability contracts imported by
@@ -153,20 +153,20 @@ close those gates on a human's behalf.
 
 ## Familiar lanes
 
-- 🌿 **Sage** — contract synthesis, conformance mapping, evidence packets.
-- 🔮 **Echo** — predicate, audit, replay, and substrate-authority review.
-- 👑 **Nova** — daemon integration and independent coherence review.
-- ⚡ **Cody** — Rust contracts, regressions, and deterministic test seams.
-- ✨ **Charm** — Cave language and live-daemon human acceptance.
+- 🌿 **Sage**: contract synthesis, conformance mapping, evidence packets.
+- 🔮 **Echo**: predicate, audit, replay, and substrate-authority review.
+- 👑 **Nova**: daemon integration and independent coherence review.
+- ⚡ **Cody**: Rust contracts, regressions, and deterministic test seams.
+- ✨ **Charm**: Cave language and live-daemon human acceptance.
 
 GitHub accountability remains with an authenticated maintainer until a familiar
 has independently authenticated repository authority.
 
 ## Related repositories
 
-- `OpenCoven/familiar-contract` — upstream familiar identity contract.
-- `OpenCoven/coven` — daemon, persistence, staging, scheduler, and apply owner.
-- `OpenCoven/coven-cave` — human oversight surface; forwards, never decides.
-- `OpenCoven/coven-memory` — promotion producer; Threads decides whether writes
+- `OpenCoven/familiar-contract`: upstream familiar identity contract.
+- `OpenCoven/coven`: daemon, persistence, staging, scheduler, and apply owner.
+- `OpenCoven/coven-cave`: human oversight surface; forwards, never decides.
+- `OpenCoven/coven-memory`: promotion producer; Threads decides whether writes
   may commit.
-- `OpenCoven/psyche` — orchestration consumer of authority-bound snapshots.
+- `OpenCoven/psyche`: orchestration consumer of authority-bound snapshots.

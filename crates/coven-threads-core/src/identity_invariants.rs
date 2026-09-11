@@ -30,7 +30,7 @@
 //! predicate result is authoritative; probe output feeds `advisory_probes` on
 //! the proposal surface, never `probes`.
 //!
-//! See [`AdvisoryProbe`] and [`AdvisoryProbeResult`] for the type shapes.
+//! See [`AdvisoryProbes`] and [`AdvisoryProbeResult`] for the type shapes.
 //!
 //! ## Fail-closed ambiguity rule (decision 4)
 //!
