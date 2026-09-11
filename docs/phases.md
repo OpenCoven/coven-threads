@@ -309,9 +309,23 @@ authorization to add an audit event.
 
 #31 tracks required pinned daemon checks, deterministic time, OS/Cave acceptance,
 Action SHA pins, and measured coverage/flake targets. The 2026-09-10 GitHub
-snapshot reports `main` as unprotected and no repository rulesets. CI and
-CODEOWNERS files do not themselves enforce branch protection. The readiness
-foundation is merged, but these governance items remain open.
+snapshot reported `main` as unprotected and no repository rulesets.
+On 2026-09-11, active ruleset `22910327` ("Threads main authority baseline")
+enabled protection for `refs/heads/main`, with no bypass actors:
+
+- Pull requests require one approval, approval of the most recent reviewable
+  push by someone other than its pusher, dismissed stale approvals, and resolved
+  review threads.
+- Required checks are bound to the GitHub Actions app: `Secret scanning`,
+  `Rust quality and repository contract`, `Cargo test (compatibility baseline)`,
+  and `Nextest telemetry (JUnit, fail on flaky)`. Branches must be up to date.
+- Branch deletion and force pushes are prohibited.
+
+The effective branch-rules API and `main.protected=true` confirm activation.
+This is baseline governance, not completion of #31: the reviewed pinned daemon
+E2E check is not yet available to require, privacy enforcement remains blocked,
+and coverage remains informational. No agent may substitute its own approval
+for the required independent review or the separate Nova/Val gates.
 
 #38 merged as `af013612`; #37 is closed. It pins the existing
 external CI actions and preserves explicit Rust 1.88.0 inputs in every
