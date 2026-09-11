@@ -1,9 +1,18 @@
 # PHASE-5 DECISION RECORD — Approval semantics over the Phase-2 Ward
 
-**Status:** IMPLEMENTATION LANDED; HUMAN FREEZE PENDING (Sections 0–5 preserve
+**Status:** ACTIVE; INITIAL IMPLEMENTATION LANDED; REMEDIATION BLOCKS HUMAN SIGN-OFF (Sections 0–5 preserve
 the reviewed proposal; Sections 6–8 record Val's implementation opening and
 the resulting delivery state. Independent Nova coherence sign-off and final
 Val freeze remain gated.)
+
+> **Delivery-status erratum (2026-09-11, #44):** Sections 6–8 record the
+> initial implementation opening and delivery, not completion of all
+> remediation. As recorded in [`docs/phases.md`](../docs/phases.md),
+> `threads-okc`, `threads-980`, `threads-dgg`, and `threads-zav` remain
+> unresolved remediation gates. Nova coherence sign-off is blocked, and Val
+> freeze remains outstanding. This annotation changes no design decision
+> and does not satisfy either human gate.
+
 **Date:** 2026-07-18
 **Decision date:** 2026-07-18
 **Bead:** `threads-uqx`
@@ -379,10 +388,11 @@ and trailers cannot satisfy or simulate that gate.
 
 ---
 
-## 7. Phase status — implementation landed; human freeze pending
+## 7. Phase status: initial implementation landed; remediation blocks sign-off
 
-Val opened Phase 5 implementation on 2026-07-18. The machine-deliverable lanes
-have since landed:
+Val opened Phase 5 implementation on 2026-07-18. The initial delivery lanes
+below landed; the delivery-status erratum above records the remaining
+remediation:
 
 - `threads-uqx.1`, `.11` — design defaults and authority-review corrections.
 - `threads-uqx.2`, `.12` — RFC closure/provenance and fail-closed typed
@@ -399,7 +409,9 @@ have since landed:
 - `threads-uqx.8` — compile-or-reject v0.1 invariant migration fidelity
   (OpenCoven/coven PR #464).
 
-Two human gates remain and must not be simulated:
+Two human gates remain and must not be simulated. They are not the only
+remaining work: the remediation gates recorded in `docs/phases.md` block
+independent sign-off (2026-09-11 erratum, #44).
 
 - `threads-uqx.9` — Nova coherence sign-off over the identified landed commits:
   RFC round-trip, Gate-4 fail-closed proof, `Channel`/`ApprovalPath` separation,
@@ -410,7 +422,7 @@ Making this decision-record PR ready for review does not satisfy either gate.
 
 ---
 
-## 8. Recommendation — implementation executed; freeze pending
+## 8. Recommendation: initial implementation executed; remediation and freeze outstanding
 
 Val opened Phase 5 implementation to recover semantic approval behavior, not
 just document why it was lost. The repository does not infer Nova approval from

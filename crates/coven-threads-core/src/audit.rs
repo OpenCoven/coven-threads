@@ -1237,15 +1237,21 @@ END"#
 /// `main.ward_audit`, ordered column metadata from
 /// `pragma_table_info('ward_audit', 'main')`, the exact explicit main-index SQL
 /// set (discovered with `pragma_index_list('ward_audit', 'main')` and then read
-/// from `main.sqlite_master`), and the exact append-only main-trigger SQL set
+/// from `main.sqlite_master`), and the exact main-trigger SQL set
 /// must all match. Full stored-table-SQL equality covers every declared
 /// table-level constraint (`CHECK`, `UNIQUE`, foreign-key clauses, and the
 /// `event_type` list), so any extra or missing column, constraint, index, or
 /// trigger returns `unknown`. Across **all** durable states, the reserved
 /// main-schema namespace is whitelisted to exactly these objects attached to
 /// `main.ward_audit`: the `ward_audit` table, `ward_audit_event_idx`,
-/// `ward_audit_familiar_idx`, `ward_audit_append_only_update`, and
-/// `ward_audit_append_only_delete`. Any other main-schema table/view/index/
+/// `ward_audit_familiar_idx`, `ward_audit_append_only_update`,
+/// `ward_audit_append_only_delete`, `ward_audit_require_single_terminal_insert`,
+/// `ward_audit_require_authorization_insert`,
+/// `ward_audit_require_proposal_approval_detail_insert`, and
+/// `ward_audit_require_window_close_detail_insert`. The exact state fingerprint
+/// determines which objects must exist: current has one table, two indexes,
+/// and six triggers; legacy retains its original shape.
+/// Any other main-schema table/view/index/
 /// trigger whose name is exactly `ward_audit` or begins with `ward_audit_`
 /// returns `unknown`, including `ward_audit_new`, backup/shadow tables, or
 /// reserved-name indexes/triggers attached elsewhere. Any temp-schema
@@ -1256,7 +1262,8 @@ END"#
 /// the only accepted `current_v020` table SQL variants are the fresh
 /// `CREATE TABLE ward_audit (...)` form and SQLite's quoted
 /// `CREATE TABLE "ward_audit" (...)` form produced by the exact legacy
-/// migration path, while the `legacy_v013` fingerprint intentionally includes
+/// migration path, plus the exact comment-free quoted form emitted by the
+/// daemon-pinned predecessor migrator. The `legacy_v013` fingerprint includes
 /// the inline comments preserved from the shipped v0.1.3 DDL.
 pub const WARD_AUDIT_SCHEMA_STATE_SQL: &str = concat!(
     ward_audit_schema_state_ctes_sql!(),

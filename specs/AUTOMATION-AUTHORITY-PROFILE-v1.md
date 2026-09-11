@@ -94,6 +94,7 @@ not over the hexadecimal text.
 | decision | `opencoven:automation-decision:v1` |
 | approval | `opencoven:automation-approval:v1` |
 | approval event | `opencoven:automation-approval-event:v1` |
+| consumption snapshot | `opencoven:automation-consumption-snapshot:v1` |
 | proposal | `opencoven:automation-proposal:v1` |
 | evidence read | `opencoven:automation-evidence-read:v1` |
 
@@ -102,6 +103,14 @@ MUST authenticate the requesting principal. Decisions, proposal receipts, and
 lifecycle events MUST authenticate Threads authority. Approvals MUST
 authenticate the named approving principal/key. The repository keyring is
 synthetic conformance material and contains public keys only.
+
+> **Additive documentation erratum (2026-09-11, #44):** The consumption
+> snapshot row documents the existing `DOMAIN.consumption` preimage in
+> `profiles/automation-authority/v1/validator.mjs`, previously omitted from
+> this table. Consumption snapshots MUST authenticate Threads authority,
+> as already required by `validateConsumptionSnapshot`. This records the
+> existing domain and signer requirement; it introduces no new cryptography,
+> signature format, or profile-version change.
 
 Every identity-bearing keyring role (`principal`, `protected_owner`, and
 `auditor`) MUST carry a non-empty exact `principal_id`. Its omission is invalid,

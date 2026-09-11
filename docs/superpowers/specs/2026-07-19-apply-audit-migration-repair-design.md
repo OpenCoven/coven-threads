@@ -1,5 +1,11 @@
 # ApplyAudit Migration Repair
 
+> **Historical implementation design.** The repair merged through #23
+> (`8e2de93ca3a311c46f2d4a6a0da7be0dd6ad7edc`). See [the delivery
+> ledger](../../phases.md) for current work. The 2026-09-11 documentation
+> correction (#44) reconciles this description with the implemented
+> classifier; it does not change SQL, transaction ownership, or human gates.
+
 ## Goal
 
 Repair PR #7 so `ward_audit` upgrades are gated by a full table-local schema
@@ -72,9 +78,10 @@ DDL.
 
 ## Initialization design
 
-`WARD_AUDIT_SCHEMA_SQL` must stay compatible with the current daemon behavior:
-the daemon executes it unconditionally on every store open. The safe contract is
-therefore:
+At the original design checkpoint, the daemon executed `WARD_AUDIT_SCHEMA_SQL`
+unconditionally on every store open. This compatibility premise explains why
+the SQL permits exact-current reruns; it is not a description of every current
+daemon request connection. The initialization contract is:
 
 1. `BEGIN IMMEDIATE;` to reserve the main-database write slot before any guard
    read/classification;
@@ -201,7 +208,8 @@ This repair does not add daemon migration orchestration or change the
 `WARD_AUDIT_SCHEMA_STATE_SQL`, choosing fresh initialization vs legacy
 migration, treating `main.ward_audit` as the only durable audit contract,
 accepting only the exact durable whitelist of `main.ward_audit` plus its two
-indexes and two append-only triggers, running `WARD_AUDIT_SCHEMA_SQL` only
+indexes, two append-only triggers, and four Phase-5 authority triggers, running
+`WARD_AUDIT_SCHEMA_SQL` only
 through the allowed `missing`/`current_v020` contract, and failing closed on
 `unknown`. Concurrent callers must also treat a migration guard rejection after
 waiting as a signal to reclassify: another writer may already have serialized

@@ -1,10 +1,17 @@
 # ApplyAudit Migration Repair Implementation Plan
 
+> **Historical implementation plan.** The repair merged through #23
+> (`8e2de93ca3a311c46f2d4a6a0da7be0dd6ad7edc`). The tasks below record that
+> implementation, not an open work queue. `CHANGELOG.md` still marks `0.2.0`
+> unreleased. See [the delivery ledger](../../phases.md) for current work.
+> The 2026-09-11 documentation correction (#44) reconciles the object list
+> with the implemented classifier; it does not change SQL or migration policy.
+
 **Goal:** Replace the old two-boolean `ward_audit` migration gate with a full
 schema fingerprint/state contract built around exact durable
 `main.sqlite_master.sql` fingerprints for the table/indexes/triggers plus
 ordered column metadata, reserve the durable `ward_audit` /
-`ward_audit_*` namespace to an exact five-object whitelist in every state, fail
+`ward_audit_*` namespace to the exact table-local whitelist in every state, fail
 closed on any TEMP shadow/reserved temp object, make schema initialization fail
 closed and atomic, preserve evidence and unrelated `user_version`, and prove
 rollback behavior with executable rusqlite tests.
@@ -136,12 +143,18 @@ For this semver-corrected follow-up, the repair delta relative to
     'main')` (including `recorded_at` default and PK metadata);
   - explicit durable index discovery from `pragma_index_list('ward_audit',
     'main')`, with exact index SQL then read from `main.sqlite_master`;
-  - exact append-only trigger SQL from `main.sqlite_master`;
+  - exact append-only and authority-trigger SQL from `main.sqlite_master`;
   - at every durable state, an exact reserved main-schema whitelist consisting
     only of table `main.ward_audit`, indexes `ward_audit_event_idx` and
     `ward_audit_familiar_idx` attached to it, and triggers
-    `ward_audit_append_only_update` / `ward_audit_append_only_delete` attached
-    to it, with every other `ward_audit` / `ward_audit_*` main object rejected;
+    `ward_audit_append_only_update` / `ward_audit_append_only_delete` and
+    `ward_audit_require_single_terminal_insert`,
+    `ward_audit_require_authorization_insert`,
+    `ward_audit_require_proposal_approval_detail_insert`, and
+    `ward_audit_require_window_close_detail_insert` attached to it. The exact
+    state fingerprint determines which objects must exist: current has one
+    table, two indexes, and six triggers; legacy retains its original shape.
+    Every other `ward_audit` / `ward_audit_*` main object is rejected;
   - at every durable state, rejection when any temp-schema table/view/index/
     trigger is named `ward_audit` or begins with `ward_audit_`; and
   - only the controlled fresh/migrated current table-SQL variants plus the

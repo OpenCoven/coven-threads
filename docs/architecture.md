@@ -16,7 +16,7 @@ The `coven` Rust daemon is the shipped trust boundary. Its safety model (`coven/
 
 The daemon already enforces: canonicalized `projectRoot`/`cwd` path comparison, rejection of working directories outside the project root, allowlisted harness ids, argv-only harness commands (never `sh -c`), and fail-closed handling of unknown API versions and action ids. Its runtime state lives at `~/.coven/coven.sock` (unix socket), `~/.coven/coven.sqlite3` (daemon DB), and `~/.coven/memory/archival.sqlite3` (memory store).
 
-What the daemon does **not** do today is validate a request *against the typed authority state of the surface it targets*. It validates **who** (client identity) and **what action** (allowlisted operations) — not **whether the target surface's threads permit this write**. `coven-threads` fills exactly that gap. It does not replace the daemon; it gives the daemon a **gate-shaped receiver** for identity-surface mutation requests.
+The daemon imports Threads to validate requests against the typed authority state of their target surfaces. Coven `v0.4.3` includes the earlier integration, but complete route, identity-predicate, and replay enforcement remains subject to the unresolved [Phase-5 findings](phases.md#phase-5--approval-semantics-active). Threads supplies the **gate-shaped receiver**; it does not replace the daemon's trust boundary or own effects.
 
 Two structural facts follow from this placement:
 
@@ -25,7 +25,7 @@ Two structural facts follow from this placement:
 
 ## Relationship to RFC-0001 and to Ward
 
-`coven-threads` is a **conforming implementation of RFC-0001 §5** (the Ward section of the Familiar Contract). The division of labor across the document family:
+`coven-threads` defines validator contracts for **RFC-0001 §5** (the Ward section of the Familiar Contract). Full daemon conformance remains subject to the delivery ledger's unresolved boundary findings. The division of labor across the document family:
 
 - **RFC-0001 §5.1** specifies *authority-layer separation* — the boundary itself, and the requirement that convention-based protection does not count. This is the external correctness anchor: **RFC wins on any conflict** with this repo. The v0.2 design freeze was gated on a verified round-trip against §5.1, §5.4, and §5.6.
 - **Ward v0.2 / RFC-0001 §5.4** specifies the *four enforcement gates* — **what** to check. The gates are the loom, in weave vocabulary.
@@ -43,9 +43,9 @@ The design doc's framing: the boundary (§5.1) was spec'd and the daemon existed
 The flow, step by step (design doc §5):
 
 1. An **untrusted client** sends a mutation request to the `coven` daemon over the unix socket. The client may be a familiar's harness, a tool, or anything else; for enforcement purposes it is untrusted regardless.
-2. The **daemon** performs its existing checks (identity, action allowlist, path canonicalization), then — for requests that target a protected surface — calls `coven-threads::validate(weave, request)`. The request carries three facts: which **surface**, which **writer**, and which **channel** the mutation arrives on.
-3. The **validator** loads the relevant weave and asks, for each affected thread, the load-bearing question: *does this thread hold under this channel?* Concretely, it checks that the thread's strands satisfy the channel's structural requirements (e.g., a `Forced`-channel mutation requires an intact `ContentHash` and `ManifestEntry`; see [channels-and-strands.md](channels-and-strands.md)). It also checks weave coherence via the pattern **predicate** — never the descriptor (see the anti-pattern in [concepts.md](concepts.md#the-descriptor-vs-predicate-anti-pattern)).
-4. The validator returns one of **three verdicts**: `Permit`, `DegradeToProposal`, or `Reject`. The semantics of each are covered in [authority-model.md](authority-model.md); the short version is: intact thread → permit; frayed thread → stage the write as a proposal for the principal, touch nothing; snapped or missing thread, or *any unknown* → reject.
+2. The **daemon** performs its existing checks (identity, action allowlist, path canonicalization), then supplies the weave and a `MutationRequest` to `coven_threads_core::validate_fail_closed(&weave, &request)`. The request contains `surface`, `writer`, `channel`, and optional `identity_context`. Identity-aware patterns reject absent, stale, or inconsistent identity evidence.
+3. The **validator** checks the supplied weave and asks: *does this thread hold under this channel?* It checks writer binding, channel coverage, tension, and structural strand requirements (for example, `Forced` requires `ContentHash` and `ManifestEntry`). The daemon verifies strand content against the world; the crate checks the resulting state. When the thread holds, the validator also checks weave coherence via the pattern **predicate**, never the descriptor.
+4. The validator returns one of **three verdicts**: `Permit`, `DegradeToProposal`, or `Reject`. [The authority model](authority-model.md) explains the conditions; tension alone does not determine the verdict. A degradation never grants write authority. Only proposal-eligible targets may enter staging: proposals touching protected surfaces MUST be rejected and cannot be promoted through `ApprovalPath`.
 5. The **daemon acts on the verdict** — applying the write, staging it to `~/.coven/pending/`, or refusing — and **appends the outcome to `ward.audit`**.
 
 Note the shape: the validator computes; the daemon acts. `coven-threads-core` has no filesystem side effects, no audit writes, no staging I/O. It answers the gate question and names the verdict; everything with side effects is the daemon's lane. This keeps the enforcement core small, testable, and free of ambient authority.
@@ -62,7 +62,7 @@ The rationale stacks three facts:
 - RFC-0001 §5.6 defines the audit-log entry shape, including `ward_hash`, and requires append-only behavior: entries MUST NOT be deleted or modified.
 - The daemon already owns `coven.sqlite3`, so putting the table there inherits the existing ownership and access boundary for free.
 
-Every gate verdict is auditable, and WARD-C6's compaction ledger rides the same table rather than a second store. The implemented contract (`audit.rs`, `[IMPLEMENTED, NOT ENFORCING]`) mirrors RFC-0001 §5.6's event vocabulary (`proposal_submitted`, `proposal_approved`, `proposal_rejected`, `proposal_vetoed`, `ward_updated`) and adds the coven-threads extensions (gate verdicts, compaction ledger entries, and — with Phase 5 — `proposal_window_opened` plus window-close detail; see below). One implementation note: the SQL table is spelled `ward_audit`, because a literal dot in the name would collide with SQLite's attached-database syntax — and an attached `ward.*` database would *be* the forbidden sidecar.
+Every gate verdict is auditable, and WARD-C6's compaction ledger uses the same table rather than a second store. The implemented contract in `audit.rs` defines RFC-0001 §5.6's event vocabulary (`proposal_submitted`, `proposal_approved`, `proposal_rejected`, `proposal_vetoed`, `ward_updated`) and the Threads extensions, including gate verdicts, compaction entries, and Phase-5 window details. The daemon owns writes; the crate defines their contract. The SQL table is spelled `ward_audit`: a literal dot would collide with SQLite's attached-database syntax, and a separate attached audit database would violate the one-store requirement.
 
 ## Phase 5: approval semantics and delayed apply
 
@@ -85,16 +85,18 @@ The **daemon** owns proposal classification and the delayed-apply scheduler — 
 
 ![The Phase 5 delayed-apply lifecycle: a proposal moves from intake through classification into a staged pending state; a veto window opens and stays visibly pending for at least its minimum-visible duration; the deadline fires, the daemon replays the gate evidence by live re-materialization, and the proposal applies on a hash match or rejects on divergence](diagrams/delayed-apply-scheduler.png)
 
-*Intake → classify → stage pending → veto window opens → deadline fires → evidence replay → apply on match, reject on divergence. No path writes before the window closes clean.*
+*Windowed path: intake → classify → stage pending → window opens → deadline fires → live revalidation → apply or reject. No windowed path writes before its deadline and minimum-visible floor are satisfied.*
 
 The flow (spec decision 2 — delayed apply *only*):
 
-1. **Intake.** A proposal arrives — for example, via `DegradeToProposal` or the tier-0 protected-surface path.
+1. **Intake.** A proposal arrives for proposal-eligible targets. Reject any proposal whose declared or materialized diff touches a protected surface. Principal-authorized protected updates use a separate audited authority path, never this pipeline.
 2. **Classify.** The daemon produces the `ProposalClassification`, including `evidence_replay_hash`.
 3. **Stage pending.** Nothing is written to any protected surface.
-4. **Window opens.** The proposal becomes pending-visible. The window cannot close before `min_visible` has elapsed.
+4. **Window opens, if required.** Windowed proposals become pending-visible and must satisfy the minimum-visible floor before deadline-driven apply.
 5. **Deadline fires.** Deadline expiry is a *trigger for revalidation*, not an outcome by itself.
-6. **Replay.** The daemon re-derives the evidence by live re-materialization. Hash matches → apply. Hash differs → reject.
+6. **Replay.** The daemon re-derives the evidence by live re-materialization. Apply requires matching evidence, no veto, elapsed deadline and minimum visibility, and final authority revalidation. Divergence rejects.
+
+`AutoRegression { veto: None }` has no veto period. `HumanApproval` and `HumanApprovalWithRationale` wait for explicit approval rather than a veto-window deadline. These non-windowed paths still require final live revalidation. The flow above describes the required contract, not proof that every daemon route currently satisfies it.
 
 There is **no provisional apply, ever**: the daemon never applies first and rolls back on veto. And Gate 4 keeps its fail-closed posture unweakened — every path, windowed or not, ends in live daemon re-materialization before apply.
 
@@ -102,7 +104,7 @@ One conflation to refuse, because it was a HIGH finding in the independent coher
 
 ### The audit lifecycle
 
-The proposal lifecycle rides the same `ward_audit` table — the window is a first-class audit interval, not a gap between rows:
+The windowed proposal lifecycle uses the same `ward_audit` table. Each opened window is a first-class audit interval, not a gap between rows:
 
 `proposal_submitted` → `proposal_window_opened` → exactly one terminal close event, each close carrying an explicit `WindowCloseReason`:
 

@@ -249,8 +249,11 @@ commit. The daemon must not reconstruct authority from incomplete client fields.
 
 ## 8. Failure evidence bundle
 
-On failure, write a sanitized bundle under
-`target/e2e-artifacts/<run-id>/` containing:
+On failure, write a sanitized bundle beneath the configured artifact root.
+The local default is `target/e2e-artifacts/<run-id>/`. CI must use an uncached
+root and an upload name scoped to the workflow run and attempt, so restored
+build caches or repeated attempts cannot supply another run's evidence.
+The bundle contains:
 
 ```text
 manifest.json              exact commits, command, platform, scenario
@@ -267,6 +270,12 @@ junit.xml                  machine-readable result
 `manifest.json` must record whether the local Cargo override was proven active.
 Artifacts use synthetic data only and default to the retention in
 `e2e/compatibility.toml`.
+
+The Coven integration uses the test-only
+`COVEN_THREADS_E2E_ARTIFACT_ROOT` override for CI isolation. Older artifacts
+with commit-only names must be retrieved by exact artifact ID. These storage
+conventions do not change the required compatibility pin or turn a diagnostic
+retry into first-attempt acceptance.
 
 ## 9. Red -> fix -> green closure rule
 

@@ -1,10 +1,18 @@
 # PHASE-4 — Cave Surfaces: the data contract between daemon memory state and the Coven Cave UI
 
-**Status:** DRAFT (bead `threads-986.17.1` — written first, before any UI code; blocks `.17.2`–`.17.9`)
+**Status:** RECORDED FROZEN 2026-07-17 in [`docs/phases.md`](../docs/phases.md), with subsequent amendments below.
+**Original draft status (2026-07-15):** DRAFT (bead `threads-986.17.1` — written first, before any UI code; blocks `.17.2`–`.17.9`)
 **Date:** 2026-07-15
 **Upstream:** RFC-0001 §5 (Ward: gates, tiers, audit); `PHASE-0-DESIGN.md` (FROZEN v0.2) §2 metaphor bindings, §2.5 binding rule, §3.4 single audit store, §5 verdicts
-**Substrate:** `coven-threads-core` v0.1.2 (98 tests green) + coven daemon integration branch `feat/threads-gate-validator` (PR OpenCoven/coven#382, merge gated on `threads-986.19`)
+**Design-time substrate (2026-07-15):** `coven-threads-core` v0.1.2 (98 tests green) + coven daemon integration branch `feat/threads-gate-validator` (PR OpenCoven/coven#382, merge gated on `threads-986.19`)
 **Shape reference:** OpenTrust `docs/MEMORY-API-CONTRACT.md` / `docs/MEMORY-LAYER-STANDARD.md` — mirrored in *shape* (contract-first, evidence-over-summaries, freshness surfaced everywhere), **never in stack** (no Tauri, no Convex, no plugin architecture, no vendored code)
+
+> **Historical-status erratum (2026-09-11, #44):** The status above reports
+> the existing freeze recorded in `docs/phases.md`; it is not a new approval
+> or freeze attestation. The original draft status, substrate version,
+> fixture-first rollout, and implementation checklist preserve design-time
+> context, not current delivery. The ledger records the merged surfaces and
+> completed adapter follow-up. The original checklist remains unchanged.
 
 **Phase 5 amendment (2026-07-20, bead `threads-uqx.7`):** scheduled
 proposal lifecycle metadata comes from the daemon read model added by
@@ -50,7 +58,9 @@ files.
 **Two adapters, one interface (`.17.2`):**
 
 - `daemon-absent` — reads fixtures from `coven-cave/fixtures/phase-4/`.
-  **Default** until `threads-986.19` merges PR #382. In this mode every
+  **Historical rollout default (2026-07-15):** fixtures were the default
+  while `threads-986.19` gated OpenCoven/coven#382. That rollout condition is
+  no longer current (2026-09-11 erratum, #44). In fixture mode every
   response carries `meta.adapter = "fixtures"` and the approval POST routes
   refuse (§3.7) — there is no daemon to forward to, so the action fails
   closed.
@@ -183,6 +193,16 @@ current-vs-expected diff (`.17.5`):
 ```
 
 ### 2.5 `AuditEntryView` — one `ward_audit` row
+
+> **Schema-version erratum (2026-09-11, #44):** The example below preserves
+> the original Phase-4 audit view. It is not an exhaustive mirror of the
+> current `ward_audit` contract in `crates/coven-threads-core/src/audit.rs`.
+> Current records also include `proposal_window_opened`,
+> `memory_entry_admitted`, `principal_authorized_write`, and `apply_audit`,
+> with event-specific `detail`. Extending the Cave view to expose these
+> records and their evidence requires an explicit contract amendment and
+> downstream compatibility review. This note does not change the existing
+> UI wire contract or claim that an adapter implements that extension.
 
 Mirrors the append-only table (`WARD_AUDIT_SCHEMA_SQL`; RFC-0001 §5.6 set +
 `validation_verdict` + `compaction_ledger`).
