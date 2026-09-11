@@ -27,15 +27,24 @@ pull requests and pushes to `main`. It needs no private stores, Beads database,
 credentials, or downstream checkout. Third-party Actions retain immutable
 commit pins and the existing explicit Rust toolchain parity checks.
 
-**Separate privacy rollout (#39, draft #40):** the proposed privacy policy rejects a
-pre-existing runtime-path example in the frozen Phase-5 specification. This is
-a policy/example conflict, not a claim of exposed personal data. Privacy
-enforcement is not enabled in this secret-scanning job; its checker and
-synthetic regressions are included for reproducible policy evaluation.
-Draft #40 remains blocked pending a maintainer-approved policy clarification
-or a change-controlled example correction. This independently deployable
-secret-scanning slice neither waives that requirement nor claims privacy
-acceptance. No exemption or frozen-spec edit is included.
+**Separate privacy rollout (#39, #40; 2026-09-11):** candidate
+`2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee` adds a separate privacy job and
+the maintainer-approved correction to a historical Phase-5 source reference.
+The correction preserves provenance without the private runtime location;
+it changes no normative authority decision and adds no scanner exemption.
+[Candidate CI](https://github.com/OpenCoven/coven-threads/actions/runs/34610860329)
+passes both guards at that named revision. Follow-up
+`4fce2d9525cc966febb1a8db82587664a5a11c9a` corrects the rollout text identified
+in the [engineering review](https://github.com/OpenCoven/coven-threads/pull/40#pullrequestreview-5182694836)
+and states the checker-trust limitation explicitly. Acceptance of that new
+head remains separate.
+
+The correction and privacy job are not yet on `main`. Until they land, manual
+privacy evaluation remains subject to the historical source-reference
+conflict. That conflict is not a claim of exposed personal data. The existing
+`Secret scanning` job remains independent and unchanged; it cannot establish
+privacy acceptance. Reviewed landing and activation of privacy as a required
+branch check remain separate obligations.
 
 From the repository root:
 
@@ -44,7 +53,7 @@ bash scripts/install-gitleaks.sh /tmp/threads-guard-bin
 export PATH="/tmp/threads-guard-bin:$PATH"
 node --test scripts/tests/*.test.mjs scripts/tests/secret-guard.integration.mjs
 node scripts/secret-guard.mjs
-# Manual proposed-policy evaluation; currently blocked as documented above.
+# Indexed privacy evaluation; see the candidate/main distinction above.
 node scripts/privacy-guard.mjs
 ```
 
@@ -92,6 +101,12 @@ guards. Privacy is index-only, not a historical privacy audit. The guards do
 not certify daemon authority, deployed behavior, branch protection, or human
 review. Pull-request code can modify CI, so maintainer review and required-check
 policy remain separate controls.
+
+"Independent" describes a separate privacy job, not a checker that PR authors
+cannot modify. An immutable enforcement design must also govern the calling
+workflow. Do not execute untrusted PR code in a privileged workflow context
+as a shortcut. Current repository CI does not prove daemon authority or
+current-checkout downstream compatibility; see the [delivery strategy](docs/strategy.md).
 
 Policy provenance: adapted the categories and separate default-secret scan
 from `OpenCoven/coven-memory` at

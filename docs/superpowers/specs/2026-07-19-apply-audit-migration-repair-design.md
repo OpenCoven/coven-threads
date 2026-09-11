@@ -2,7 +2,8 @@
 
 > **Historical implementation design.** The repair merged through #23
 > (`8e2de93ca3a311c46f2d4a6a0da7be0dd6ad7edc`). See [the delivery
-> ledger](../../phases.md) for current work. The 2026-09-11 documentation
+> ledger](../../phases.md) for evidence and the [delivery strategy](../../strategy.md)
+> for current work. The 2026-09-11 documentation
 > correction (#44) reconciles this description with the implemented
 > classifier; it does not change SQL, transaction ownership, or human gates.
 

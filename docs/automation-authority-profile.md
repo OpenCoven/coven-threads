@@ -14,6 +14,12 @@ semantically widened or forged decision authoritative.
 The profile deliberately does not schedule or run anything. Coven owns durable
 scheduler state, final revalidation, consumption, launch, and effects.
 
+**Delivery:** #35 ships profile version `1.0.0` as a portable reference bundle,
+separately from Rust package version `0.2.0`. Its four automation outcomes are
+not additions to the Rust gate's three verdicts. Local CI exercises the bundle;
+it does not establish daemon or consumer adoption. See the
+[delivery strategy](strategy.md) for those separate obligations.
+
 Final revalidation consumes the raw signed approval-event chain plus a
 Threads-signed, revision-bound consumption snapshot. A client-authored
 `approved` summary is never authority. Human approval requires the authorized

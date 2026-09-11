@@ -69,7 +69,7 @@ Could you bend it into a general policy engine? Probably, and the design treats 
 
 This is *the* right question, and the answer has two honest halves.
 
-**Within the boundary the system defines:** no. RFC-0001 §5.1 requires that familiar-controlled processes have *no write path* to the daemon's authority surface, and the reference architecture runs familiars behind the daemon boundary — the untrusted client speaks over the socket, the daemon revalidates everything, and coven-threads is a crate inside the daemon, unreachable from familiar-controlled code (design doc §3.2). A familiar cannot modify the Ward file, restart the authority process, or bypass the gates, because there is nothing familiar-reachable to modify, restart, or bypass.
+**Within a conforming deployment:** RFC-0001 §5.1 requires that familiar-controlled processes have no write path to the authority surface, cannot restart the authority process, and cannot bypass the gates. The daemon must enforce those requirements with authentication, live validation, and process/filesystem isolation. Calling the public Threads library from familiar-controlled code grants no daemon authority. Library placement alone does not establish isolation, and the [Phase-5 findings](phases.md) remain relevant to runtime conformance.
 
 **Outside that boundary:** physics still applies. If a familiar-controlled process runs with raw OS write access to the protected files — same user, no sandbox — then yes, it can write the bytes, and no userspace gate can stop it. RFC-0001 is explicit that convention-based protection *is not* a protected surface (§5.1); the flip side is that the enforcement claim is only as strong as the actual process isolation underneath it. What the thread layer guarantees in that case is **detection, not prevention**: the out-of-band write breaks the `ContentHash` strand's commitment, the thread frays or snaps on next verification, the surface degrades to read-only through the gate, and the event is legible in `ward.audit` — tampering is caught by re-derivation from source, not silently absorbed (§3.3.1).
 
@@ -107,9 +107,20 @@ Deriving one from the other would collapse *where a write lands* with *which cer
 
 ## How do veto windows preserve Gate-4 fail-closed?
 
-By writing nothing before the deadline, and trusting nothing staged before it (decisions 2 and 8).
+The contract permits **delayed apply** only: a windowed proposal cannot write
+before its deadline and minimum-visible floor. The daemon must keep it
+pending-visible long enough for a human to act, then require no veto, matching
+live evidence, and final Gate-4 revalidation before committing.
 
-Phase 5 permits exactly one veto-window semantics: **delayed apply**. A proposal that passes its gates does not get written — it stages *pending-visible* through a `VetoWindow`, which carries both a `duration` and a `min_visible` floor guaranteeing the pending state was actually reachable by a human long enough to act on (same shape as the two-compaction contract's minimum-visibility requirement). At the deadline the daemon applies only if (a) no veto exists and (b) **live evidence replay matches**: it re-materializes the gate evidence and re-derives the classification's `evidence_replay_hash`. If the result differs, the proposal is rejected (`evidence_diverged`); if replay cannot produce authoritative evidence at all, it is rejected fail-closed (`revalidation_failed`). This is WARD-C7 generalized: evidence must survive the time gap, and a proposal whose evidence cannot be replayed at deadline fails closed — Gate 4's "final canonical check before apply" posture is preserved because *every* apply still happens after a live daemon re-materialization, never off a stale snapshot.
+`VetoWindow` represents the timing constraints; its presence alone does not
+prove UI reachability. Likewise, `evidence_replay_hash` commits materialized
+diff and region evidence, not every identity or runtime binding. The inspected
+draft reconstructs that hash at scheduled-envelope load and performs live
+checks at apply. Classification-time identity binding remains an explicit
+[acceptance gap](reviews/2026-09-11-landscape-and-readiness.md#phase-5-engineering-review).
+These implementation details do not narrow the required live-evidence
+contract. Divergence requires `evidence_diverged`; unavailable authoritative
+evidence requires `revalidation_failed`.
 
 Provisional apply — write now, roll back on veto — is explicitly forbidden until Val/Nova accept rollback semantics as a distinct threat model. And the window is a first-class audit interval, not a gap: every close event carries a typed `WindowCloseReason` (`applied | vetoed | evidence_diverged | revalidation_failed | superseded`). Deadline expiry is a trigger for revalidation, not a terminal state — there is no `proposal_expired`.
 

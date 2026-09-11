@@ -1,14 +1,14 @@
 # coven-threads
 
-**Status (2026-09-09):** Engineering phases 0–4 are **frozen**. Phase 5 is **active**, with four unresolved implementation blockers and independent Nova/Val gates still outstanding. Coven `v0.4.3` includes the earlier daemon integration and pins Threads to `c102844`; release ancestry does not prove full Phase-5 conformance or current-checkout compatibility. See [the delivery ledger](docs/phases.md) for evidence, draft fixes, and the real-daemon work graph.
-**License:** stated as Apache-2.0 (planned) in the design doc; the committed `LICENSE` file is currently MIT — a known discrepancy pending reconciliation (see `docs/STATUS-2026-07-15.md` §6).
+**Status (2026-09-11):** Engineering phases 0–4 remain **frozen**. Phase 5 is **active**, with four unresolved remediation gates and independent Nova/Val decisions outstanding. Baseline protection now enforces reviews and four existing checks on `main`; required pinned-daemon acceptance is still missing. Coven `v0.4.3` includes the earlier integration, not proof of full Phase-5 conformance. Start with the [delivery strategy](docs/strategy.md), [evidence ledger](docs/phases.md), and [readiness review](docs/reviews/2026-09-11-landscape-and-readiness.md).
+**License:** the committed `LICENSE` and Cargo package metadata specify MIT. The frozen design retains an older Apache-2.0 plan; reconciling that historical text requires a maintainer decision, not an inferred license change.
 **Owners (design phase):** Sage 🌿 + Echo 🔮 co-drive; Nova 👑 + Sage on lane assignments; Cody ⚡ Phase 1+ crate lane
 
 ---
 
 ## What this is
 
-`coven-threads` is OpenCoven's **authority-boundary gate layer**: the external, structural enforcement contract that sits *above* the `coven` Rust daemon's untrusted-client boundary, and *underneath* every familiar's protected memory surface.
+`coven-threads` is OpenCoven's **protected-authority validator**, imported inside the trusted `coven` daemon. Threads defines typed validation contracts; the daemon owns authentication, protected writes, persistence, and recovery.
 
 In the vocabulary of the Familiar Contract (RFC-0001) and the Ward v0.2 spec: this is the *gate-shaped receiver* on which Ward's four validation gates sit. Ward specifies **what** the gates check; `coven-threads` specifies **how** they are enforced, by an authority outside familiar cooperation.
 
@@ -30,6 +30,8 @@ User-facing docs live in [`docs/`](docs/README.md):
 - [Automation Authority Profile](docs/automation-authority-profile.md) — operation-specific permit / approval / proposal / reject decisions, replay-safe approval evidence, and portable vectors.
 - [Channels and strands](docs/channels-and-strands.md) — the four channels, the five strand kinds, WARD-C1–C7.
 - [Phases](docs/phases.md) — what is frozen, what is implemented, what is active, what is blocked.
+- [Delivery strategy](docs/strategy.md): ordered workstreams, owners, acceptance evidence, and release gates.
+- [Readiness review](docs/reviews/2026-09-11-landscape-and-readiness.md): the dated documentation audit and engineering recommendations for #13, #31, #40, and #46.
 - [FAQ](docs/faq.md) · [Glossary](docs/glossary.md)
 
 The frozen design doc is [`specs/PHASE-0-DESIGN.md`](specs/PHASE-0-DESIGN.md); the docs describe it and never amend it.
@@ -52,7 +54,11 @@ replace its trust boundary or own filesystem and persistence effects. The
 remaining work is complete route, predicate, and replay enforcement, not the
 absence of any integration.
 
-![The shipped Phase 2 enforcement flow: client request through Ward::evaluate, blocked proposals refused as a unit, the coven-threads gate validating each protected target fail-closed, and the three verdicts — Reject (403), DegradeToProposal (staged at ~/.coven/pending/), Permit (Ward::apply) — with every verdict appended to the append-only ward_audit table](docs/diagrams/enforcement.png)
+![Historical Phase-2 enforcement flow, not current protected-proposal acceptance](docs/diagrams/enforcement.png)
+
+This historical diagram includes a staging branch that must not be read as
+protected-write authority. The current contract rejects proposals touching
+protected surfaces; see the [authority model](docs/authority-model.md).
 
 ## The weaving metaphor
 
@@ -96,7 +102,7 @@ Honest labels; the detailed ledger is [docs/phases.md](docs/phases.md).
 ## Anti-goals
 
 - **Not a general-purpose policy engine.** This is a *typed* authority layer for OpenCoven familiar surfaces. Reusability is a nice-to-have; typed correctness is the goal.
-- **Not a runtime-portability format.** That's Phase 3's job. Phase 0 is enforcement design, not export.
+- **Not a runtime implementation.** Threads owns the `.weave` portability contract and lossy one-way `.af` export. Coven owns runtime adoption and effects; an imported artifact grants no authority by itself.
 - **Not `.af`-compatible.** Documented divergence, source-verified 2026-07-14: Letta's `CoreMemoryBlockSchema` has no protection field and runtime `read_only` is stripped at export — silent downgrade on import is exactly what WARD-C7 refuses. See [docs/faq.md](docs/faq.md#why-isnt-it-af-compatible).
 
 ## Related

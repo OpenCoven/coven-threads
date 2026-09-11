@@ -21,6 +21,12 @@ bash scripts/agent-check.sh full
 
 Follow `AGENTS.md` for authority-impact evidence, downstream acceptance, and the applicable contribution workflow.
 
+These commands validate local repository contracts and the portable automation
+profile; they do not launch a Coven daemon. Required current-checkout
+compatibility and the scheduled canary remain work under #31. Use the
+[delivery strategy](docs/strategy.md) for sequencing and owner-specific
+acceptance rather than repeating a completed historical plan.
+
 ## Design gates
 
 The Phase-0 design freeze is complete. Phase-5 remediation, Nova's independent coherence review, and Val's freeze remain outstanding. Agents may prepare evidence; they cannot replace either human decision.

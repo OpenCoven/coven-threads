@@ -21,7 +21,11 @@ A thread has **tension**: it either holds under load, or it degrades. Load means
 
 That question is what the metaphor buys us. It is the enforcement vocabulary of the whole layer, and it appears in the type sketch as `Thread::holds_under(channel)`.
 
-Threads are first-class inspectable objects. The design requires that `coven-threads inspect <thread-id>` return the thread's current tension state (Holds / Frayed / Snapped — see [authority-model.md](authority-model.md) for the state machine).
+Threads are first-class inspectable objects. The frozen design sketches
+`coven-threads inspect <thread-id>`, but this repository ships a library, not
+that executable. Inspection must use a supported daemon or Cave surface.
+See the [tension state machine](authority-model.md#the-thread-tension-state-machine)
+for `Holds`, `Frayed`, and `Snapped`.
 
 ## Weave — the enforced pattern of threads
 
