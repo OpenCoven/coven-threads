@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-10: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. The latest recorded draft checkpoint passes native Windows journeys, but earlier startup failures remain unexplained; green observations are not a reliability repair. Two bounded production fixes have landed independently. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-11: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Daemon and Cave release tags include the earlier integration. The latest recorded draft checkpoint passes native Windows journeys, but earlier startup failures remain unexplained; green observations are not a reliability repair. Two bounded production fixes have landed independently. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
