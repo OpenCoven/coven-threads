@@ -148,7 +148,8 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   or upgrade, and recover cleanly with explicit rollback after any init or
   migration error. The durable contract is explicitly `main.ward_audit`, and
   the reserved durable namespace is valid only for that table plus its two
-  explicit indexes and two append-only triggers; any extra durable reserved
+  explicit indexes, two append-only triggers, and four Phase-5 authority
+  triggers; any other durable reserved
   object or TEMP shadow/reserved temp object keeps the contract fail-closed as
   `unknown`. Production dependencies stay unchanged, while `coven-threads-core`
   now carries bundled `rusqlite` as a dev-dependency for executable migration

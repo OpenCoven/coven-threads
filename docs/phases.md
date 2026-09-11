@@ -258,7 +258,8 @@ and component PR success cannot be transferred to a different combined head.
 Browser acceptance still requires OpenCoven/coven-cave#5256's real-daemon
 project, not mocked route composition or disappearance from a pending queue.
 
-The latter obligation is the [E2E contract](testing/e2e-contract.md) section 7
+The final-commit binding obligation in OpenCoven/coven#977 is the
+[E2E contract](testing/e2e-contract.md) section 7
 snapshot requirement, not an additional requirement for globally simultaneous
 multi-file visibility. J1 separately requires an atomic intended-file change.
 Existing conditional-write regression tests do not, by themselves, prove that
@@ -344,5 +345,12 @@ acceptance, and neither job creates required-check policy.
 Tracked in `docs/STATUS-2026-07-15.md` and worth knowing when reading the repo:
 
 - **License mismatch:** the design doc and README say *Apache-2.0 (planned)*; the committed `LICENSE` file is MIT (with a separate `PATENTS` file). Needs a deliberate reconciliation; until then, treat the license as unsettled.
-- **`PHASE-0-DESIGN.md` §9 is headed "Open questions (need resolution before v0.2 freeze)" — but v0.2 froze on 2026-07-14 with all four still listed.** Recorded here rather than fixed, because the design doc is frozen and change-controlled; this page describes it and does not amend it. Three of the four were settled by events after the freeze: §9.2 (Phase 2 daemon-integration ownership) resolved when Phase 2 merged as coven PR #382; §9.3 (portability format Shape A vs B) resolved 2026-07-15 as **Shape B**, recorded in `specs/PHASE-3-PORTABILITY.md` §6; §9.4 (Phase 4 UI/UX) resolved by `specs/PHASE-4-CAVE-SURFACES.md` and the 2026-07-17 Phase 4 freeze. §9.1 (whether federation forces a fourth `fabric` level) is genuinely still open and still correctly deferred. The heading is what is stale, not the content — a reader who trusts it will think four live blockers stand in front of a freeze that already happened.
+- **Historical Phase-0 planning:** `PHASE-0-DESIGN.md` Sections 7-9 retain the
+  pre-freeze checklist and questions. Their historical-status annotation
+  distinguishes them from current blockers without rewriting the decisions.
+  Three questions were settled after the freeze: Section 9.2 through
+  OpenCoven/coven#382, Section 9.3 by the Shape B decision in
+  `specs/PHASE-3-PORTABILITY.md` Section 6, and Section 9.4 by the Phase-4
+  contract and its recorded 2026-07-17 freeze. Section 9.1, whether federation
+  needs a fourth `fabric` level, remains open and deferred.
 - **`Channel::Deliberate` is specified but unreachable.** `PHASE-0-DESIGN.md` §2.4 and non-negotiable #4 (the two-compaction contract) treat `Deliberate` and `Forced` as distinct channels with distinct survival requirements. `Forced` is woven into the daemon's `PROTECTED_CHANNELS`; `Deliberate` is referenced nowhere in coven, and every channel value the daemon constructs is a hardcoded `Channel::Mutation`. Tracked as `threads-xpo`. Relevant when reading §2.4 or the promotion-write seam contract, both of which describe intent that no code path can currently express.

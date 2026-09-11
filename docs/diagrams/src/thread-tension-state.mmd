@@ -9,23 +9,26 @@ stateDiagram-v2
   direction TB
   [*] --> Holds: woven (typed surface bound at construction)
 
-  Holds --> Frayed: a strand fails —<br/>hash / manifest / signature mismatch,<br/>or a required strand kind is missing<br/>(RequiredStrandMissing is a fray, not a snap)
-  Frayed --> Holds: repair
-  Frayed --> Snapped: multiple strands fray —<br/>no in-place repair
-  Holds --> Snapped: revoked · pattern broken
+  Holds --> Frayed: verifier records a fray
+  Frayed --> Holds: authorized repair and verification
+  Frayed --> Snapped: verifier explicitly snaps the thread
+  Holds --> Snapped: verifier explicitly snaps the thread
   Snapped --> [*]: fresh authority ceremony —<br/>new thread (snap is terminal)
 
   note right of Holds
-    holds_under(covered channel) → Ok → Permit path
-    holds_under(uncovered channel) → NotCovered → Reject
-    (fail-closed — absence of coverage is "no")
+    Covered channel + required strand kinds → Ok
+    Missing required kind → Frayed result (no state change)
+    Uncovered channel → NotCovered → Reject
+    Permit also requires writer binding and weave coherence
   end note
   note right of Frayed
-    every covered channel → Frayed
-    → DegradeToProposal: write staged, principal notified,
-    protected surface untouched
+    Covered channel → Frayed result
+    Uncovered channel → NotCovered → Reject
+    DegradeToProposal grants no write authority
+    Staging requires proposal eligibility; protected targets reject
+    Repeated fray calls do not automatically snap
   end note
   note left of Snapped
-    every channel → Snapped → Reject
-    surface read-only until repair
+    Every channel → Snapped → Reject
+    A new authority ceremony is required
   end note

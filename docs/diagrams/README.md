@@ -18,7 +18,13 @@ rendered files are never hand-edited. If a diagram disagrees with
 
 ## Regenerating
 
-One command, from this directory:
+Install the locked dependencies from the repository root:
+
+```sh
+pnpm --dir slides/community-explainer install --frozen-lockfile
+```
+
+Then, from `docs/diagrams/`:
 
 ```sh
 ./render.sh
@@ -31,8 +37,10 @@ against the committed artifacts).
 
 **Toolchain (pinned):**
 
-- `@mermaid-js/mermaid-cli` **11.16.0**, installed locally at
-  `slides/community-explainer/node_modules` (`npm install` there first).
+- `@mermaid-js/mermaid-cli` **11.16.0**, resolved by the committed
+  `slides/community-explainer/pnpm-lock.yaml` and installed locally at
+  `slides/community-explainer/node_modules`. Use the frozen-lockfile command
+  above; `npm install` does not honor this pnpm lockfile.
 - A Chromium for puppeteer-core: `PUPPETEER_EXECUTABLE_PATH` if set, else
   Playwright's cached Chromium, else Google Chrome (see `resolve_chromium`
   in `render.sh`).

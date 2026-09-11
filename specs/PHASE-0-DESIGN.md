@@ -289,6 +289,13 @@ Failure modes:
 
 ## 7. What Phase 0 delivers
 
+> **Historical-status erratum (2026-09-11, #44):** Sections 7–9 preserve the
+> pre-freeze checklist and planning state. Their unchecked items and blocker
+> labels are not current task status. The recorded Phase-0 freeze appears in
+> §11; current delivery is tracked in [`docs/phases.md`](../docs/phases.md).
+> This annotation preserves the original checklist and does not attest to any
+> new review or freeze.
+
 - [x] Repo scaffolded at `~/Documents/GitHub/OpenCoven/coven-threads/`
 - [x] README, AGENTS.md, SECURITY.md, CONTRIBUTING.md, LICENSE (MIT via coven sibling), PATENTS, .gitignore
 - [x] Beads DB initialized (prefix: `threads`)

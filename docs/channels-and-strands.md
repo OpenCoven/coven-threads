@@ -1,6 +1,6 @@
 # Channels and strands
 
-> Status: `[DESIGNED]` — frozen in `specs/PHASE-0-DESIGN.md` §2.3–§2.4, §3.3 (v0.2, 2026-07-14). The `Channel` enum and five-kind `Strand` vocabulary are mirrored in `coven-threads-core` (`channel.rs`, `strand.rs`) `[IMPLEMENTED, NOT ENFORCING]`.
+> Status: the Phase-0 channel and strand vocabulary is frozen in `specs/PHASE-0-DESIGN.md` §2.3–§2.4, §3.3 (v0.2, 2026-07-14) and implemented in `coven-threads-core`. The daemon imports the validator and owns effects. These contracts do not establish that every runtime channel is wired or conformant; see [the delivery ledger](phases.md).
 
 Vocabulary (bound in [concepts.md](concepts.md)): a **Thread** is an authority relationship *surface → writer*; a **Weave** is the enforced pattern of threads; a **Strand** is a fiber inside a thread; a **Channel** is the axis of load a thread must hold under.
 
@@ -18,7 +18,7 @@ Familiar-initiated, principal-gated compaction: memory promotion, dreaming, deli
 
 Because consent and review are present, `Deliberate` imposes **no structural strand floor** beyond an intact thread: the gate here is the principal's consent path, not a cryptographic survival requirement. That is not laxity — it is a recognition that the protection on this channel is procedural (tiers, review, veto windows per RFC-0001 §5.3) rather than structural.
 
-As of Phase 5 (open, not frozen), "veto window" is no longer just an RFC phrase — it has a typed contract: `VetoWindow` in `coven-threads-core`. The contract is **delayed apply only** — a staged proposal stays visibly pending for at least a minimum-visible duration, and the daemon applies only after the deadline passes clean and the gate evidence replays to the same result; there is no apply-then-rollback. Every window close is audited with an explicit reason. Full flow: [architecture.md — Phase 5](architecture.md#phase-5-approval-semantics-and-delayed-apply).
+Phase 5 (active, not frozen) defines `VetoWindow` in `coven-threads-core`. For windowed proposals, **delayed apply only** means no apply until the deadline and minimum-visible floor are satisfied, no veto exists, and live evidence revalidation succeeds. Non-windowed approval paths still require their applicable ceremony and final live revalidation. Protected targets are not proposal-eligible. Every opened window receives exactly one typed terminal close. See [the approval flow](architecture.md#phase-5-approval-semantics-and-delayed-apply).
 
 ### Forced
 
