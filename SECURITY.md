@@ -27,17 +27,19 @@ pull requests and pushes to `main`. It needs no private stores, Beads database,
 credentials, or downstream checkout. Third-party Actions retain immutable
 commit pins and the existing explicit Rust toolchain parity checks.
 
-**Separate privacy rollout (#39, #40):** this candidate adds a
-`Privacy policy guard` job and the maintainer-approved correction to the
-historical Phase-5 source reference. The correction preserves provenance
+**Separate privacy rollout (#39, #40):** the `Privacy policy guard` job runs on
+pull requests and pushes to `main`, separately from secret scanning. The
+maintainer-approved correction to the historical Phase-5 source reference
+preserves provenance
 without retaining the private runtime location; it changes no normative
 authority decision and adds no scanner exemption.
 
 Both guards passed at candidate `2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee`
 in [CI run 34610860329](https://github.com/OpenCoven/coven-threads/actions/runs/34610860329).
 That is evidence for the named revision, not every subsequent head. The landed
-`Secret scanning` job remains unchanged. Reviewed landing and activation of
-privacy as a required branch check remain separate obligations.
+`Secret scanning` job remains unchanged. Privacy is not a required branch
+check; activation requires a separate maintainer decision. Landing the job
+does not change the ruleset.
 
 From the repository root:
 
