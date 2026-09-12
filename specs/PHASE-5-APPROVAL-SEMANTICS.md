@@ -48,10 +48,16 @@ Sources read and cited:
   design-time daemon reality — path tiers, Gate 1-4 comments,
   protected-surface weave construction, and `decide_threads_proposal` as the
   then-current tier-0 proposal commit point. Delivery is tracked in §7.
-- `~/.coven/workspaces/familiars/nova/ward.toml.v01.bak`: read-only example of
-  the retired dialect. This draft paraphrases its invariant shape and does not
-  reproduce Val's exact invariant strings. The repository-owned synthetic
-  replacement is tracked under `threads-uqx.13` in §7.
+- A private, read-only retired Ward backup: historical source for the retired
+  dialect's invariant shape, not a reproducible fixture or a runtime-path
+  contract. This draft does not reproduce Val's exact invariant strings.
+  The repository-owned synthetic replacement is tracked under `threads-uqx.13`
+  in §7.
+
+**Source-reference correction (2026-09-11, #39/#40):** the private backup's
+runtime location has been removed under the approved privacy remediation.
+Its historical role is retained above; no normative requirement, approval
+decision, or independent human sign-off changes.
 
 ---
 

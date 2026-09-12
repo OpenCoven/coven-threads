@@ -9,7 +9,7 @@ follow-through `threads-ufe`.
 This is Nova-lane engineering evidence, not the independently attributable
 Nova coherence decision, Val's freeze, or permission to bypass review.
 
-## Decisions and publication
+## Decisions and publication at the original review
 
 | Review target | Engineering recommendation | Published evidence |
 | --- | --- | --- |
@@ -20,8 +20,8 @@ Nova coherence decision, Val's freeze, or permission to bypass review.
 
 Both PR reviews are `COMMENTED`, not `APPROVED`. They were published through
 the authenticated PR-author account at the user's request. That account cannot
-supply its own required independent approval. Neither review edits the PR
-branch or unlocks a protected merge.
+supply the independent approval required by the original policy. Neither review
+edited the PR branch or unlocked a protected merge.
 
 **Publication follow-through:** at the user's explicit request, subsequent
 documentation-only commits corrected #40 at
@@ -34,6 +34,30 @@ for either follow-up, and this audit's broader documentation is proposed on
 Both follow-ups passed exact-head hosted CI: [#40 run 34647137078](https://github.com/OpenCoven/coven-threads/actions/runs/34647137078)
 and [#46 run 34647134180](https://github.com/OpenCoven/coven-threads/actions/runs/34647134180).
 These are repository checks, not new daemon acceptance or independent reviews.
+
+### Authorized landing follow-through, 2026-09-12 UTC
+
+The maintainer approved the documentation work, confirmed the solo-maintainer
+setup, and explicitly authorized a [review-policy change](https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5642501227).
+Ruleset `22910327` now requires zero approving reviews and disables latest-push
+and extra unattributed-change approvals. Required PRs, resolved conversations,
+stale-review dismissal, all four strict required checks, branch safeguards, and
+the absence of bypass actors are unchanged. This is a real policy revision,
+not an independent approval supplied by an agent.
+
+#46 merged at `91ff511609cfb717bf71c3cafe07c0cbb2a2a317`, following
+[CI at `caf0683`](https://github.com/OpenCoven/coven-threads/actions/runs/34664611356).
+#40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`, following
+[CI at `2d17d0d`](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160).
+The checker-trust conversation was resolved by narrowing the enforcement claim,
+not making the checker immutable. Privacy required-check activation remains
+separate. #47 reconciles this audit with both landings.
+
+This update supersedes the original pending-landing and repository-review
+requirements below, not the source findings, daemon acceptance limits, or
+Phase-5 coherence/freeze prerequisites. The [contributor policy](../../CONTRIBUTING.md#solo-maintainer-merge-policy)
+and [ledger](../phases.md#repository-governance-baseline-active-boundary-enforcement-outstanding)
+record the current process and rollback.
 
 ## Identified baseline
 
@@ -225,10 +249,11 @@ records the feature-enabled invocation. Preserve the actual command in future
 evidence. Earlier startup failures in run `34482201141` remain unexplained.
 No fresh daemon run or 30-day reliability measurement was performed here.
 
-Live [ruleset `22910327`][ruleset] enforces one approval, latest-push approval,
+At the original review, [ruleset `22910327`][ruleset] enforced one approval, latest-push approval,
 stale-approval dismissal, resolved review threads, up-to-date branches, four
 GitHub Actions-bound checks, and deletion/non-fast-forward protection with no
-bypass actors. It does not require daemon E2E or privacy. Neither the current
+bypass actors. The authorized follow-through above changes only the three
+approval settings. It still does not require daemon E2E or privacy. Neither the current
 workflow nor a TOML schedule declaration supplies the missing nightly canary.
 
 The #40 checker-trust comment is a documented boundary limitation, not a newly
@@ -238,10 +263,12 @@ governance design, not a privileged workflow shortcut.
 
 ## Impact, verification, and rollback
 
-The changes are explanatory Markdown only. They do not modify Rust, SQL,
+The audit changes are explanatory Markdown only. They do not modify Rust, SQL,
 migrations, fixtures, dependency pins, workflows, frozen specifications,
 identity definitions, or human-gate status. Historical source correction in
-#40 is reviewed as a separate candidate, not applied by this audit.
+#40 was reviewed and subsequently merged separately, not introduced by this
+audit. The later server-side policy change is recorded in the follow-through
+above; it is not a claim that the original audit changed governance.
 
 Read-only evidence commands included:
 

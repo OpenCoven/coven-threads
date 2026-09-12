@@ -27,24 +27,18 @@ pull requests and pushes to `main`. It needs no private stores, Beads database,
 credentials, or downstream checkout. Third-party Actions retain immutable
 commit pins and the existing explicit Rust toolchain parity checks.
 
-**Separate privacy rollout (#39, #40; 2026-09-11):** candidate
-`2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee` adds a separate privacy job and
-the maintainer-approved correction to a historical Phase-5 source reference.
-The correction preserves provenance without the private runtime location;
-it changes no normative authority decision and adds no scanner exemption.
-[Candidate CI](https://github.com/OpenCoven/coven-threads/actions/runs/34610860329)
-passes both guards at that named revision. Follow-up
-`4fce2d9525cc966febb1a8db82587664a5a11c9a` corrects the rollout text identified
-in the [engineering review](https://github.com/OpenCoven/coven-threads/pull/40#pullrequestreview-5182694836)
-and states the checker-trust limitation explicitly. Acceptance of that new
-head remains separate.
+**Separate privacy rollout (#39, #40; 2026-09-12 UTC):** the `Privacy policy guard` job runs on
+pull requests and pushes to `main`, separately from secret scanning. The
+maintainer-approved correction to the historical Phase-5 source reference
+preserves provenance without retaining the private runtime location; it changes
+no normative authority decision and adds no scanner exemption.
 
-The correction and privacy job are not yet on `main`. Until they land, manual
-privacy evaluation remains subject to the historical source-reference
-conflict. That conflict is not a claim of exposed personal data. The existing
-`Secret scanning` job remains independent and unchanged; it cannot establish
-privacy acceptance. Reviewed landing and activation of privacy as a required
-branch check remain separate obligations.
+#40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`, after
+[combined-head CI](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160)
+passed at `2d17d0d4583801b1dfa831c7ca40a03930ceef80`. The correction and privacy
+job are now on `main`. Privacy is not a required branch check; activation
+requires a separate maintainer decision. The existing `Secret scanning` job
+and required-check contexts are unchanged.
 
 From the repository root:
 
@@ -53,7 +47,7 @@ bash scripts/install-gitleaks.sh /tmp/threads-guard-bin
 export PATH="/tmp/threads-guard-bin:$PATH"
 node --test scripts/tests/*.test.mjs scripts/tests/secret-guard.integration.mjs
 node scripts/secret-guard.mjs
-# Indexed privacy evaluation; see the candidate/main distinction above.
+# Check the staged index; this does not inspect unstaged or untracked edits.
 node scripts/privacy-guard.mjs
 ```
 
@@ -62,7 +56,7 @@ archives are verified against SHA-256 digests committed in the installer
 before extraction. Updating the version requires reviewing and updating both
 the version file and digests; the guard rejects version skew.
 
-**Scope:** the manual privacy checker scans every stage-zero Git index blob and filename, not
+**Scope:** the privacy checker scans every stage-zero Git index blob and filename, not
 unstaged or untracked files. Clean checkout CI therefore covers the submitted
 tree. Stage intended changes before local scanning. Secret scanning covers
 the same index via a permission-restricted temporary snapshot plus every

@@ -3,7 +3,8 @@
 Finish the real-daemon authority boundary before declaring Phase 5 complete
 or expanding its authority claims.
 
-**Planning baseline: 2026-09-11.** This is an explanatory delivery strategy,
+**Planning baseline: 2026-09-11; repository rollout updated 2026-09-12 (UTC).**
+This is an explanatory delivery strategy,
 not a new normative contract, task tracker, or approval. [GitHub #31](https://github.com/OpenCoven/coven-threads/issues/31)
 and its linked issues own cross-repository work; Beads owns local task status.
 The [delivery ledger](phases.md) records implementation evidence, and the
@@ -16,8 +17,8 @@ findings behind this sequence.
 | --- | --- | --- |
 | Rust core | Typed validation, approvals, identity predicates, audit schema/migrations, `.weave` portability, and conformance suites | Authentication, filesystem effects, or every daemon route |
 | Automation Authority Profile v1 | Schemas, reference validator, signed evidence contracts, and exact vectors | Production scheduler, credential issuance, runtime-adapter adoption, or Rust API integration |
-| Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, and secret scanning | Required daemon compatibility, privacy enforcement on main, or a coverage ratchet |
-| Governance | Active main-branch ruleset with independent review and four required checks | A required pinned-daemon check or either Phase-5 human decision |
+| Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, secret scanning, and a separate privacy job | Required daemon compatibility, privacy as a required check, or a coverage ratchet |
+| Governance | Authorized solo-maintainer policy, required PRs, resolved conversations, and four strict required checks | GitHub-enforced independent review, a required pinned-daemon check, or either Phase-5 human decision |
 | Downstream integration | Earlier release-source integration and substantial draft process-boundary evidence | Reviewed landing of the four remediations, full acceptance, or installed-binary conformance |
 
 The core's three verdicts and the automation profile's four outcomes answer
@@ -28,31 +29,31 @@ gate or infer daemon adoption merely because a reference vector passes.
 
 ### 1. Finish the bounded documentation and privacy landing
 
-**Owner:** authenticated maintainer and an eligible independent reviewer.
+**Owner:** authenticated maintainer under the [solo-maintainer merge policy](../CONTRIBUTING.md#solo-maintainer-merge-policy).
 **Public tracking:** [governance ledger #46](https://github.com/OpenCoven/coven-threads/pull/46),
 [privacy rollout #40](https://github.com/OpenCoven/coven-threads/pull/40), and
 [remaining rollout issue #39](https://github.com/OpenCoven/coven-threads/issues/39).
-**Beads:** `threads-6qw` records completed server-side governance;
-`threads-chk` tracks its remaining documentation landing; `threads-t6t`
-tracks privacy landing and activation. The GitHub records remain usable
-without access to a local Beads database.
+**Beads:** `threads-6qw` records initial governance; `threads-1e9` records the
+authorized solo-maintainer revision; `threads-chk` records the landed ledger;
+`threads-t6t` retains the separate privacy required-check decision. GitHub
+records remain usable without access to a local Beads database.
 
-#46 documents server-side protection that is already active. The engineering
-review found no blocker in that delta; follow-up `d51d40a` aligns the page date.
-#40's source-reference correction is published, and follow-up `4fce2d9`
-corrects its stale `SECURITY.md` rollout text and clarifies checker trust.
-Obtain an eligible independent review of each new exact head.
+#46 merged at `91ff511609cfb717bf71c3cafe07c0cbb2a2a317`, recording active
+protection and its authorized solo-maintainer revision. #40 merged at
+`7168dae10f6b59bad8bc653b95f51911334ded74`, adding the separate privacy job and
+approved historical source correction. Their final heads passed required
+checks before normal merges. No independent GitHub review is claimed.
 
-Both PRs touch `docs/phases.md`. Reconcile their final combined wording rather
-than treating either candidate's older ledger as authoritative. The audit
-branch carries broader explanatory changes, not another copy of their
-workflow or source-reference amendments. Coordinate overlapping documentation
-at landing without changing the remaining acceptance gates.
+#47 reconciles their overlapping `SECURITY.md` and `docs/phases.md` wording
+with the broader audit. Keep the original dated evidence distinct from later
+landing and policy changes, and preserve the remaining acceptance gates.
 
-Exit evidence is reviewed landing and the required checks at the accepted
-head. Adding `Privacy policy guard` to the ruleset is a separate authorized
-administrative change after rollout. A separate scanner job is not tamper-proof
-enforcement against changes to the checker or calling workflow.
+Exit evidence is recorded human authorization, resolved conversations, and
+normal landing after the required checks at the accepted head. Adding
+`Privacy policy guard` to the ruleset remains a separate authorized
+administrative change; it is not included in the solo-maintainer policy
+change. A separate scanner job is not tamper-proof enforcement against
+changes to the checker or calling workflow.
 
 ### 2. Close the implementation and acceptance gaps in Coven
 

@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-11: phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Baseline `main` protection is active. The latest recorded daemon draft passes native Windows journeys, but earlier startup failures remain unexplained and the required current-checkout compatibility lane is absent. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Baseline `main` protection is active under the authorized solo-maintainer policy. The latest recorded daemon draft passes native Windows journeys, but earlier startup failures remain unexplained and the required current-checkout compatibility lane is absent. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
 
 Read the [delivery strategy](strategy.md) for the order of work and the
 [2026-09-11 readiness review](reviews/2026-09-11-landscape-and-readiness.md)
@@ -328,8 +328,8 @@ upstream work reference and `threads-lm4` tracking runtime conformance.
 `threads-76z` was reopened because its purported fix, #27, was closed **without
 merge** and superseded by stricter terminal-close work. Do not resurrect its
 null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` now tracks
-reviewed privacy rollout after secret scanning landed in #41 and the
-source-reference correction was published in #40.
+privacy required-check activation after secret scanning landed in #41 and the
+separate privacy job and source-reference correction landed in #40.
 `threads-5rr` is an unratified design proposal, not
 authorization to add an audit event.
 
@@ -337,24 +337,38 @@ authorization to add an audit event.
 
 #31 tracks required pinned daemon checks, deterministic time, OS/Cave acceptance,
 Action SHA pins, and measured coverage/flake targets. The 2026-09-10 GitHub
-snapshot reported `main` as unprotected. On 2026-09-11, active
-[ruleset `22910327`](https://github.com/OpenCoven/coven-threads/rules/22910327)
-enabled protection for `refs/heads/main`, with no bypass actors:
+snapshot reported `main` as unprotected and no repository rulesets.
+On 2026-09-11, active [ruleset `22910327`](https://github.com/OpenCoven/coven-threads/rules/22910327)
+("Threads main authority baseline")
+enabled protection for `refs/heads/main`. Its original independent-review
+requirement could not be fulfilled by the sole maintainer, who authored the
+pending PRs. On 2026-09-12 (UTC), the maintainer explicitly authorized a
+solo-maintainer policy. The active configuration has no bypass actors:
 
-- One approval, approval of the latest reviewable push by someone other than
-  its pusher, stale-approval dismissal, and resolved review threads.
-- Four required checks bound to GitHub Actions: `Secret scanning`,
+- Pull requests and resolved review threads remain required. Required approving
+  reviews are zero; latest-push and extra unattributed-change approvals are
+  disabled. Stale-review dismissal remains enabled for any reviews submitted.
+- Required checks are bound to the GitHub Actions app: `Secret scanning`,
   `Rust quality and repository contract`, `Cargo test (compatibility baseline)`,
   and `Nextest telemetry (JUnit, fail on flaky)`. Branches must be up to date.
-- Branch deletion and non-fast-forward updates prohibited.
+- Branch deletion and force pushes are prohibited.
 
-The effective branch-rules API confirms enforcement. #46 records this already
-active configuration; follow-up `d51d40a72a2bda92827fdfe00cdab02408e95e1f`
-aligns its page date. It still needs an eligible independent review. Baseline
-protection does not complete #31: no required pinned-daemon check or scheduled
-latest-main canary is wired, privacy is not required, and coverage remains
-informational. Neither CODEOWNERS nor an agent recommendation supplies the
-required approval.
+Explicit human approval must be recorded with its scope before an agent merges.
+This is a maintainer process requirement, not a GitHub-enforced second-person
+review. CI and agent reviews do not supply that approval. If another maintainer
+joins, reassess independent review. To restore the original review controls,
+set `required_approving_review_count` to `1`, `require_last_push_approval` to
+`true`, and `require_extra_approval_for_unattributed_changes` to `true`.
+
+The effective branch-rules API and `main.protected=true` confirm activation.
+#46 merged this policy ledger at `91ff511609cfb717bf71c3cafe07c0cbb2a2a317`.
+This is baseline governance, not completion of #31: the reviewed pinned daemon
+E2E check is not yet available to require, privacy is not a required check,
+the scheduled latest-main canary is not wired, and coverage remains
+informational. The solo-maintainer policy does not waive
+the separate Nova coherence or Val freeze gates, or their engineering
+prerequisites. [The authorization and exact policy change](https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5642501227)
+are recorded on #31.
 
 #38 merged as `af013612`; #37 is closed. It pins the existing
 external CI actions and preserves explicit Rust 1.88.0 inputs in every
@@ -366,7 +380,7 @@ add branch protection, a coverage ratchet, or a reviewed downstream gate.
 reachable `HEAD`-history scanning, sanitized diagnostics, and synthetic
 regressions. Actual PR CI `34465028325` and merged-main CI `34465519559` passed.
 The separate Copilot review workflow `34465035137` is not CI evidence.
-PR #40 at `2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee` adds a separate privacy
+PR #40 at `2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee` proposed a separate privacy
 job and a maintainer-approved, provenance-preserving source-reference
 correction. Its [CI run 34610860329](https://github.com/OpenCoven/coven-threads/actions/runs/34610860329)
 passes both guards at that named head. Follow-up
@@ -374,11 +388,14 @@ passes both guards at that named head. Follow-up
 rollout text and explicitly documents the checker-trust limitation.
 The #40 follow-up passes [CI run 34647137078](https://github.com/OpenCoven/coven-threads/actions/runs/34647137078);
 the #46 date correction passes [CI run 34647134180](https://github.com/OpenCoven/coven-threads/actions/runs/34647134180).
-These results apply to their named heads, not a future combined landing.
-The correction and job are not yet on `main`; #39 remains open for reviewed
-landing, with required-check activation separate. "Independent" means a
-separate job from secret scanning, not an immutable checker that PR authors
-cannot modify. No guard exemption or normative authority change is implied.
+These results apply to their named heads. The combined privacy head
+`2d17d0d4583801b1dfa831c7ca40a03930ceef80` subsequently passed
+[CI run 34664678160](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160).
+#40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`; the job and
+source-reference correction are now on `main`. Required-check activation
+remains separate. "Independent" means a separate job from secret scanning,
+not an immutable checker that PR authors cannot modify. No guard exemption or
+normative authority change is implied.
 
 ### Automation Authority Profile v1
 
