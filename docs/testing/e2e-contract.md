@@ -327,6 +327,14 @@ and the preflight/override/daemon outcome in `observation.json`. The disposable
 Coven checkout retains its configuration and lock overlay for diagnosis.
 It must not be a developer's active worktree.
 
+The recorded configuration overlay must remain the sole regular Cargo config
+file after each metadata query and daemon execution. Changed or missing bytes,
+symlink replacements, and newly ambiguous config filenames fail the observation,
+even if the dependency graph still selects the current Threads checkout.
+The resolved overlay lockfile is also rechecked after daemon execution and the
+final metadata query before a passing receipt is written. These boundary checks
+do not attest to transient changes restored between commands.
+
 Until the selected downstream revision has the full harness, observation fails
 explicitly rather than skipping or substituting a library test. A failed
 advisory workflow remains visible but is not a protected-branch requirement.
