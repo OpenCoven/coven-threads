@@ -182,11 +182,23 @@ executed unauthorized-write counterexample.
 | RFC round-trip | [Recorded defaults][decisions] map substantially to [approval types][approval], predicates, and audit contracts. Source gaps above prevent a complete runtime claim. |
 | Every approval path revalidates | Familiar-review and human-review process evidence exists; supported auto and full rationale-required process acceptance remain open. [Apply ceremony][ceremony] is not proof of every producer route. |
 | Descriptor is not authority | Inspected [validator][validator] and materialization chain use predicates and authoritative bytes. No exhaustive Cave/client conformance is claimed. |
-| Exactly one typed terminal close | [Typed close/SQL guards][audit] and hosted terminal families exist; full failure/recovery coverage and explicit ambiguous-applying resolution remain open. |
+| Audit completeness: `proposal_submitted -> window_opened -> close(reason)` | The [retired-corpus journey][corpus] binds submission detail to the pending classification; its [terminal helper][terminal-helper] asserts one opening and one typed close for the same proposal. These cases do not establish gap-free ordering and correspondence across every route or crash boundary. Full-chain acceptance, failure/recovery coverage, and explicit ambiguous-applying resolution remain open. |
 | Replay hash enforced | [Scheduled load][scheduler] reconstructs diff/region evidence; live apply checks follow. The complete classification-time identity commitment is still unresolved. |
 | Minimum visibility | [Real retired-corpus journey][corpus] observes pending/restart and time advancement. Exact deadline, publication visibility, and browser reachability need distinct evidence. |
 | Label/variant load contract | [Typed envelope][wire] and negative core cases exist. A real-daemon malformed-load case must substantiate the boundary claim. |
 | Advisory separation | [Model-advisory types][advisory] remain separate; inspected daemon probes are deterministic. An unimplemented model-probe integration is not certified. |
+
+For **audit completeness**, #13's `window_opened` shorthand denotes the
+canonical `proposal_window_opened` event. Each link has its own evidence limit:
+
+| Link | Source-backed observation | Remaining proof |
+| --- | --- | --- |
+| Submission to opening | The corpus journey reads `proposal_submitted` by proposal ID and compares its classification with the durable pending envelope. The [opening writer][opening-writer] derives interval and replay fields from the scheduled proposal. | The inspected journey does not independently assert event ordering, complete submission/opening correspondence, or absence of a gap at every publication/crash boundary. |
+| Opening to typed close | The terminal helper requires one opening and one terminal record under the same proposal ID, then checks the terminal family, reason, and replay result. [SQL guards][audit] enforce typed terminal constraints. | Cover every failure/recovery route, preserve linkage after restart, and resolve ambiguous applying state without inventing a receipt. |
+
+This mapping retains the full obligation rather than reducing it to terminal
+multiplicity. These are source and previously hosted observations at the
+recorded daemon revision, not new execution or a checked human decision.
 
 All four remediation issues remain open: OpenCoven/coven#885 (`threads-okc`),
 OpenCoven/coven#886 (`threads-980`), OpenCoven/coven#887 (`threads-dgg`), and
@@ -265,6 +277,8 @@ the original authority defects. Remaining work follows [the strategy](../strateg
 [audit]: https://github.com/OpenCoven/coven-threads/blob/5be96b0ecb8e0b9a98d2cfd04fc12ce5c0fcd4fd/crates/coven-threads-core/src/audit.rs#L1307-L1449
 [ceremony]: https://github.com/OpenCoven/coven/blob/8576f41e6d622f63a3576b85bd2d3142776e59ca/crates/coven-cli/src/api.rs#L7468-L7600
 [corpus]: https://github.com/OpenCoven/coven/blob/8576f41e6d622f63a3576b85bd2d3142776e59ca/crates/coven-cli/tests/threads_e2e.rs#L302-L402
+[terminal-helper]: https://github.com/OpenCoven/coven/blob/8576f41e6d622f63a3576b85bd2d3142776e59ca/crates/coven-cli/tests/threads_e2e.rs#L1473-L1511
+[opening-writer]: https://github.com/OpenCoven/coven/blob/8576f41e6d622f63a3576b85bd2d3142776e59ca/crates/coven-cli/src/api.rs#L12126-L12222
 [wire]: https://github.com/OpenCoven/coven-threads/blob/5be96b0ecb8e0b9a98d2cfd04fc12ce5c0fcd4fd/crates/coven-threads-core/src/approval.rs#L571-L677
 [advisory]: https://github.com/OpenCoven/coven-threads/blob/5be96b0ecb8e0b9a98d2cfd04fc12ce5c0fcd4fd/crates/coven-threads-core/src/identity_invariants.rs#L770-L915
 [daemon-run]: https://github.com/OpenCoven/coven/actions/runs/34489425644

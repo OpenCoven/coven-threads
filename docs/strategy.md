@@ -29,7 +29,13 @@ gate or infer daemon adoption merely because a reference vector passes.
 ### 1. Finish the bounded documentation and privacy landing
 
 **Owner:** authenticated maintainer and an eligible independent reviewer.
-**Tracking:** #46, #40, #39; `threads-chk`, `threads-t6t`.
+**Public tracking:** [governance ledger #46](https://github.com/OpenCoven/coven-threads/pull/46),
+[privacy rollout #40](https://github.com/OpenCoven/coven-threads/pull/40), and
+[remaining rollout issue #39](https://github.com/OpenCoven/coven-threads/issues/39).
+**Beads:** `threads-6qw` records completed server-side governance;
+`threads-chk` tracks its remaining documentation landing; `threads-t6t`
+tracks privacy landing and activation. The GitHub records remain usable
+without access to a local Beads database.
 
 #46 documents server-side protection that is already active. The engineering
 review found no blocker in that delta; follow-up `d51d40a` aligns the page date.
@@ -62,12 +68,18 @@ or restore #27's rejected null-close approach.
 | Obligation | Existing work owner | Required closure evidence |
 | --- | --- | --- |
 | Identity binding from classification through replay | OpenCoven/coven#885; `threads-okc` | Bind supported predicate/candidate evidence at intake; prove changed-but-still-valid evidence cannot reuse stale authority, including restart |
-| Every approval ceremony reaches supported intake | #13 and OpenCoven/coven#888; `threads-zav` | Prove both auto variants and the human paths through a supported production route; do not lower protected region floors or insert test-only envelopes |
+| Every approval ceremony reaches supported intake | Coven daemon lane: producer OpenCoven/coven#972 and harness OpenCoven/coven#884; integrated in draft OpenCoven/coven#931 | Prove both auto variants and the human paths through supported production routes; do not lower protected region floors or insert test-only envelopes. #13 is the downstream acceptance gate, not the implementation owner |
 | Exactly one typed close per opened window | OpenCoven/coven#886; `threads-980` | Complete terminal/recovery matrix, duplicate prevention, and explicit resolution of ambiguous applying state without fabricated receipts |
 | Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg` | Full known-route, retry, cross-familiar, stale-claim, and recovery refusal matrix with persisted effects |
 | Retired-Ward schedulability | OpenCoven/coven#888; `threads-zav` | Supported migration/intake, observable minimum visibility, exact time boundaries, restart, and unsupported-input refusal |
 | Final authority snapshot matches committed bytes | OpenCoven/coven#977; `threads-8pz.13` | Named authority-change interleavings, intended-file atomicity, audit agreement, and recovery/rollback evidence |
 | Native startup reliability and artifact provenance | OpenCoven/coven#1001, OpenCoven/coven#1000 | Explain retained startup failures and dependency state; record actual command, exact merge, run/attempt, and override mode |
+
+The all-ceremony proof above is broader than OpenCoven/coven#888's requirement
+for a minimal valid retired-Ward case. Keep the corpus remediation in
+`threads-zav`; do not silently expand its acceptance criteria or assign
+implementation work to the human gate. The shared daemon lane owns the
+broader route coverage needed for #13.
 
 For each of the four root blockers, retain a pre-fix red, the production fix,
 an exact-head green, a lower-level regression, and migration/rollback notes.
