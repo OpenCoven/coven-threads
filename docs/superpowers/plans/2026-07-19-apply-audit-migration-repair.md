@@ -3,7 +3,8 @@
 > **Historical implementation plan.** The repair merged through #23
 > (`8e2de93ca3a311c46f2d4a6a0da7be0dd6ad7edc`). The tasks below record that
 > implementation, not an open work queue. `CHANGELOG.md` still marks `0.2.0`
-> unreleased. See [the delivery ledger](../../phases.md) for current work.
+> unreleased. See the [delivery strategy](../../strategy.md) for current
+> sequencing and the [delivery ledger](../../phases.md) for evidence.
 > The 2026-09-11 documentation correction (#44) reconciles the object list
 > with the implemented classifier; it does not change SQL or migration policy.
 
@@ -225,9 +226,10 @@ For this semver-corrected follow-up, the repair delta relative to
   - `git diff --check`
   - stale-wording searches for the old partial-gate terminology.
 
-## Commit
+## Historical commit instruction
 
-Create a new commit (no amend) with:
+The completed plan prescribed this message. It is not an instruction to create
+another commit or repeat the version bump:
 
 ```text
 fix(audit): release ApplyAudit as v0.2.0

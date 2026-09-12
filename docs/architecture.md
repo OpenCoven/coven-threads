@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: the enforcement flow on this page is `[DESIGNED]` (frozen, `specs/PHASE-0-DESIGN.md` §5) with the crate implementation in `coven-threads-core` and the daemon-side call site **merged to coven `main`** (PR https://github.com/OpenCoven/coven/pull/382, 2026-07-15). Daemons built from coven `main` route tier-0 protected-surface edits through this flow.
+> Status: the Phase-0 contract is frozen, and the original daemon call site merged through OpenCoven/coven#382. The required flow below is not certification of every current route. Four Phase-5 remediation gates remain open; consult the [delivery ledger](phases.md).
 
 Vocabulary reminder (bound in full in [concepts.md](concepts.md)): a **Thread** is an authority relationship *surface → writer*; a **Weave** is the enforced pattern of threads across a familiar; a **Strand** is a fiber inside a thread (hash, signature, manifest entry, audit trail, serialization marker); a **Channel** is the axis of load a thread must hold under.
 
@@ -20,7 +20,7 @@ The daemon imports Threads to validate requests against the typed authority stat
 
 Two structural facts follow from this placement:
 
-1. **`coven-threads` is a crate, not a service.** It is imported into the daemon and reachable *only* by the privileged daemon process — never by a familiar-controlled process. There is no socket to coven-threads, no separate process to restart, no config file a familiar could edit. This is how the layer satisfies RFC-0001 §5.1's three MUST-NOTs (a familiar must not modify the Ward file, must not restart the authority process, must not bypass gates): there is nothing familiar-reachable *to* modify, restart, or bypass.
+1. **`coven-threads` is a crate, not a service.** Any program can call the public library, but a client-side result grants no authority. Only the trusted daemon's validation of authoritative inputs can govern its effects. There is no separate Threads socket or process. RFC-0001 §5.1's separation requirements depend on daemon authentication and deployment isolation, not on hiding the crate from familiar-controlled code.
 2. **The wire format does not change.** Clients speak the same socket protocol before and after integration. The only client-visible difference (Phase 2) is a new possible outcome on mutation requests: `DegradeToProposal`.
 
 ## Relationship to RFC-0001 and to Ward
@@ -38,7 +38,7 @@ The design doc's framing: the boundary (§5.1) was spec'd and the daemon existed
 
 ![Enforcement flow](diagrams/enforcement.png)
 
-*Client → daemon → coven-threads validator → weave load → strand check under channel → Permit / DegradeToProposal / Reject → `ward.audit`.*
+*Historical Phase-2 diagram. Its staging branch is not permission to stage or approve protected targets. The steps below state the current required contract.*
 
 The flow, step by step (design doc §5):
 
@@ -79,7 +79,7 @@ The placement rule from the top of this page carries straight through. `coven-th
 - **`ProposalClassification`** — the append-only record produced at intake: the channel the mutation arrived on, affected surfaces and semantic regions, the floor path tier, the required approval path (highest ceremony of everything touched wins, all-or-nothing — matching existing Ward behavior), and the **`evidence_replay_hash`** committing to the gate evidence evaluated at classification.
 - **`WindowCloseReason`** and the audit-detail shapes for the lifecycle rows below.
 
-The **daemon** owns proposal classification and the delayed-apply scheduler — both landed in the coven daemon (PR #430, bead `threads-uqx.6`). This crate does not ship a scheduler; it defines the record the scheduler must honor.
+The **daemon** owns proposal classification and the delayed-apply scheduler, initially merged through OpenCoven/coven#430 (`threads-uqx.6`). This crate defines the record the scheduler must honor. Initial delivery does not close the later route, identity, terminal, and recovery findings.
 
 ### The delayed-apply flow
 
@@ -97,6 +97,13 @@ The flow (spec decision 2 — delayed apply *only*):
 6. **Replay.** The daemon re-derives the evidence by live re-materialization. Apply requires matching evidence, no veto, elapsed deadline and minimum visibility, and final authority revalidation. Divergence rejects.
 
 `AutoRegression { veto: None }` has no veto period. `HumanApproval` and `HumanApprovalWithRationale` wait for explicit approval rather than a veto-window deadline. These non-windowed paths still require final live revalidation. The flow above describes the required contract, not proof that every daemon route currently satisfies it.
+
+The [2026-09-11 readiness review](reviews/2026-09-11-landscape-and-readiness.md#phase-5-engineering-review)
+identifies two specific acceptance gaps at the inspected draft: its supported
+scheduled producer cannot produce `AutoRegression` with the built-in region
+floors, and the diff/region replay hash does not itself bind identity
+predicate evidence at classification. Later live checks and final-commit
+binding do not, by themselves, close those obligations.
 
 There is **no provisional apply, ever**: the daemon never applies first and rolls back on veto. And Gate 4 keeps its fail-closed posture unweakened — every path, windowed or not, ends in live daemon re-materialization before apply.
 

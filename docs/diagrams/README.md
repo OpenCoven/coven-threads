@@ -1,11 +1,19 @@
 # Architecture diagrams
 
-Source-authoritative diagrams for `coven-threads`. Every rendered artifact
-(`.svg`, `.png`) is generated from a committed source in [`src/`](src/) —
-rendered files are never hand-edited. If a diagram disagrees with
+These diagrams explain `coven-threads`; they are not authority or current
+acceptance evidence. Every rendered artifact (`.svg`, `.png`) is generated
+from a committed source in [`src/`](src/). Rendered files are never
+hand-edited. If a diagram disagrees with
 `specs/PHASE-0-DESIGN.md` (FROZEN v0.2), `specs/PHASE-5-APPROVAL-SEMANTICS.md`
 (decision record), or the shipped crate, the diagram is wrong; recreated
 2026-07-15 against both (bead `threads-986.22`).
+
+> Historical scope: `enforcement` depicts the original Phase-2 integration,
+> including a staging branch that must not authorize protected proposals.
+> `delayed-apply-scheduler` illustrates the intended windowed lifecycle, not
+> complete acceptance of every approval path. Read the current
+> [authority model](../authority-model.md) and [delivery ledger](../phases.md)
+> alongside these snapshots. This audit does not certify the PDF or slide deck.
 
 | Diagram | What it shows | Form (why) | Source of truth |
 |---|---|---|---|

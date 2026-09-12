@@ -21,6 +21,36 @@ bash scripts/agent-check.sh full
 
 Follow `AGENTS.md` for authority-impact evidence, downstream acceptance, and the applicable contribution workflow.
 
+These commands validate local repository contracts and the portable automation
+profile; they do not launch a Coven daemon. Required current-checkout
+compatibility and the scheduled canary remain work under #31. Use the
+[delivery strategy](docs/strategy.md) for sequencing and owner-specific
+acceptance rather than repeating a completed historical plan.
+
+## Solo-maintainer merge policy
+
+You can land an approved change without inventing a second reviewer. The
+maintainer [authorized this policy](https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5642501227)
+for the solo-maintainer repository on 2026-09-12 (UTC).
+
+Use a pull request, record the human approval and its scope on GitHub, resolve
+review conversations with their actual disposition, and satisfy the required
+checks against an up-to-date branch before merging. Agents need explicit human
+authorization; a passing check, model review, or persona is not approval.
+Material changes outside the approved scope need renewed authorization.
+
+Ruleset `22910327` requires no approving review and disables latest-push and
+extra unattributed-change approvals. It retains pull requests, resolved review
+threads, stale-review dismissal, four strict required GitHub Actions checks,
+and deletion/non-fast-forward protection, with no bypass actors. GitHub
+enforces those controls, but does not enforce the conversational human-approval
+process or provide independent review.
+
+See the [governance ledger](docs/phases.md#repository-governance-baseline-active-boundary-enforcement-outstanding)
+for exact checks and rollback. Reassess independent review when another
+maintainer joins. This repository merge policy does not change protected-write
+authority or waive the design gates below.
+
 ## Design gates
 
 The Phase-0 design freeze is complete. Phase-5 remediation, Nova's independent coherence review, and Val's freeze remain outstanding. Agents may prepare evidence; they cannot replace either human decision.

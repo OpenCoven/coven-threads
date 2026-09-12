@@ -27,19 +27,18 @@ pull requests and pushes to `main`. It needs no private stores, Beads database,
 credentials, or downstream checkout. Third-party Actions retain immutable
 commit pins and the existing explicit Rust toolchain parity checks.
 
-**Separate privacy rollout (#39, #40):** the `Privacy policy guard` job runs on
+**Separate privacy rollout (#39, #40; 2026-09-12 UTC):** the `Privacy policy guard` job runs on
 pull requests and pushes to `main`, separately from secret scanning. The
 maintainer-approved correction to the historical Phase-5 source reference
-preserves provenance
-without retaining the private runtime location; it changes no normative
-authority decision and adds no scanner exemption.
+preserves provenance without retaining the private runtime location; it changes
+no normative authority decision and adds no scanner exemption.
 
-Both guards passed at candidate `2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee`
-in [CI run 34610860329](https://github.com/OpenCoven/coven-threads/actions/runs/34610860329).
-That is evidence for the named revision, not every subsequent head. The landed
-`Secret scanning` job remains unchanged. Privacy is not a required branch
-check; activation requires a separate maintainer decision. Landing the job
-does not change the ruleset.
+#40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`, after
+[combined-head CI](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160)
+passed at `2d17d0d4583801b1dfa831c7ca40a03930ceef80`. The correction and privacy
+job are now on `main`. Privacy is not a required branch check; activation
+requires a separate maintainer decision. The existing `Secret scanning` job
+and required-check contexts are unchanged.
 
 From the repository root:
 
@@ -97,10 +96,11 @@ not certify daemon authority, deployed behavior, branch protection, or human
 review. Pull-request code can modify CI, so maintainer review and required-check
 policy remain separate controls.
 
-"Independent" means a separate privacy job, not an immutable checker that
-PR authors cannot modify. A stronger enforcement policy must also govern the
-calling workflow. Do not execute untrusted PR code in a privileged workflow
-context as a shortcut.
+"Independent" describes a separate privacy job, not a checker that PR authors
+cannot modify. An immutable enforcement design must also govern the calling
+workflow. Do not execute untrusted PR code in a privileged workflow context
+as a shortcut. Current repository CI does not prove daemon authority or
+current-checkout downstream compatibility; see the [delivery strategy](docs/strategy.md).
 
 Policy provenance: adapted the categories and separate default-secret scan
 from `OpenCoven/coven-memory` at

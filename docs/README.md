@@ -8,14 +8,24 @@ findings.
 
 If you are new here, read [concepts.md](concepts.md) first. Everything else assumes its vocabulary.
 
-## Current status (2026-09-09)
+## Current status (2026-09-12 UTC)
 
 - **Phase 0 (design) — `[FROZEN]`.** The design doc `specs/PHASE-0-DESIGN.md` is frozen at v0.2 (2026-07-14, tag `v0.2-phase0-design`), with Nova sign-off and an RFC-0001 §5 round-trip verified.
 - **Phases 1–2: `[FROZEN; IN RELEASE TAG]`; Phase 3: `[ENGINEERING FROZEN]`.** Coven `v0.4.3` includes the daemon integration and pins Threads to `c102844`. This is release-source provenance, not verification of deployed configuration or current-checkout compatibility. Phase 3 retains the decided `.weave` envelope and lossy one-way `.af` export semantics.
 - **Phase 4: `[FROZEN]` (2026-07-17).** The four Cave surfaces and their recorded human gates are complete under `threads-986.17`. The daemon-adapter follow-up `threads-v3g` and degraded-familiar follow-up `threads-k9s` are closed. See the delivery ledger for merge evidence.
 - **Phase 5: `[ACTIVE]`.** The earlier core, scheduler, Cave contract (`.7`), and RFC alignment (`.12`) implementation beads are closed. Four daemon-boundary blockers still prevent coherence sign-off. The shared harness and protected/terminal fixes are draft checkpoints, and neither Nova's review nor Val's freeze can be replaced by agent evidence. See [phases.md](phases.md) for the work graph and [the E2E contract](testing/e2e-contract.md) for closure requirements.
 
-These docs describe the **frozen design**. Where implemented code goes beyond or refines the design, that is labeled explicitly. See [phases.md](phases.md) for the full breakdown.
+Baseline `main` protection is active under the
+[authorized solo-maintainer policy](../CONTRIBUTING.md#solo-maintainer-merge-policy).
+The separate privacy job has landed, but is not a required check. The required
+pinned-daemon check and scheduled canary are not wired. The Automation Authority Profile v1 is a
+separate shipped schema/reference-validator contract, not evidence of daemon
+adoption or a replacement for the Rust gate.
+
+These docs describe frozen and active contracts without amending them. Use the
+[delivery strategy](strategy.md) for sequencing, the [ledger](phases.md) for
+delivery evidence, and the [dated readiness review](reviews/2026-09-11-landscape-and-readiness.md)
+for findings and remaining acceptance obligations.
 
 ## Who this is for
 
@@ -33,6 +43,9 @@ These docs describe the **frozen design**. Where implemented code goes beyond or
 | [automation-authority-profile.md](automation-authority-profile.md) | Operation-specific automation authority, approvals, proposal-only downgrade, replay/TOCTOU, privacy, and portable vectors. |
 | [channels-and-strands.md](channels-and-strands.md) | The four channels of load, the five strand types, which strands each channel structurally requires, WARD-C1–C7. |
 | [phases.md](phases.md) | Phase 0 → 5 with honest status labels: what is frozen, what is implemented, what is active, what is blocked. |
+| [strategy.md](strategy.md) | Workstream order, canonical owners, closure evidence, and release prerequisites. GitHub issues and Beads retain task status. |
+| [Readiness review](reviews/2026-09-11-landscape-and-readiness.md) | Dated landscape, documentation corrections, and engineering recommendations for the open review gates. |
+| [E2E contract](testing/e2e-contract.md) | Real-daemon topology, eight required journeys, deterministic time, and blocker-closure evidence. |
 | [faq.md](faq.md) | Anticipated questions, answered honestly with sources. |
 | [glossary.md](glossary.md) | Every named term, one line each, alphabetical, with links to depth. |
 
@@ -50,3 +63,11 @@ WARD-C1–C7. `coven/docs/SAFETY-MODEL.md` describes the daemon boundary; it doe
 not replace the source precedence above.
 
 Diagrams in `diagrams/` are legibility aids derived from the design doc; they are not authoritative (see `diagrams/README.md`).
+
+## Historical plans and reports
+
+The [July status report](STATUS-2026-07-15.md), [ApplyAudit design](superpowers/specs/2026-07-19-apply-audit-migration-repair-design.md),
+and [ApplyAudit implementation plan](superpowers/plans/2026-07-19-apply-audit-migration-repair.md)
+preserve earlier checkpoints. Do not execute their completed tasks or treat
+their old counts as current acceptance. Rendered diagrams, the PDF, and slides
+are explanatory snapshots, not release evidence.
