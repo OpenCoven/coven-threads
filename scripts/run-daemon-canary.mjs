@@ -92,6 +92,8 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     if (env.COVEN_REF && env.COVEN_REF !== "main" && env.COVEN_REF !== receipt.coven_sha) {
       throw new Error("Coven checkout does not match the requested immutable revision");
     }
+    receipt.rustc = execute("rustc", ["--version"], coven, { env });
+    receipt.cargo = execute("cargo", ["--version"], coven, { env });
     const covenManifest = realpathSync(join(coven, "crates/coven-cli/Cargo.toml"));
     const threadsManifest = realpathSync(join(threads, "crates/coven-threads-core/Cargo.toml"));
     if (!existsSync(join(coven, "crates/coven-cli/tests/threads_e2e.rs"))) {

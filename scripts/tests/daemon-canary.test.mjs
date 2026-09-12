@@ -73,7 +73,9 @@ test("observation is separate from required PR CI and pins its actions", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/daemon-observation.yml", import.meta.url), "utf8",
   );
-  checkCiPins(workflow, "1.88.0");
+  checkCiPins(workflow, "1.95.0");
+  const coreCi = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+  checkCiPins(coreCi, "1.88.0");
   assert.match(workflow, /schedule:\s*\n\s*- cron:/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.doesNotMatch(workflow, /pull_request|continue-on-error|secrets\.|write-all/);
@@ -102,6 +104,7 @@ function fixture(t) {
   const execute = (exe, args, cwd, options) => {
     invocations.push({ exe, args, cwd, options });
     if (exe === "git") return args[0] === "rev-parse" ? "a".repeat(40) : "";
+    if (args[0] === "--version") return `${exe} 1.95.0 (synthetic)`;
     assert.equal(exe, "cargo");
     if (args[0] === "metadata") {
       if (!args.includes("--locked")) writeFileSync(join(coven, "Cargo.lock"), "resolved overlay");
@@ -120,6 +123,8 @@ test("records explicit overlay resolution, inherited patch, exact invocation and
   }, f.execute);
   assert.equal(receipt.status, "passed");
   assert.equal(receipt.run_attempt, "2");
+  assert.equal(receipt.rustc, "rustc 1.95.0 (synthetic)");
+  assert.equal(receipt.cargo, "cargo 1.95.0 (synthetic)");
   assert.equal(receipt.local_threads_override_active, true);
   assert.notEqual(receipt.coven_lock_before_sha256, receipt.coven_lock_overlay_sha256);
   assert.match(readFileSync(join(f.coven, ".cargo/config.toml"), "utf8"), /\[patch\./);
