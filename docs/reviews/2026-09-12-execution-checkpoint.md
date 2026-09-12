@@ -1,7 +1,8 @@
 # Phase-5 execution checkpoint
 
-**The current-checkout daemon observation lane is unblocked. Phase 5 is not
-fully unblocked or ready to freeze.**
+**The current-checkout daemon observation lane is unblocked, and a main-based
+daemon checkpoint is published with separate Linux and macOS evidence.
+Phase 5 is not fully unblocked or ready to freeze.**
 
 This records execution of the [handoff recommendations](2026-09-12-handoff-integration-review.md),
 not another design proposal or an independent human decision.
@@ -15,7 +16,10 @@ Tracking: [Threads #31][boundary], `threads-cxv`; completed observation work:
 | Integrated handoff and advisory workflow | [Threads #49][pr49], main merge `237031a3e7acc1ba834cdc6aa9d1d5125ea68ca7` | Scheduled latest-main and full-SHA manual observations; no new required check |
 | Existing Cargo configuration preserved | [Threads #50][pr50], main merge `df696c3fe972d670104cdabac5ce4ea7b24b8ec3` | Existing daemon network/build settings retained; explicit config and lock overlay hashes |
 | Separate downstream compiler pin | [Threads #51][pr51], main merge `22187284425a2c70798bf117c899af1837fb32cb` | Advisory Rust 1.95.0 for daemon `sysinfo 0.39.6`; core baseline remains Rust 1.88.0 |
+| Published execution checkpoint | [Threads #52][pr52], main merge `c8f7b983bb231742c2e1013192752837c03641bf` | Report and delivery ledgers distinguish completed advisory work from outstanding authority gates |
 | Exact-current-checkout daemon observation | [Run 34678114852][green], [artifact 10292074982][green-artifact] | Threads `ac7884a2a51b36839f1c2168c5b90aea6397985b`, Coven `ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`, attempt 1 of this run |
+| Main-based daemon reconciliation | [OpenCoven/coven#1022][reconciled-pr], candidate `65766b89b4c945d325853cefdd05f364ee87cbac` | Published as a draft; original integration and active owner branches preserved; not merged or root acceptance |
+| Separate reconciled-candidate observation | [Run 34679627847][reconciled-green], [artifact 10293412690][reconciled-artifact] | Threads `c8f7b983bb231742c2e1013192752837c03641bf`, Coven `65766b89b4c945d325853cefdd05f364ee87cbac`; hosted Linux and separate local macOS boundary evidence |
 | Shareable owner coordination and result | [Threads continuation][published], [daemon integration coordination][coordination] | Existing identity and producer claims respected; no competing edits to their worktrees |
 
 Each Threads PR landed normally after its five required checks passed.
@@ -70,16 +74,139 @@ published history and must remain in reliability accounting.
 
 ## Canonical implementation continuation
 
-The current-main reconciliation uses an isolated Coven worktree and the
+The current-main reconciliation used an isolated Coven worktree and the
 existing `issue-884` claim. The original integration branch is preserved.
 Active `issue-885` and `issue-888` claims remain with their existing owners;
 [identity coordination][identity-coordination] and
 [producer coordination][producer-coordination] state the source gaps and
 boundary obligations without overwriting those branches.
 
-This checkpoint does not yet certify a replacement integration commit.
-The accepted observation above cannot be transferred to it. Its own exact-head
-review, preserved-main regression evidence, and daemon run are required.
+The first reconciled checkpoint is
+`0061709ee6759d9b4fc9d9336b8760cbc6153f24`, with exact parents
+`aa527d2dbcd1edcda470483c1a91a519f24e8406` and
+`ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`. Its 27-file main delta composes
+the older integration with landed repairs rather than overwriting either
+parent. Conflict resolution preserves deterministic refusal timestamps,
+invalid/unavailable Ward recovery, typed terminal context and reservation
+exclusion, scheduler reclassification, final-commit binding, and ambiguous
+applying-state quarantine. Main's protected-intake, terminal-recovery, and
+daemon fixture files remain unchanged. No protected floor or startup timeout
+was lowered.
+
+The integration retains its identity-capable Threads pin `c3bd46bc` and main's
+unrelated tempfile dependency graph. Separate local overlay and restored
+committed-pin checks distinguish those dependency modes. The accepted older
+observation above cannot be transferred to this commit.
+
+Follow-up `65766b89b4c945d325853cefdd05f364ee87cbac` changes only
+`crates/coven-cli/tests/threads_e2e.rs` and `docs/reference/threads-e2e.md`.
+Both manifest producers now derive their generic reproduction command from
+the compiled clock feature. Both existing artifact regressions failed first
+with the omitted flag, then passed in both profiles. The exact runner invocation
+and overlay receipt remain separate; no environment-derived authority input
+or override-proof relaxation was added.
+
+The final candidate is published as [OpenCoven/coven#1022][reconciled-pr],
+not merged. It does not consume subsequent edits from the active identity or
+producer owners.
+
+A separate read-only machine review of immutable merge `0061709e` found no
+significant reconciliation-introduced issues. It did not reproduce runtime
+results or certify the inherited source gaps; its inherited command-provenance
+limitation is addressed by the separately inspected `65766b89` follow-up.
+The parent performed the exact-candidate observations below. Neither review
+is an independently attributable human coherence decision.
+
+### Reconciliation evidence and initial native failures
+
+The worker recorded 158 default Threads units, 170 clock-enabled Threads
+units, 66 boundary units, and 232 exact-checkpoint committed-pin units passing.
+These selectors overlap; do not add them as independent test coverage.
+Default and feature builds, targeted Clippy, formatting, workflow checks,
+privacy checks, and seven client HTTP units also passed.
+
+Both full native boundary invocations compiled but **did not pass**:
+
+```bash
+cargo test --offline --locked -p coven-cli \
+  --test threads_protected_intake --test threads_terminal_recovery \
+  --test threads_e2e --no-fail-fast
+cargo test --offline --locked -p coven-cli --features threads-test-clock \
+  --test threads_protected_intake --test threads_terminal_recovery \
+  --test threads_e2e --no-fail-fast
+```
+
+With the explicitly resolved local Threads overlay, the default results were
+E2E 5 passed / 5 failed, protected intake 9 / 9, and terminal recovery 9 / 4.
+The clock-enabled results were E2E 5 / 15, protected intake 9 / 9, and terminal
+recovery 9 / 4. A direct synthetic daemon probe confirmed that the deep granted
+worktree plus fixture layout exceeded macOS `SUN_LEN`. Assertions and timeouts
+were not weakened. Earlier compile, invalid-Ward recovery, and redaction
+failures were retained separately and corrected before this checkpoint.
+
+An exact-head supplemental smoke with a shorter disposable home did pass
+through supported Unix IPC: bounded write and persisted receipt, protected
+refusal, human coherence intake, restart, approval, exactly one no-window
+terminal, and idempotent replay. This is not the full fixture suite or native
+acceptance. The coding worker's local receipt and logs remain under
+`target/phase5-evidence/` in the isolated daemon worktree; its raw local report
+contains runtime paths and is not copied into the public repository.
+
+### Exact candidate: hosted Linux and recovered native macOS
+
+The parent subsequently used a clean disposable daemon checkout at
+`65766b89b4c945d325853cefdd05f364ee87cbac` and clean Threads checkout at
+`c8f7b983bb231742c2e1013192752837c03641bf`. Selecting a short, private
+`TMPDIR` **inside the granted filesystem boundary** removed the macOS socket
+path obstruction without any production or fixture-source change.
+
+The existing runner then passed all 20 feature-enabled real-daemon target
+tests on native macOS. The preserved protected-intake and terminal-recovery
+targets passed 18 and 13 tests with the feature enabled; the default-profile
+targets passed 10 E2E, 18 protected-intake, and 13 terminal-recovery tests.
+No tests were filtered or ignored in these target runs.
+
+```bash
+node scripts/run-daemon-canary.mjs COVEN_CHECKOUT NEW_ARTIFACT_DIRECTORY
+cargo test --locked -p coven-cli --features threads-test-clock \
+  --test threads_protected_intake --test threads_terminal_recovery
+cargo test --locked -p coven-cli \
+  --test threads_protected_intake --test threads_terminal_recovery \
+  --test threads_e2e
+```
+
+The local run used `CARGO_NET_OFFLINE=true`,
+`COVEN_THREADS_E2E_REQUIRE_LOCAL_OVERRIDE=1`, an isolated artifact root, and
+the same explicitly resolved overlay lock. Its hash remained unchanged after
+the additional default and feature targets. The original committed config and
+lock were restored afterward; the short temporary root was removed.
+The native wrapper receipt remains at
+`target/daemon-observation-native-65766b89/observation.json` in Threads,
+with separate `native-feature-boundary-65766b89.log` and
+`native-default-boundary-65766b89.log` files under `target/`.
+
+Independently, [hosted run 34679627847][reconciled-green] passed all 20 tests
+against the same exact revision pair on Linux. Both local and downloaded
+hosted bundles contain 23 distinct passed scenario manifests, all with the
+exact pair, active local override, clean Threads source, and feature-correct
+reproduction commands. The hosted artifact digest is
+`sha256:526cc0e5a82c5e684d2e2af6b6a404eceac95232f87622bfd69e67351ee86184`.
+Both runs used Rust 1.95.0.
+
+These are separate exact-candidate observations, not transferred older greens.
+The earlier native failures remain part of the record. Fixing the temporary
+path layout is not a production red/fix/green dossier for an authority defect
+or a claim of first-attempt reliability. The candidate's full hosted Windows
+job and broader CI remain distinct from this bounded evidence.
+
+### Active identity owner's approval hold
+
+The independently owned identity branch advanced to
+`e65b1c8eed58ee4917724d7e53e8773ec905a471`. Its [CI run][identity-ci] reports
+`action_required` with zero jobs and Copilot as the triggering actor. This is a
+workflow approval hold, not a failing Rust test. The earlier Windows result
+cannot transfer to this new head. [The canonical owner was notified][identity-hold];
+no agent approval, bypass, branch overwrite, or merge was performed.
 
 ## Remaining blockers, owners, and closure conditions
 
@@ -92,7 +219,7 @@ review, preserved-main regression evidence, and daemon run are required.
 | Retired corpus | Preserve the landed clock; prove the final supported producer's synthetic migration/intake/visibility/restart/terminal path | [OpenCoven/coven#888][corpus], active producer/corpus lane; Sage mapping |
 | Final authority-to-bytes binding | Prove the final daemon-owned authority snapshot remains bound to committed bytes across drift, interleavings, and restart on the accepted combined head | [OpenCoven/coven#977][binding], daemon lane |
 | Stable required compatibility | Await reviewed daemon landing and complete attributable dossiers before proposing a new full-SHA pin or enforcement | Threads #31 / maintainer |
-| Native OS and Cave | Linux observation does not certify native Windows/macOS or live-daemon Cave acceptance | Daemon lane; Charm / OpenCoven/coven-cave#5256 |
+| Native OS and Cave | Exact-candidate Linux observation and native macOS boundary targets pass; complete Windows/other-platform and live-daemon Cave acceptance remain separate | Daemon lane; Charm / OpenCoven/coven-cave#5256 |
 | Reliability measurement | No 30-day window or 99.5% first-attempt result is established by these runs | Maintainer / harness owner |
 | Coherence and freeze | Still reserved, independently attributable decisions; no checklist item checked by this execution | [Threads #13][coherence], then Val |
 
@@ -127,8 +254,12 @@ inventing a terminal receipt.
 [pr49]: https://github.com/OpenCoven/coven-threads/pull/49
 [pr50]: https://github.com/OpenCoven/coven-threads/pull/50
 [pr51]: https://github.com/OpenCoven/coven-threads/pull/51
+[pr52]: https://github.com/OpenCoven/coven-threads/pull/52
 [green]: https://github.com/OpenCoven/coven-threads/actions/runs/34678114852
 [green-artifact]: https://github.com/OpenCoven/coven-threads/actions/runs/34678114852/artifacts/10292074982
+[reconciled-pr]: https://github.com/OpenCoven/coven/pull/1022
+[reconciled-green]: https://github.com/OpenCoven/coven-threads/actions/runs/34679627847
+[reconciled-artifact]: https://github.com/OpenCoven/coven-threads/actions/runs/34679627847/artifacts/10293412690
 [config-red]: https://github.com/OpenCoven/coven-threads/actions/runs/34677886218
 [config-artifact]: https://github.com/OpenCoven/coven-threads/actions/runs/34677886218/artifacts/10292714338
 [compiler-red]: https://github.com/OpenCoven/coven-threads/actions/runs/34678004690
@@ -136,6 +267,8 @@ inventing a terminal receipt.
 [published]: https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5644202431
 [coordination]: https://github.com/OpenCoven/coven/issues/884#issuecomment-5644128132
 [identity-coordination]: https://github.com/OpenCoven/coven/issues/885#issuecomment-5644130346
+[identity-ci]: https://github.com/OpenCoven/coven/actions/runs/34678643759
+[identity-hold]: https://github.com/OpenCoven/coven/issues/885#issuecomment-5644310163
 [producer-coordination]: https://github.com/OpenCoven/coven/issues/888#issuecomment-5644130475
 [identity]: https://github.com/OpenCoven/coven/issues/885
 [producer]: https://github.com/OpenCoven/coven/pull/972
