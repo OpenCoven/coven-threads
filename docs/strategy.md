@@ -10,6 +10,8 @@ and its linked issues own cross-repository work; Beads owns local task status.
 The [delivery ledger](phases.md) records implementation evidence, and the
 [readiness review](reviews/2026-09-11-landscape-and-readiness.md) records the
 findings behind this sequence.
+The [September 12 continuation](reviews/2026-09-12-handoff-integration-review.md)
+refreshes the daemon head, landed checkpoints, and remaining evidence owners.
 
 ## Starting position
 
@@ -66,18 +68,29 @@ predicate/audit/replay review; Sage for evidence mapping.
 OpenCoven/coven#977; `threads-8pz`.
 
 Resolve the shared draft's merge conflicts before collecting final evidence.
-Reconcile overlapping component commits; do not merge every historical branch
-or restore #27's rejected null-close approach.
+The September 12 target is `ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`,
+against main `aa527d2dbcd1edcda470483c1a91a519f24e8406`; only a skipped
+`auto-merge` check is attached to that draft head. Preserve the clock
+(OpenCoven/coven#968), protected-intake (OpenCoven/coven#933), and typed-terminal
+(OpenCoven/coven#932) checkpoints already landed on main. Reconcile overlapping
+component commits; do not merge every historical branch or restore #27's
+rejected null-close approach.
 
 | Obligation | Existing work owner | Required closure evidence |
 | --- | --- | --- |
 | Identity binding from classification through replay | OpenCoven/coven#885; `threads-okc` | Bind supported predicate/candidate evidence at intake; prove changed-but-still-valid evidence cannot reuse stale authority, including restart |
 | Every approval ceremony reaches supported intake | Coven daemon lane: producer OpenCoven/coven#972 and harness OpenCoven/coven#884; integrated in draft OpenCoven/coven#931 | Prove both auto variants and the human paths through supported production routes; do not lower protected region floors or insert test-only envelopes. #13 is the downstream acceptance gate, not the implementation owner |
-| Exactly one typed close per opened window | OpenCoven/coven#886; `threads-980` | Complete terminal/recovery matrix, duplicate prevention, and explicit resolution of ambiguous applying state without fabricated receipts |
-| Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg` | Full known-route, retry, cross-familiar, stale-claim, and recovery refusal matrix with persisted effects |
+| Complete submission/opening/typed-close chain | OpenCoven/coven#886; `threads-980`; bounded OpenCoven/coven#932 fix is on main | Matching and ordered submission/opening/close evidence across crashes, complete terminal/recovery matrix, duplicate prevention, and explicit resolution of ambiguous applying state without fabricated receipts |
+| Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg`; bounded OpenCoven/coven#933 fix is on main | Full known-route, retry, cross-familiar, stale-claim, and recovery refusal matrix with persisted effects |
 | Retired-Ward schedulability | OpenCoven/coven#888; `threads-zav` | Supported migration/intake, observable minimum visibility, exact time boundaries, restart, and unsupported-input refusal |
 | Final authority snapshot matches committed bytes | OpenCoven/coven#977; `threads-8pz.13` | Named authority-change interleavings, intended-file atomicity, audit agreement, and recovery/rollback evidence |
-| Native startup reliability and artifact provenance | OpenCoven/coven#1001, OpenCoven/coven#1000 | Explain retained startup failures and dependency state; record actual command, exact merge, run/attempt, and override mode |
+| Native startup reliability and artifact provenance | OpenCoven/coven#884, OpenCoven/coven#931, OpenCoven/coven#1000 | Explain retained startup failures and dependency state; record actual command, exact merge, run/attempt, and override mode; OpenCoven/coven#1001 is closed for measurement, not reliability |
+
+The landed terminal checkpoint's legacy-window recovery target is not
+supported scheduled publication. OpenCoven/coven#969 and OpenCoven/coven#972
+remain unmerged, and the two source findings remain at the current integration
+head. OpenCoven/coven#1019 adds synthetic startup-budget interpretation tests;
+it supplies no production authority repair or new combined-head daemon green.
 
 The all-ceremony proof above is broader than OpenCoven/coven#888's requirement
 for a minimal valid retired-Ward case. Keep the corpus remediation in
@@ -117,6 +130,13 @@ observe the non-required lane, prove intentional red cases and stable
 diagnostics, then require pinned Linux daemon acceptance. Implement the
 non-blocking scheduled `coven/main` canary separately. The TOML declaration
 alone does not schedule it.
+
+The `daemon-observation.yml` workflow now supplies that advisory schedule and
+manual full-SHA candidate runs. It records exact revisions and overlay
+resolution, rejects any dependency edge not pointing to the current Threads
+checkout, and fails visibly when the selected daemon lacks `threads_e2e`.
+Activation requires landing the workflow on the default branch; its existence
+is not evidence of a successful downstream run or permission to require it.
 
 ### 4. Complete resilience and human acceptance
 

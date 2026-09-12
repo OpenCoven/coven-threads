@@ -23,7 +23,10 @@ Follow `AGENTS.md` for authority-impact evidence, downstream acceptance, and the
 
 These commands validate local repository contracts and the portable automation
 profile; they do not launch a Coven daemon. Required current-checkout
-compatibility and the scheduled canary remain work under #31. Use the
+compatibility remains work under #31. The separate advisory daemon workflow
+supports scheduled latest-main and full-SHA manual observations as described in
+the [E2E contract](docs/testing/e2e-contract.md#10-ci-rollout); it is not a
+required compatibility gate. Use the
 [delivery strategy](docs/strategy.md) for sequencing and owner-specific
 acceptance rather than repeating a completed historical plan.
 

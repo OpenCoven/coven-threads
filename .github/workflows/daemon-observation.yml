@@ -1,0 +1,58 @@
+name: Daemon observation (advisory)
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+    inputs:
+      coven_ref:
+        description: "Full Coven commit SHA for a non-required candidate observation"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-observation-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    name: Current Threads / real daemon (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COVEN_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.coven_ref }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: threads
+          persist-credentials: false
+      - name: Validate candidate revision
+        working-directory: threads
+        run: |
+          node --input-type=module -e \
+            'import { validateRef } from "./scripts/run-daemon-canary.mjs"; validateRef(process.env.COVEN_REF, process.env.GITHUB_EVENT_NAME);'
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: OpenCoven/coven
+          ref: ${{ env.COVEN_REF }}
+          path: coven
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master
+        with:
+          toolchain: 1.88.0
+      - name: Observe exact current-checkout daemon boundary
+        working-directory: threads
+        env:
+          COVEN_THREADS_OBSERVATION_ROOT: ${{ runner.temp }}/threads-observation-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node scripts/run-daemon-canary.mjs ../coven "$COVEN_THREADS_OBSERVATION_ROOT"
+      - name: Retain exact-attempt observation and sanitized journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: threads-daemon-observation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/threads-observation-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
