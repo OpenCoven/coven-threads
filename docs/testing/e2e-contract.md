@@ -315,11 +315,14 @@ The workflow becomes schedulable only after landing on the default branch.
 
 `scripts/run-daemon-canary.mjs` requires clean, disposable checkouts and a new
 artifact directory. It installs a downstream Cargo configuration overlay so
-the harness's nested metadata queries see the same patch, explicitly resolves
+the harness's nested metadata queries see the same patch, preserving existing
+downstream network/build settings. Ambiguous config filenames and conflicting
+Cargo patch tables fail rather than replacing an existing configuration.
+The runner explicitly resolves
 the overlay lockfile, then runs the feature-enabled `threads_e2e` target with
 `--locked`. Metadata must identify the exact current Threads manifest on
 `coven-cli`'s resolved dependency edge, not merely another local Threads copy.
-The runner records both lockfile hashes, exact revisions, command, run/attempt,
+The runner records original/overlay config and lockfile hashes, exact revisions, command, run/attempt,
 and the preflight/override/daemon outcome in `observation.json`. The disposable
 Coven checkout retains its configuration and lock overlay for diagnosis.
 It must not be a developer's active worktree.
