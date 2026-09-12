@@ -327,8 +327,8 @@ admission channels. `threads-ot6` is draft #25, with `threads-5mn` tracking its
 upstream work reference and `threads-lm4` tracking runtime conformance.
 `threads-76z` was reopened because its purported fix, #27, was closed **without
 merge** and superseded by stricter terminal-close work. Do not resurrect its
-null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` now tracks
-privacy required-check activation after secret scanning landed in #41 and the
+null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` records the
+authorized privacy required-check activation after secret scanning landed in #41 and the
 separate privacy job and source-reference correction landed in #40.
 `threads-5rr` is an unratified design proposal, not
 authorization to add an audit event.
@@ -343,14 +343,16 @@ On 2026-09-11, active [ruleset `22910327`](https://github.com/OpenCoven/coven-th
 enabled protection for `refs/heads/main`. Its original independent-review
 requirement could not be fulfilled by the sole maintainer, who authored the
 pending PRs. On 2026-09-12 (UTC), the maintainer explicitly authorized a
-solo-maintainer policy. The active configuration has no bypass actors:
+solo-maintainer policy, then separately authorized adding `Privacy policy guard`
+as a required check. The active configuration has no bypass actors:
 
 - Pull requests and resolved review threads remain required. Required approving
   reviews are zero; latest-push and extra unattributed-change approvals are
   disabled. Stale-review dismissal remains enabled for any reviews submitted.
-- Required checks are bound to the GitHub Actions app: `Secret scanning`,
+- Five required checks are bound to GitHub Actions app `15368`: `Secret scanning`,
   `Rust quality and repository contract`, `Cargo test (compatibility baseline)`,
-  and `Nextest telemetry (JUnit, fail on flaky)`. Branches must be up to date.
+  `Nextest telemetry (JUnit, fail on flaky)`, and `Privacy policy guard`.
+  Branches must be up to date.
 - Branch deletion and force pushes are prohibited.
 
 Explicit human approval must be recorded with its scope before an agent merges.
@@ -358,12 +360,13 @@ This is a maintainer process requirement, not a GitHub-enforced second-person
 review. CI and agent reviews do not supply that approval. If another maintainer
 joins, reassess independent review. To restore the original review controls,
 set `required_approving_review_count` to `1`, `require_last_push_approval` to
-`true`, and `require_extra_approval_for_unattributed_changes` to `true`.
+`true`, and `require_extra_approval_for_unattributed_changes` to `true`,
+preserving the later privacy required check.
 
 The effective branch-rules API and `main.protected=true` confirm activation.
 #46 merged this policy ledger at `91ff511609cfb717bf71c3cafe07c0cbb2a2a317`.
 This is baseline governance, not completion of #31: the reviewed pinned daemon
-E2E check is not yet available to require, privacy is not a required check,
+E2E check is not yet available to require,
 the scheduled latest-main canary is not wired, and coverage remains
 informational. The solo-maintainer policy does not waive
 the separate Nova coherence or Val freeze gates, or their engineering
@@ -392,8 +395,20 @@ These results apply to their named heads. The combined privacy head
 `2d17d0d4583801b1dfa831c7ca40a03930ceef80` subsequently passed
 [CI run 34664678160](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160).
 #40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`; the job and
-source-reference correction are now on `main`. Required-check activation
-remains separate. "Independent" means a separate job from secret scanning,
+source-reference correction are now on `main`.
+
+**Privacy required-check activation, 2026-09-12 UTC:** following
+[explicit human approval](https://github.com/OpenCoven/coven-threads/issues/39#issuecomment-5643712162),
+the existing `Privacy policy guard` context was added to ruleset `22910327`,
+bound to GitHub Actions app `15368`. Pre-activation main
+`3ff49c02abe5693a58529265fca5bf253f4f4844` already passed that exact check in
+[CI run 34664925352](https://github.com/OpenCoven/coven-threads/actions/runs/34664925352).
+Full ruleset read-back and the effective branch-rules API confirmed the single
+addition; all prior settings were preserved. To roll back this activation,
+remove only that context from the live required-check list, preserving every
+other current setting. A documentation revert alone cannot change enforcement.
+
+"Independent" means a separate job from secret scanning,
 not an immutable checker that PR authors cannot modify. No guard exemption or
 normative authority change is implied.
 

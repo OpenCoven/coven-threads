@@ -17,7 +17,7 @@ If you are new here, read [concepts.md](concepts.md) first. Everything else assu
 
 Baseline `main` protection is active under the
 [authorized solo-maintainer policy](../CONTRIBUTING.md#solo-maintainer-merge-policy).
-The separate privacy job has landed, but is not a required check. The required
+The separate privacy job has landed and is now a required check. The required
 pinned-daemon check and scheduled canary are not wired. The Automation Authority Profile v1 is a
 separate shipped schema/reference-validator contract, not evidence of daemon
 adoption or a replacement for the Rust gate.

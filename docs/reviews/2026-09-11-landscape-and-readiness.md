@@ -50,14 +50,27 @@ not an independent approval supplied by an agent.
 #40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`, following
 [CI at `2d17d0d`](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160).
 The checker-trust conversation was resolved by narrowing the enforcement claim,
-not making the checker immutable. Privacy required-check activation remains
-separate. #47 reconciles this audit with both landings.
+not making the checker immutable. Privacy required-check activation was still
+separate at this checkpoint. #47 reconciled this audit with both landings.
 
 This update supersedes the original pending-landing and repository-review
 requirements below, not the source findings, daemon acceptance limits, or
 Phase-5 coherence/freeze prerequisites. The [contributor policy](../../CONTRIBUTING.md#solo-maintainer-merge-policy)
 and [ledger](../phases.md#repository-governance-baseline-active-boundary-enforcement-outstanding)
 record the current process and rollback.
+
+### Privacy required-check follow-through, 2026-09-12 UTC
+
+At 05:16 UTC, the maintainer
+[explicitly approved requiring the privacy check](https://github.com/OpenCoven/coven-threads/issues/39#issuecomment-5643712162).
+The existing `Privacy policy guard` context is now the fifth required check in
+ruleset `22910327`, bound to GitHub Actions app `15368`. The four earlier
+contexts and every other rule field were preserved. The exact check had
+already passed on main `3ff49c02abe5693a58529265fca5bf253f4f4844` in
+[run 34664925352](https://github.com/OpenCoven/coven-threads/actions/runs/34664925352).
+API read-back confirmed the active ruleset and effective branch requirement.
+This supersedes the historical pending-activation statements below, not the
+checker-trust limits or any daemon/coherence/freeze obligation.
 
 ## Identified baseline
 
@@ -252,8 +265,9 @@ No fresh daemon run or 30-day reliability measurement was performed here.
 At the original review, [ruleset `22910327`][ruleset] enforced one approval, latest-push approval,
 stale-approval dismissal, resolved review threads, up-to-date branches, four
 GitHub Actions-bound checks, and deletion/non-fast-forward protection with no
-bypass actors. The authorized follow-through above changes only the three
-approval settings. It still does not require daemon E2E or privacy. Neither the current
+bypass actors. The separate follow-through decisions above changed three
+approval settings and later added the fifth privacy check. Daemon E2E remains
+absent from the required contexts. Neither the current
 workflow nor a TOML schedule declaration supplies the missing nightly canary.
 
 The #40 checker-trust comment is a documented boundary limitation, not a newly
