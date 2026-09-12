@@ -36,9 +36,11 @@ no normative authority decision and adds no scanner exemption.
 #40 merged at `7168dae10f6b59bad8bc653b95f51911334ded74`, after
 [combined-head CI](https://github.com/OpenCoven/coven-threads/actions/runs/34664678160)
 passed at `2d17d0d4583801b1dfa831c7ca40a03930ceef80`. The correction and privacy
-job are now on `main`. Privacy is not a required branch check; activation
-requires a separate maintainer decision. The existing `Secret scanning` job
-and required-check contexts are unchanged.
+job are now on `main`. After
+[separate human authorization](https://github.com/OpenCoven/coven-threads/issues/39#issuecomment-5643712162)
+on 2026-09-12, `Privacy policy guard` is also required on `main` by ruleset
+`22910327`, bound to GitHub Actions app `15368`. The four existing required
+checks, strict up-to-date policy, and all other branch safeguards are unchanged.
 
 From the repository root:
 
@@ -116,5 +118,9 @@ unchecked downloads, match-printing, or broad exemptions.
 
 Roll back this CI slice by reverting its workflow job, scripts, configuration,
 and this section; no Rust API, audit schema, data migration, or downstream
-runtime change is involved. Tracking and rollout decisions remain in #39
-(`threads-t6t`), under #31; defining a job does not make it a required check.
+runtime change is involved. Before removing the job, separately remove only
+`Privacy policy guard` from the live ruleset's required-check list through an
+authorized policy change; otherwise PRs would wait for a check that cannot run.
+Preserve all other current rule fields. Reverting documentation or a workflow
+does not revert server-side policy. Tracking and authorization remain in #39
+(`threads-t6t`), under #31.

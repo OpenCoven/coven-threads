@@ -17,8 +17,8 @@ findings behind this sequence.
 | --- | --- | --- |
 | Rust core | Typed validation, approvals, identity predicates, audit schema/migrations, `.weave` portability, and conformance suites | Authentication, filesystem effects, or every daemon route |
 | Automation Authority Profile v1 | Schemas, reference validator, signed evidence contracts, and exact vectors | Production scheduler, credential issuance, runtime-adapter adoption, or Rust API integration |
-| Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, secret scanning, and a separate privacy job | Required daemon compatibility, privacy as a required check, or a coverage ratchet |
-| Governance | Authorized solo-maintainer policy, required PRs, resolved conversations, and four strict required checks | GitHub-enforced independent review, a required pinned-daemon check, or either Phase-5 human decision |
+| Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret scanning, and a required separate privacy job | Required daemon compatibility, immutable checker authority, or a coverage ratchet |
+| Governance | Authorized solo-maintainer policy, required PRs, resolved conversations, and five strict required checks | GitHub-enforced independent review, a required pinned-daemon check, or either Phase-5 human decision |
 | Downstream integration | Earlier release-source integration and substantial draft process-boundary evidence | Reviewed landing of the four remediations, full acceptance, or installed-binary conformance |
 
 The core's three verdicts and the automation profile's four outcomes answer
@@ -32,10 +32,10 @@ gate or infer daemon adoption merely because a reference vector passes.
 **Owner:** authenticated maintainer under the [solo-maintainer merge policy](../CONTRIBUTING.md#solo-maintainer-merge-policy).
 **Public tracking:** [governance ledger #46](https://github.com/OpenCoven/coven-threads/pull/46),
 [privacy rollout #40](https://github.com/OpenCoven/coven-threads/pull/40), and
-[remaining rollout issue #39](https://github.com/OpenCoven/coven-threads/issues/39).
+[rollout issue #39](https://github.com/OpenCoven/coven-threads/issues/39).
 **Beads:** `threads-6qw` records initial governance; `threads-1e9` records the
 authorized solo-maintainer revision; `threads-chk` records the landed ledger;
-`threads-t6t` retains the separate privacy required-check decision. GitHub
+`threads-t6t` records the separately authorized privacy required-check activation. GitHub
 records remain usable without access to a local Beads database.
 
 #46 merged at `91ff511609cfb717bf71c3cafe07c0cbb2a2a317`, recording active
@@ -44,15 +44,18 @@ protection and its authorized solo-maintainer revision. #40 merged at
 approved historical source correction. Their final heads passed required
 checks before normal merges. No independent GitHub review is claimed.
 
-#47 reconciles their overlapping `SECURITY.md` and `docs/phases.md` wording
-with the broader audit. Keep the original dated evidence distinct from later
+#47 merged at `3ff49c02abe5693a58529265fca5bf253f4f4844`, reconciling their
+overlapping `SECURITY.md` and `docs/phases.md` wording with the broader audit.
+Keep the original dated evidence distinct from later
 landing and policy changes, and preserve the remaining acceptance gates.
 
 Exit evidence is recorded human authorization, resolved conversations, and
-normal landing after the required checks at the accepted head. Adding
-`Privacy policy guard` to the ruleset remains a separate authorized
-administrative change; it is not included in the solo-maintainer policy
-change. A separate scanner job is not tamper-proof enforcement against
+normal landing after the required checks at the accepted head.
+`Privacy policy guard` was subsequently added to the ruleset on 2026-09-12
+under [separate human authorization](https://github.com/OpenCoven/coven-threads/issues/39#issuecomment-5643712162).
+The original four required checks and all other rule settings were preserved.
+This completes the bounded rollout, not the daemon acceptance work below.
+A required scanner job is not tamper-proof enforcement against
 changes to the checker or calling workflow.
 
 ### 2. Close the implementation and acceptance gaps in Coven
