@@ -307,6 +307,29 @@ decision; they must never simulate Nova's independent review or Val's freeze.
 - run the eight journeys as non-required checks;
 - verify diagnostic bundles and deliberate red cases.
 
+The advisory workflow `.github/workflows/daemon-observation.yml` provides a
+scheduled latest-main canary and a manual candidate observation. Manual runs
+require a full Coven commit SHA; scheduled runs resolve `main` and record its
+exact SHA. Neither adds a required PR check or replaces the stable pin.
+The workflow becomes schedulable only after landing on the default branch.
+
+`scripts/run-daemon-canary.mjs` requires clean, disposable checkouts and a new
+artifact directory. It installs a downstream Cargo configuration overlay so
+the harness's nested metadata queries see the same patch, explicitly resolves
+the overlay lockfile, then runs the feature-enabled `threads_e2e` target with
+`--locked`. Metadata must identify the exact current Threads manifest on
+`coven-cli`'s resolved dependency edge, not merely another local Threads copy.
+The runner records both lockfile hashes, exact revisions, command, run/attempt,
+and the preflight/override/daemon outcome in `observation.json`. The disposable
+Coven checkout retains its configuration and lock overlay for diagnosis.
+It must not be a developer's active worktree.
+
+Until the selected downstream revision has the full harness, observation fails
+explicitly rather than skipping or substituting a library test. A failed
+advisory workflow remains visible but is not a protected-branch requirement.
+Its run-scoped evidence is uncached; retries cannot reuse an existing artifact
+directory or replace first-attempt history.
+
 ### Enforcement
 
 - require the pinned Linux daemon suite after all eight journeys are stable;
