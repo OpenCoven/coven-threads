@@ -144,7 +144,9 @@ are not accepted. Typed deserialization retains duplicate-field rejection.
 Unknown, duplicate, missing, or differently typed
 fields, other versions, creation, and deletion produce blocking floor-0
 evidence; valid replacements have floor 2. Invalid content never disappears
-from region coverage. The public `validate` method also rejects mixed batches.
+from region coverage. Both public validation and registry materialization enforce
+the single-replacement boundary; mixed batches retain output-format coverage at
+blocking floor 0.
 
 This predicate supplies bounded evidence, not automatic approval authority.
 The daemon must require explicit literal **and effective** tier 2, a compiled

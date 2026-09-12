@@ -99,14 +99,17 @@ The landed terminal checkpoint's legacy-window recovery target is not
 supported scheduled publication. OpenCoven/coven#969 has since merged; the
 supported scheduled producer now commits identity evidence, and
 `threads-vpp.2` supplies the missing valid-to-valid replay proof.
-OpenCoven/coven#972 remains open and owns its separate publication/recovery
-scope. OpenCoven/coven#1019 supplied synthetic budget interpretation, not the
+OpenCoven/coven#972 subsequently landed at `8bab50f6`, after the publication
+foundation OpenCoven/coven#1022 at `2de5aaa8`; broader acceptance still belongs
+to OpenCoven/coven#888. OpenCoven/coven#1019 supplied synthetic budget interpretation, not the
 later native repair. Keep those earlier receipts dated rather than calling
 them current blockers.
 
-The next integration step is the paired #57 / OpenCoven/coven#1029 candidate:
-core `2c7a305e`, daemon `d01136f7`, and existing owner base `8d48bf79`.
-Review its final native/current-core packet and land it through the existing
+The next integration step remains the paired #57 / OpenCoven/coven#1029
+contribution. Core `2c7a305e`, daemon `d01136f7`, and owner base `8d48bf79`
+identify its earlier checkpoint, not the later composed source. Use the paired
+pull requests for current revisions and fresh native/current-core acceptance,
+including the registry's corrected mixed-batch refusal. Land through the existing
 owner, rather than reopening parallel fixture implementations. Preserve the
 exact pinned core commit, or update the pin and repeat the affected proof if
 history is rewritten. The new region is strictly bounded output formatting,

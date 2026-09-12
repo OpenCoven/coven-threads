@@ -569,7 +569,7 @@ impl SurfaceRegionPredicate for OutputFormatRegion {
             region_id: SurfaceRegionId::new("output_format"),
             replay_bytes: materialized_surface_replay(proposal, &affected_surfaces),
             affected_surfaces,
-            min_path_tier: if Self::validate_surface(surface).is_ok() {
+            min_path_tier: if Self::validate(proposal).is_ok() {
                 2
             } else {
                 0

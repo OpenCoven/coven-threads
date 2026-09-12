@@ -1,5 +1,9 @@
 # Boundary proof remediation
 
+This is the historical `d01136f7` / `e4a58637` checkpoint. Later composition,
+recovery and core-registry corrections require fresh acceptance recorded on
+the paired pull requests below; these receipts do not transfer to newer heads.
+
 The Windows startup corrections and remaining scheduled-identity and bounded
 auto routes now have platform-scoped boundary proof. The final candidate
 passes native Windows workspace, CLI lifecycle, and authority gates.

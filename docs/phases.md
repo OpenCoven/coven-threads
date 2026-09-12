@@ -48,7 +48,12 @@ the documentation-only passing rerun is not treated as its repair.
 
 The owner merged OpenCoven/coven#1027 at its older `1294a893` head. Later
 fixture finalization belongs to OpenCoven/coven#1029, not that merged PR's
-native receipt. OpenCoven/coven#1022 and OpenCoven/coven#972 remain open.
+native receipt. The publication foundation subsequently landed through
+OpenCoven/coven#1022 at `2de5aaa8`, followed by the final test-only publication
+tail OpenCoven/coven#972 at `8bab50f6`. Their histories are now on Coven main.
+The later combined AUTO candidate and corrected core dependency still require
+their own exact-head acceptance on the paired pull requests; the `d01136f7`
+receipts above remain historical.
 The four root issues, full #13 acceptance, and human decisions remain open
 even when a bounded contribution's tests pass.
 
@@ -160,7 +165,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 | `threads-okc` | identity predicates must run at intake and delayed/restart replay | OpenCoven/coven#969 merged; bounded scheduled valid-identity proofs completed in `threads-vpp.2`; root integration/acceptance remains open in OpenCoven/coven#885 |
 | `threads-980` | every opened window needs exactly one typed terminal close | bounded OpenCoven/coven#932 repair merged at `aa527d2d`; complete supported terminal/audit-chain acceptance remains blocked in OpenCoven/coven#886 |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | bounded OpenCoven/coven#933 repair merged at `b7b3b4e1`; complete route/recovery acceptance remains blocked in OpenCoven/coven#887 |
-| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | bounded Windows and auto work tracked in `threads-vpp`; broader publication/recovery remains with OpenCoven/coven#972 and OpenCoven/coven#888; new auto routes do not lower legacy migration tiers |
+| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | bounded Windows and auto work tracked in `threads-vpp`; publication contribution OpenCoven/coven#972 landed, while broader acceptance remains in OpenCoven/coven#888; new auto routes do not lower legacy migration tiers |
 
 **Historical review:** Echo's 2026-08-09 static review at Coven `59c5be4`
 confirmed the four findings then. It is not a current test result and cannot

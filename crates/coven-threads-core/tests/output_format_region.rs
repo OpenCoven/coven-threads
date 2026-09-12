@@ -1,6 +1,8 @@
 //! Closed output-format regions never confer authority over other content.
 
-use coven_threads_core::{MaterializedDiff, SurfaceDiff, SurfaceId, SurfaceRegionRegistry};
+use coven_threads_core::{
+    MaterializedDiff, OutputFormatRegion, SurfaceDiff, SurfaceId, SurfaceRegionRegistry,
+};
 
 const BEFORE: &[u8] = br#"{"schema":"coven.output-format/v1","indent":2,"final_newline":true}"#;
 const AFTER: &[u8] = br#"{"schema":"coven.output-format/v1","indent":4,"final_newline":false}"#;
@@ -25,6 +27,45 @@ fn output_format_replacement_has_a_bounded_logged_region() {
     assert_eq!(regions[0].region_id.as_str(), "output_format");
     assert_eq!(regions[0].min_path_tier, 2);
     assert!(!regions[0].replay_bytes.is_empty());
+}
+
+#[test]
+fn output_format_mixed_batches_keep_blocking_region_evidence() {
+    for other_surface in ["notes.json", "TOOLS.md", "MEMORY.md"] {
+        for reversed in [false, true] {
+            let mut surfaces = vec![
+                SurfaceDiff {
+                    surface: SurfaceId::new(OutputFormatRegion::SURFACE),
+                    before: Some(BEFORE.to_vec()),
+                    after: Some(AFTER.to_vec()),
+                },
+                SurfaceDiff {
+                    surface: SurfaceId::new(other_surface),
+                    before: Some(b"other before".to_vec()),
+                    after: Some(b"other after".to_vec()),
+                },
+            ];
+            if reversed {
+                surfaces.reverse();
+            }
+            let diff = MaterializedDiff::try_new(surfaces).unwrap();
+            assert!(OutputFormatRegion::validate(&diff).is_err());
+            let output = SurfaceRegionRegistry::default_registry()
+                .classify_all(&diff)
+                .into_iter()
+                .find(|region| region.region_id.as_str() == "output_format")
+                .expect("mixed output-format evidence must remain covered");
+            assert_eq!(
+                output.min_path_tier, 0,
+                "mixed batch with {other_surface}, reversed={reversed}"
+            );
+            assert_eq!(
+                output.affected_surfaces,
+                vec![SurfaceId::new(OutputFormatRegion::SURFACE)]
+            );
+            assert!(!output.replay_bytes.is_empty());
+        }
+    }
 }
 
 #[test]
