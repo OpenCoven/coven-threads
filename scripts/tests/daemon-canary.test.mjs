@@ -130,6 +130,30 @@ test("records explicit overlay resolution, inherited patch, exact invocation and
   assert.throws(() => runCanary(f.coven, f.artifacts, {}, f.execute), /EEXIST/);
 });
 
+for (const name of ["config", "config.toml"]) {
+  test(`preserves existing downstream ${name} network settings and records its overlay`, (t) => {
+    const f = fixture(t);
+    mkdirSync(join(f.coven, ".cargo"));
+    const config = join(f.coven, ".cargo", name);
+    const original = "# Existing daemon setting\n[net]\ngit-fetch-with-cli = true\n";
+    writeFileSync(config, original);
+    const receipt = runCanary(f.coven, f.artifacts, {}, f.execute);
+    assert.equal(receipt.status, "passed");
+    assert(readFileSync(config, "utf8").startsWith(original));
+    assert.notEqual(receipt.coven_config_before_sha256, receipt.coven_config_overlay_sha256);
+  });
+}
+
+test("rejects ambiguous config names without modifying either file", (t) => {
+  const f = fixture(t);
+  mkdirSync(join(f.coven, ".cargo"));
+  for (const name of ["config", "config.toml"]) writeFileSync(join(f.coven, ".cargo", name), "original");
+  assert.throws(() => runCanary(f.coven, f.artifacts, {}, f.execute), /ambiguous downstream/);
+  for (const name of ["config", "config.toml"]) {
+    assert.equal(readFileSync(join(f.coven, ".cargo", name), "utf8"), "original");
+  }
+});
+
 for (const mode of ["wrong-override", "daemon-failed", "lock-changed", "missing-target", "dirty"]) {
   test(`retains failure evidence and never reports green for ${mode}`, (t) => {
     const f = fixture(t);

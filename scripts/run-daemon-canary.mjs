@@ -101,15 +101,25 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     if (existsSync(configDir) && !lstatSync(configDir).isDirectory()) {
       throw new Error("downstream Cargo configuration directory must not be a symlink or file");
     }
-    if (existsSync(join(configDir, "config")) || existsSync(join(configDir, "config.toml"))) {
-      throw new Error("existing downstream Cargo configuration requires explicit reconciliation");
+    const configs = ["config", "config.toml"].map((name) => join(configDir, name))
+      .filter((path) => existsSync(path));
+    if (configs.length > 1) {
+      throw new Error("ambiguous downstream Cargo configuration files require reconciliation");
     }
+    const configPath = configs[0] ?? join(configDir, "config.toml");
+    if (configs.length && !lstatSync(configPath).isFile()) {
+      throw new Error("downstream Cargo configuration must be a regular file");
+    }
+    receipt.coven_config_before_sha256 = configs.length ? hashFile(configPath) : null;
     receipt.coven_lock_before_sha256 = hashFile(join(coven, "Cargo.lock"));
     mkdirSync(configDir, { recursive: true });
-    writeFileSync(join(configDir, "config.toml"),
-      `[patch."https://github.com/OpenCoven/coven-threads"]\n` +
+    // Preserve the daemon's existing network/build settings. Cargo rejects
+    // conflicting patch tables rather than silently overriding their meaning.
+    writeFileSync(configPath,
+      `\n[patch."https://github.com/OpenCoven/coven-threads"]\n` +
       `coven-threads-core = { path = ${JSON.stringify(dirname(threadsManifest))} }\n`,
-      { flag: "wx" });
+      { flag: configs.length ? "a" : "wx" });
+    receipt.coven_config_overlay_sha256 = hashFile(configPath);
     receipt.stage = "overlay-resolution";
     save();
     const metadataArgs = ["metadata", "--format-version", "1", "--features", "threads-test-clock"];
