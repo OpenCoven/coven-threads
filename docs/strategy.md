@@ -66,13 +66,17 @@ changes to the checker or calling workflow.
 
 **Owners:** daemon integration lane and Cody for implementation; Echo for
 predicate/audit/replay review; Sage for evidence mapping.
-**Tracking:** OpenCoven/coven#931, OpenCoven/coven#976,
+**Tracking:** OpenCoven/coven#1022, OpenCoven/coven#931, OpenCoven/coven#976,
 OpenCoven/coven#977; `threads-8pz`.
 
-Resolve the shared draft's merge conflicts before collecting final evidence.
-The September 12 target is `ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`,
-against main `aa527d2dbcd1edcda470483c1a91a519f24e8406`; only a skipped
-`auto-merge` check is attached to that draft head. Preserve the clock
+The original September 12 target was
+`ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`, against main
+`aa527d2dbcd1edcda470483c1a91a519f24e8406`. Its shared branch remains
+untouched. The separate draft OpenCoven/coven#1022 now composes both parents
+at `65766b89b4c945d325853cefdd05f364ee87cbac`; its own exact-current-Threads
+Linux observation and native macOS boundary targets pass, with retained
+failure history in the execution checkpoint. Review and finish the canonical
+owner gaps before landing or accepting that candidate. Preserve the clock
 (OpenCoven/coven#968), protected-intake (OpenCoven/coven#933), and typed-terminal
 (OpenCoven/coven#932) checkpoints already landed on main. Reconcile overlapping
 component commits; do not merge every historical branch or restore #27's

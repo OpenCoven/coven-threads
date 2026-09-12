@@ -22,9 +22,9 @@ OpenCoven/coven#931 remains an unmerged draft at
 merge conflicts with Coven main `aa527d2dbcd1edcda470483c1a91a519f24e8406`.
 Its own attached check at review was skipped `auto-merge`; the separate Threads
 observation below now supplies bounded exact-head Linux evidence. The change
-since the previously reviewed `8576f41e` adds two synthetic startup-budget tests, not production
-authority repairs. Resolve and review the combined head while preserving the
-bounded fixes already on main; do not transfer earlier green results to it.
+since the previously reviewed `8576f41e` adds two synthetic startup-budget
+tests, not production authority repairs. That original branch is preserved;
+the separate main-based candidate below retains the landed repairs.
 
 **Advisory observation delivered:** #49, #50, and #51 landed a separate scheduled
 latest-main and full-SHA manual workflow. [Run 34678114852](https://github.com/OpenCoven/coven-threads/actions/runs/34678114852)
@@ -34,6 +34,17 @@ Threads override proven active. The wrapper retains config/lock overlay hashes
 and the complete invocation. Two initial setup failures remain recorded.
 This is not evidence for a different reconciled daemon head, closure of the
 source findings below, first-attempt reliability, or a replacement stable pin.
+
+**Main-based checkpoint published:** OpenCoven/coven#1022 is a draft at
+`65766b89b4c945d325853cefdd05f364ee87cbac`, composing exact parents
+`aa527d2d` and `ea3f455a` plus a feature-command provenance correction.
+Its separate [run 34679627847](https://github.com/OpenCoven/coven-threads/actions/runs/34679627847)
+passed against Threads `c8f7b983`; native macOS default and feature-enabled
+E2E/protected-intake/terminal-recovery targets also pass with short private
+fixture paths inside the granted boundary. The execution checkpoint preserves
+the initial native failures and the separate new evidence. This draft is not
+merged, does not absorb newer active owner branches, and does not close the
+remaining source obligations or human gates.
 
 Two source-level acceptance gaps remain on the refreshed head: the supported
 scheduled producer cannot produce `AutoRegression` with the built-in region
