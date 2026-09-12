@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Baseline `main` protection is active under the authorized solo-maintainer policy. Bounded clock, protected-intake, and typed-terminal repairs have landed on Coven main. The current integration draft has no passing daemon CI established at its new head; earlier Windows results remain historical, startup causation remains unresolved, and the required current-checkout compatibility lane is absent. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Baseline `main` protection is active under the authorized solo-maintainer policy. Bounded clock, protected-intake, and typed-terminal repairs have landed on Coven main. The advisory current-checkout daemon lane is now active and has a passing Linux observation at the exact revision pair below. Startup causation remains unresolved, and the required stable-pin compatibility lane is absent. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
 
 Read the [delivery strategy](strategy.md) for the order of work and the
 [2026-09-12 handoff integration review](reviews/2026-09-12-handoff-integration-review.md)
@@ -14,13 +14,26 @@ original dates; a later observation does not transfer acceptance between heads.
 ## Current decision
 
 The engineering recommendation is to keep Phase 5 active, not to freeze it.
+The [execution checkpoint](reviews/2026-09-12-execution-checkpoint.md) records
+the landed advisory observation lane, retained setup failures, exact revision
+pair, and remaining owner-specific closure work.
 OpenCoven/coven#931 remains an unmerged draft at
 `ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`; the 2026-09-12 refresh reports
 merge conflicts with Coven main `aa527d2dbcd1edcda470483c1a91a519f24e8406`.
-Its only attached check is skipped `auto-merge`. The change since the previously
-reviewed `8576f41e` adds two synthetic startup-budget tests, not production
+Its own attached check at review was skipped `auto-merge`; the separate Threads
+observation below now supplies bounded exact-head Linux evidence. The change
+since the previously reviewed `8576f41e` adds two synthetic startup-budget tests, not production
 authority repairs. Resolve and review the combined head while preserving the
 bounded fixes already on main; do not transfer earlier green results to it.
+
+**Advisory observation delivered:** #49, #50, and #51 landed a separate scheduled
+latest-main and full-SHA manual workflow. [Run 34678114852](https://github.com/OpenCoven/coven-threads/actions/runs/34678114852)
+passed all 20 feature-enabled daemon target tests against Coven `ea3f455a` and
+Threads `ac7884a2`, with 23 passed scenario manifests and the exact local
+Threads override proven active. The wrapper retains config/lock overlay hashes
+and the complete invocation. Two initial setup failures remain recorded.
+This is not evidence for a different reconciled daemon head, closure of the
+source findings below, first-attempt reliability, or a replacement stable pin.
 
 Two source-level acceptance gaps remain on the refreshed head: the supported
 scheduled producer cannot produce `AutoRegression` with the built-in region

@@ -12,6 +12,8 @@ The [delivery ledger](phases.md) records implementation evidence, and the
 findings behind this sequence.
 The [September 12 continuation](reviews/2026-09-12-handoff-integration-review.md)
 refreshes the daemon head, landed checkpoints, and remaining evidence owners.
+The [execution checkpoint](reviews/2026-09-12-execution-checkpoint.md) records
+the subsequent advisory-lane landing and exact-current-checkout daemon result.
 
 ## Starting position
 
@@ -135,8 +137,10 @@ The `daemon-observation.yml` workflow now supplies that advisory schedule and
 manual full-SHA candidate runs. It records exact revisions and overlay
 resolution, rejects any dependency edge not pointing to the current Threads
 checkout, and fails visibly when the selected daemon lacks `threads_e2e`.
-Activation requires landing the workflow on the default branch; its existence
-is not evidence of a successful downstream run or permission to require it.
+It landed through #49, #50, and #51 and is active on the default branch.
+The execution checkpoint records the first bounded successful observation and
+the retained setup failures. Neither activation nor that exact-head result
+authorizes a new required check, replacement stable pin, or Phase-5 freeze.
 
 ### 4. Complete resilience and human acceptance
 
