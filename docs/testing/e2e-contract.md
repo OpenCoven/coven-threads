@@ -333,6 +333,12 @@ advisory workflow remains visible but is not a protected-branch requirement.
 Its run-scoped evidence is uncached; retries cannot reuse an existing artifact
 directory or replace first-attempt history.
 
+The downstream observation compiler is pinned separately to Rust `1.95.0`:
+the inspected daemon's locked `sysinfo 0.39.6` requires Rust 1.95. Threads'
+own toolchain, MSRV, and required compatibility baseline remain `1.88.0`.
+Observation records the actual Cargo and rustc versions; a newer daemon
+requirement must fail visibly until this separate pin is deliberately updated.
+
 ### Enforcement
 
 - require the pinned Linux daemon suite after all eight journeys are stable;
