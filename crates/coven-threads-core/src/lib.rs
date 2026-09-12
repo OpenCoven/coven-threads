@@ -108,8 +108,8 @@ pub use staging::{PendingProposal, StagedContents, StagedEdit};
 pub use strand::{HashAlgo, SigKind, Strand, StrandKind};
 pub use surface_regions::{
     evidence_replay_hash, ExecutionPromptRegion, HeartbeatBehaviorRegion, MaterializedDiff,
-    RegionEvidence, SurfaceDiff, SurfaceRegionDescriptor, SurfaceRegionPredicate,
-    SurfaceRegionRegistry, ToolDefaultsRegion,
+    OutputFormatRegion, RegionEvidence, SurfaceDiff, SurfaceRegionDescriptor,
+    SurfaceRegionPredicate, SurfaceRegionRegistry, ToolDefaultsRegion,
 };
 pub use thread::{TensionState, Thread};
 pub use validate::{validate, validate_fail_closed, MutationRequest, RejectReason, Verdict};
