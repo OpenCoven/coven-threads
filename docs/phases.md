@@ -2,57 +2,51 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved remediation gates.** Baseline `main` protection is active under the authorized solo-maintainer policy. Bounded clock, protected-intake, and typed-terminal repairs have landed on Coven main. The advisory current-checkout daemon lane is now active and has a passing Linux observation at the exact revision pair below. Startup causation remains unresolved, and the required stable-pin compatibility lane is absent. Full boundary acceptance and independent coherence/freeze decisions remain outstanding.
+> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved root remediation gates.** The original Windows fixture failure, dedicated CLI deadline repair, scheduled identity replay, and both bounded auto routes have platform-scoped proof. A newly measured cold-store startup failure still blocks the combined candidate's final gate. These contributions do not close the root issues, install a required stable-pin compatibility lane, or supply either human coherence/freeze decision.
 
 Read the [delivery strategy](strategy.md) for the order of work and the
-[2026-09-12 handoff integration review](reviews/2026-09-12-handoff-integration-review.md)
-for the refreshed exact-head disposition and evidence matrix. The
+[boundary remediation packet](reviews/2026-09-12-boundary-proof-remediation.md)
+for the current candidate and evidence matrix. The earlier
+[2026-09-12 handoff integration review](reviews/2026-09-12-handoff-integration-review.md) and
 [2026-09-11 readiness review](reviews/2026-09-11-landscape-and-readiness.md)
-retains the original findings. This page preserves historical evidence with its
+retain the original findings. This page preserves historical evidence with its
 original dates; a later observation does not transfer acceptance between heads.
 
 ## Current decision
 
-The engineering recommendation is to keep Phase 5 active, not to freeze it.
-The [execution checkpoint](reviews/2026-09-12-execution-checkpoint.md) records
-the landed advisory observation lane, retained setup failures, exact revision
-pair, and remaining owner-specific closure work.
-OpenCoven/coven#931 remains an unmerged draft at
-`ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`; the 2026-09-12 refresh reports
-merge conflicts with Coven main `aa527d2dbcd1edcda470483c1a91a519f24e8406`.
-Its own attached check at review was skipped `auto-merge`; the separate Threads
-observation below now supplies bounded exact-head Linux evidence. The change
-since the previously reviewed `8576f41e` adds two synthetic startup-budget
-tests, not production authority repairs. That original branch is preserved;
-the separate main-based candidate below retains the landed repairs.
+Keep Phase 5 active. Use the
+[boundary remediation packet](reviews/2026-09-12-boundary-proof-remediation.md)
+for the current candidate and the [execution checkpoint](reviews/2026-09-12-execution-checkpoint.md)
+for the earlier `65766b89` and `ea3f455a` observations. Their original failures,
+results, and dates remain distinct.
 
-**Advisory observation delivered:** #49, #50, and #51 landed a separate scheduled
-latest-main and full-SHA manual workflow. [Run 34678114852](https://github.com/OpenCoven/coven-threads/actions/runs/34678114852)
-passed all 20 feature-enabled daemon target tests against Coven `ea3f455a` and
-Threads `ac7884a2`, with 23 passed scenario manifests and the exact local
-Threads override proven active. The wrapper retains config/lock overlay hashes
-and the complete invocation. Two initial setup failures remain recorded.
-This is not evidence for a different reconciled daemon head, closure of the
-source findings below, first-attempt reliability, or a replacement stable pin.
+OpenCoven/coven#969 merged at `edf3500883e72e4239ec7151904983f61a93b83f`.
+The later daemon lineage binds supported scheduled identity evidence. Eight
+valid-to-valid identity scenarios now prove stale rejection and fresh-authority
+application across live deadlines and restart. The original Windows fixture
+failure has native acceptance at daemon `63a49688`, with a separate
+current-Threads observation of that identical daemon.
 
-**Main-based checkpoint published:** OpenCoven/coven#1022 is a draft at
-`65766b89b4c945d325853cefdd05f364ee87cbac`, composing exact parents
-`aa527d2d` and `ea3f455a` plus a feature-command provenance correction.
-Its separate [run 34679627847](https://github.com/OpenCoven/coven-threads/actions/runs/34679627847)
-passed against Threads `c8f7b983`; native macOS default and feature-enabled
-E2E/protected-intake/terminal-recovery targets also pass with short private
-fixture paths inside the granted boundary. The execution checkpoint preserves
-the initial native failures and the separate new evidence. This draft is not
-merged, does not absorb newer active owner branches, and does not close the
-remaining source obligations or human gates.
+The remaining auto producer gap is implemented in paired #57 and
+OpenCoven/coven#1029. The core code is `2c7a305e`; the combined daemon candidate
+is `b439b4d1`, based on the existing integration owner's `8d48bf79`. It requires
+explicit tier-2 output-format policy, fresh deterministic regressions, staged
+intake, and submission-bound replay. It does not make `MEMORY.md` auto-editable
+or lower retired migration tiers. Earlier exact `2c7a305e` / `300d4068` Linux
+evidence includes 71 auto scenarios; final combined-head native/current-core
+receipts are tracked in the remediation packet. The separate CLI lifecycle
+failure was repaired in `df0ccd91`: all six original native cases now pass,
+with five diagnostic tests. Start/whole restart use one five-second deadline;
+standalone stop/status remain two seconds. A different owned-serve fixture
+then failed its 15-second readiness guard, with measured 13,436 ms store
+initialization. OpenCoven/coven#1031 and `threads-vpp.5` own that remaining
+blocker. The documentation-only `b439b4d1` does not repair it.
 
-Two source-level acceptance gaps remain on the refreshed head: the supported
-scheduled producer cannot produce `AutoRegression` with the built-in region
-floors, and its classification replay hash covers diff/region evidence rather
-than the identity predicate/evidence digest required by OpenCoven/coven#885.
-Later live identity checks and final-commit binding are progress, not proof of
-that earlier commitment. The readiness review maps these limits to all eight
-#13 checklist items without checking any human gate.
+The owner merged OpenCoven/coven#1027 at its older `1294a893` head. Later
+fixture finalization belongs to OpenCoven/coven#1029, not that merged PR's
+native receipt. OpenCoven/coven#1022 and OpenCoven/coven#972 remain open.
+The four root issues, full #13 acceptance, and human decisions remain open
+even when a bounded contribution's tests pass.
 
 Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
@@ -159,10 +153,10 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 | Bead | Blocking finding | Status |
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
-| `threads-okc` | identity predicates must run at intake and delayed/restart replay | blocked on reviewed integration; OpenCoven/coven#969 incorporated into draft OpenCoven/coven#931; issue OpenCoven/coven#885 |
+| `threads-okc` | identity predicates must run at intake and delayed/restart replay | OpenCoven/coven#969 merged; bounded scheduled valid-identity proofs completed in `threads-vpp.2`; root integration/acceptance remains open in OpenCoven/coven#885 |
 | `threads-980` | every opened window needs exactly one typed terminal close | bounded OpenCoven/coven#932 repair merged at `aa527d2d`; complete supported terminal/audit-chain acceptance remains blocked in OpenCoven/coven#886 |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | bounded OpenCoven/coven#933 repair merged at `b7b3b4e1`; complete route/recovery acceptance remains blocked in OpenCoven/coven#887 |
-| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | blocked on reviewed integration; draft OpenCoven/coven#931; issue OpenCoven/coven#888 |
+| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | named Windows follow-up completed in `threads-vpp.1`; broader publication/recovery remains with OpenCoven/coven#972 and OpenCoven/coven#888; bounded new auto routes do not lower legacy migration tiers |
 
 **Historical review:** Echo's 2026-08-09 static review at Coven `59c5be4`
 confirmed the four findings then. It is not a current test result and cannot

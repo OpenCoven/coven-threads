@@ -14,6 +14,8 @@ The [September 12 continuation](reviews/2026-09-12-handoff-integration-review.md
 refreshes the daemon head, landed checkpoints, and remaining evidence owners.
 The [execution checkpoint](reviews/2026-09-12-execution-checkpoint.md) records
 the subsequent advisory-lane landing and exact-current-checkout daemon result.
+The [boundary remediation packet](reviews/2026-09-12-boundary-proof-remediation.md)
+records the later Windows, identity-replay, and bounded-auto contributions.
 
 ## Starting position
 
@@ -72,11 +74,12 @@ OpenCoven/coven#977; `threads-8pz`.
 The original September 12 target was
 `ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`, against main
 `aa527d2dbcd1edcda470483c1a91a519f24e8406`. Its shared branch remains
-untouched. The separate draft OpenCoven/coven#1022 now composes both parents
-at `65766b89b4c945d325853cefdd05f364ee87cbac`; its own exact-current-Threads
+untouched. The separate draft OpenCoven/coven#1022 initially composed both parents
+at `65766b89b4c945d325853cefdd05f364ee87cbac`; that head's exact-current-Threads
 Linux observation and native macOS boundary targets pass, with retained
-failure history in the execution checkpoint. Review and finish the canonical
-owner gaps before landing or accepting that candidate. Preserve the clock
+failure history in the execution checkpoint. Those receipts remain historical;
+review the current paired candidate below rather than landing an obsolete
+head. Preserve the clock
 (OpenCoven/coven#968), protected-intake (OpenCoven/coven#933), and typed-terminal
 (OpenCoven/coven#932) checkpoints already landed on main. Reconcile overlapping
 component commits; do not merge every historical branch or restore #27's
@@ -85,18 +88,35 @@ rejected null-close approach.
 | Obligation | Existing work owner | Required closure evidence |
 | --- | --- | --- |
 | Identity binding from classification through replay | OpenCoven/coven#885; `threads-okc` | Bind supported predicate/candidate evidence at intake; prove changed-but-still-valid evidence cannot reuse stale authority, including restart |
-| Every approval ceremony reaches supported intake | Coven daemon lane: producer OpenCoven/coven#972 and harness OpenCoven/coven#884; integrated in draft OpenCoven/coven#931 | Prove both auto variants and the human paths through supported production routes; do not lower protected region floors or insert test-only envelopes. #13 is the downstream acceptance gate, not the implementation owner |
+| Every approval ceremony reaches supported intake | Existing integration OpenCoven/coven#1022; bounded auto OpenCoven/coven#1029 and #57; separate publication owner OpenCoven/coven#972 | Accept exact-head native/current-core proof of both auto variants and the human paths; preserve protected floors and reject injected positive envelopes. #13 is the downstream acceptance gate, not the implementation owner |
 | Complete submission/opening/typed-close chain | OpenCoven/coven#886; `threads-980`; bounded OpenCoven/coven#932 fix is on main | Matching and ordered submission/opening/close evidence across crashes, complete terminal/recovery matrix, duplicate prevention, and explicit resolution of ambiguous applying state without fabricated receipts |
 | Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg`; bounded OpenCoven/coven#933 fix is on main | Full known-route, retry, cross-familiar, stale-claim, and recovery refusal matrix with persisted effects |
 | Retired-Ward schedulability | OpenCoven/coven#888; `threads-zav` | Supported migration/intake, observable minimum visibility, exact time boundaries, restart, and unsupported-input refusal |
 | Final authority snapshot matches committed bytes | OpenCoven/coven#977; `threads-8pz.13` | Named authority-change interleavings, intended-file atomicity, audit agreement, and recovery/rollback evidence |
-| Native startup reliability and artifact provenance | OpenCoven/coven#884, OpenCoven/coven#931, OpenCoven/coven#1000 | Explain retained startup failures and dependency state; record actual command, exact merge, run/attempt, and override mode; OpenCoven/coven#1001 is closed for measurement, not reliability |
+| Native startup reliability and artifact provenance | Named repair OpenCoven/coven#1027; final fixture consolidation OpenCoven/coven#1029; broader OpenCoven/coven#884 and OpenCoven/coven#1000 | Preserve the original failure and exact native repair receipt; verify later heads separately, including launch/exit origin and dependency state. OpenCoven/coven#1001 is closed for measurement, not reliability |
 
 The landed terminal checkpoint's legacy-window recovery target is not
-supported scheduled publication. OpenCoven/coven#969 and OpenCoven/coven#972
-remain unmerged, and the two source findings remain at the current integration
-head. OpenCoven/coven#1019 adds synthetic startup-budget interpretation tests;
-it supplies no production authority repair or new combined-head daemon green.
+supported scheduled publication. OpenCoven/coven#969 has since merged; the
+supported scheduled producer now commits identity evidence, and
+`threads-vpp.2` supplies the missing valid-to-valid replay proof.
+OpenCoven/coven#972 remains open and owns its separate publication/recovery
+scope. OpenCoven/coven#1019 supplied synthetic budget interpretation, not the
+later native repair. Keep those earlier receipts dated rather than calling
+them current blockers.
+
+The next integration step is the paired #57 / OpenCoven/coven#1029 candidate:
+core `2c7a305e`, daemon `b439b4d1`, and existing owner base `8d48bf79`.
+Review its final native/current-core packet and land it through the existing
+owner, rather than reopening parallel fixture implementations. Preserve the
+exact pinned core commit, or update the pin and repeat the affected proof if
+history is rewritten. The new region is strictly bounded output formatting,
+not a reason to downgrade protected memory or migration policy.
+The earlier `84b8dcc7` authority target passed natively, but its dedicated CLI
+startup gate failed. The OpenCoven/coven#1030 deadline repair now passes all six
+original native CLI cases. A new owned-start cold-store failure is retained in
+OpenCoven/coven#1031. Require an evidence-driven correction and fresh full
+acceptance; neither a passing CLI-only target nor the documentation-only
+`b439b4d1` rerun explains that failure.
 
 The all-ceremony proof above is broader than OpenCoven/coven#888's requirement
 for a minimal valid retired-Ward case. Keep the corpus remediation in
