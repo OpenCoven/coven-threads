@@ -333,7 +333,7 @@ set `required_approving_review_count` to `1`, `require_last_push_approval` to
 
 The effective branch-rules API and `main.protected=true` confirm activation.
 This is baseline governance, not completion of #31: the reviewed pinned daemon
-E2E check is not yet available to require, privacy enforcement remains blocked,
+E2E check is not yet available to require, privacy is not a required check,
 and coverage remains informational. The solo-maintainer policy does not waive
 the separate Nova coherence or Val freeze gates, or their engineering
 prerequisites. [The authorization and exact policy change](https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5642501227)
@@ -349,11 +349,14 @@ add branch protection, a coverage ratchet, or a reviewed downstream gate.
 reachable `HEAD`-history scanning, sanitized diagnostics, and synthetic
 regressions. Actual PR CI `34465028325` and merged-main CI `34465519559` passed.
 The separate Copilot review workflow `34465035137` is not CI evidence.
-Draft #40 now adds only independent privacy enforcement and its rollout
-documentation. Its policy conflicts with one source-reference path in the
-frozen Phase-5 specification; no exemption or frozen-spec amendment was made.
-#39 remains open for that decision. Secret-scanning success is not privacy
-acceptance, and neither job creates required-check policy.
+PR #40 adds a separate privacy CI job and its rollout documentation.
+The 2026-09-11 approved source-reference correction removes a private runtime
+location from the Phase-5 historical sources while preserving its provenance
+role. It does not weaken the guard or change a normative decision. #39 tracks
+landing; required-check activation remains a separate authorized step.
+Secret-scanning success is not privacy acceptance. The checker and calling
+workflow remain PR-controlled; this separate job does not provide immutable
+enforcement against their authors.
 
 ## Summary table
 

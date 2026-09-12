@@ -27,15 +27,19 @@ pull requests and pushes to `main`. It needs no private stores, Beads database,
 credentials, or downstream checkout. Third-party Actions retain immutable
 commit pins and the existing explicit Rust toolchain parity checks.
 
-**Separate privacy rollout (#39, draft #40):** the proposed privacy policy rejects a
-pre-existing runtime-path example in the frozen Phase-5 specification. This is
-a policy/example conflict, not a claim of exposed personal data. Privacy
-enforcement is not enabled in this secret-scanning job; its checker and
-synthetic regressions are included for reproducible policy evaluation.
-Draft #40 remains blocked pending a maintainer-approved policy clarification
-or a change-controlled example correction. This independently deployable
-secret-scanning slice neither waives that requirement nor claims privacy
-acceptance. No exemption or frozen-spec edit is included.
+**Separate privacy rollout (#39, #40):** the `Privacy policy guard` job runs on
+pull requests and pushes to `main`, separately from secret scanning. The
+maintainer-approved correction to the historical Phase-5 source reference
+preserves provenance
+without retaining the private runtime location; it changes no normative
+authority decision and adds no scanner exemption.
+
+Both guards passed at candidate `2a12c1ad6f813b636f49f1c17bbd3ff7cb65aaee`
+in [CI run 34610860329](https://github.com/OpenCoven/coven-threads/actions/runs/34610860329).
+That is evidence for the named revision, not every subsequent head. The landed
+`Secret scanning` job remains unchanged. Privacy is not a required branch
+check; activation requires a separate maintainer decision. Landing the job
+does not change the ruleset.
 
 From the repository root:
 
@@ -44,7 +48,7 @@ bash scripts/install-gitleaks.sh /tmp/threads-guard-bin
 export PATH="/tmp/threads-guard-bin:$PATH"
 node --test scripts/tests/*.test.mjs scripts/tests/secret-guard.integration.mjs
 node scripts/secret-guard.mjs
-# Manual proposed-policy evaluation; currently blocked as documented above.
+# Check the staged index; this does not inspect unstaged or untracked edits.
 node scripts/privacy-guard.mjs
 ```
 
@@ -53,7 +57,7 @@ archives are verified against SHA-256 digests committed in the installer
 before extraction. Updating the version requires reviewing and updating both
 the version file and digests; the guard rejects version skew.
 
-**Scope:** the manual privacy checker scans every stage-zero Git index blob and filename, not
+**Scope:** the privacy checker scans every stage-zero Git index blob and filename, not
 unstaged or untracked files. Clean checkout CI therefore covers the submitted
 tree. Stage intended changes before local scanning. Secret scanning covers
 the same index via a permission-restricted temporary snapshot plus every
@@ -92,6 +96,11 @@ guards. Privacy is index-only, not a historical privacy audit. The guards do
 not certify daemon authority, deployed behavior, branch protection, or human
 review. Pull-request code can modify CI, so maintainer review and required-check
 policy remain separate controls.
+
+"Independent" means a separate privacy job, not an immutable checker that
+PR authors cannot modify. A stronger enforcement policy must also govern the
+calling workflow. Do not execute untrusted PR code in a privileged workflow
+context as a shortcut.
 
 Policy provenance: adapted the categories and separate default-secret scan
 from `OpenCoven/coven-memory` at
