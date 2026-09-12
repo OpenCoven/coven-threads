@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved root remediation gates.** The original Windows fixture failure, dedicated CLI deadline repair, scheduled identity replay, and both bounded auto routes have platform-scoped proof. A newly measured cold-store startup failure still blocks the combined candidate's final gate. These contributions do not close the root issues, install a required stable-pin compatibility lane, or supply either human coherence/freeze decision.
+> **As of 2026-09-12 (UTC): phases 0–4 remain frozen, and Phase 5 remains active with four unresolved root remediation gates.** The Windows fixture, CLI deadline, and redundant store-checkpoint corrections now have native acceptance. Scheduled identity replay and both bounded auto routes have platform-scoped proof. The paired contributions still require owner integration; they do not close the root issues, install a required stable-pin compatibility lane, or supply either human coherence/freeze decision.
 
 Read the [delivery strategy](strategy.md) for the order of work and the
 [boundary remediation packet](reviews/2026-09-12-boundary-proof-remediation.md)
@@ -29,7 +29,7 @@ current-Threads observation of that identical daemon.
 
 The remaining auto producer gap is implemented in paired #57 and
 OpenCoven/coven#1029. The core code is `2c7a305e`; the combined daemon candidate
-is `b439b4d1`, based on the existing integration owner's `8d48bf79`. It requires
+is `d01136f7`, based on the existing integration owner's `8d48bf79`. It requires
 explicit tier-2 output-format policy, fresh deterministic regressions, staged
 intake, and submission-bound replay. It does not make `MEMORY.md` auto-editable
 or lower retired migration tiers. Earlier exact `2c7a305e` / `300d4068` Linux
@@ -39,8 +39,12 @@ failure was repaired in `df0ccd91`: all six original native cases now pass,
 with five diagnostic tests. Start/whole restart use one five-second deadline;
 standalone stop/status remain two seconds. A different owned-serve fixture
 then failed its 15-second readiness guard, with measured 13,436 ms store
-initialization. OpenCoven/coven#1031 and `threads-vpp.5` own that remaining
-blocker. The documentation-only `b439b4d1` does not repair it.
+initialization. OpenCoven/coven#1031 removed a reproduced redundant
+checkpoint/reopen from that startup path without widening deadlines or
+weakening durability. Final native run `34703393798` passes both workspace
+and feature gates, including all six original CLI cases plus five diagnostics.
+The physical cause of the earlier host timing outlier is not fully isolated;
+the documentation-only passing rerun is not treated as its repair.
 
 The owner merged OpenCoven/coven#1027 at its older `1294a893` head. Later
 fixture finalization belongs to OpenCoven/coven#1029, not that merged PR's
@@ -156,7 +160,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 | `threads-okc` | identity predicates must run at intake and delayed/restart replay | OpenCoven/coven#969 merged; bounded scheduled valid-identity proofs completed in `threads-vpp.2`; root integration/acceptance remains open in OpenCoven/coven#885 |
 | `threads-980` | every opened window needs exactly one typed terminal close | bounded OpenCoven/coven#932 repair merged at `aa527d2d`; complete supported terminal/audit-chain acceptance remains blocked in OpenCoven/coven#886 |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | bounded OpenCoven/coven#933 repair merged at `b7b3b4e1`; complete route/recovery acceptance remains blocked in OpenCoven/coven#887 |
-| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | named Windows follow-up completed in `threads-vpp.1`; broader publication/recovery remains with OpenCoven/coven#972 and OpenCoven/coven#888; bounded new auto routes do not lower legacy migration tiers |
+| `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | bounded Windows and auto work tracked in `threads-vpp`; broader publication/recovery remains with OpenCoven/coven#972 and OpenCoven/coven#888; new auto routes do not lower legacy migration tiers |
 
 **Historical review:** Echo's 2026-08-09 static review at Coven `59c5be4`
 confirmed the four findings then. It is not a current test result and cannot

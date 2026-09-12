@@ -1,16 +1,16 @@
 # Boundary proof remediation
 
-The original Windows authority-fixture failure and scheduled-identity gaps
-have exact-revision repair evidence. Both bounded auto variants and the CLI
-deadline repair have native Windows proof. A newly measured owned-start
-cold-store failure still blocks final combined acceptance. Phase 5 remains active.
+The Windows startup corrections and remaining scheduled-identity and bounded
+auto routes now have platform-scoped boundary proof. The final candidate
+passes native Windows workspace, CLI lifecycle, and authority gates.
+Owner integration and the broader Phase-5 root and human gates remain open.
 
 Check the paired contributions before using a newer revision:
 
 ```sh
 gh pr view 57 --repo OpenCoven/coven-threads
 gh pr view 1029 --repo OpenCoven/coven
-gh run view 34696507398 --repo OpenCoven/coven
+gh run view 34703393798 --repo OpenCoven/coven
 ```
 
 This packet records evidence, not a release, installed-binary certification,
@@ -22,11 +22,11 @@ portable work record; you don't need the maintainer's Beads database.
 | Item | Exact revision or disposition |
 | --- | --- |
 | Core code, #57 | `2c7a305e434d7ae7c0e628f992f271007a3ab06c` |
-| Combined daemon, OpenCoven/coven#1029 | `b439b4d1286521d98e6ba1259cd0192112f62543` |
+| Combined daemon, OpenCoven/coven#1029 | `d01136f7b169df5a2af17179382f9901ccc77bb5` |
 | Existing integration owner, OpenCoven/coven#1022 | `8d48bf79b8c00478f9d6f077e34a1a5bac460b77` at this checkpoint |
 | Daemon's actual core Git dependency | `2c7a305e434d7ae7c0e628f992f271007a3ab06c`, checked through Cargo metadata |
 | Stable compatibility pin | Unchanged `39feb6de98816d10b490091e918f62035e6ce0df`; `harness-required`, not an activated required daemon check |
-| Work tracking | `threads-vpp`; bounded fixture, identity, auto, and CLI subtasks `.1` through `.4` closed; cold-store follow-up `.5` in progress |
+| Work tracking | `threads-vpp` and bounded fixture, identity, auto, CLI, and store subtasks `.1` through `.5`; final publication receipts remain on the paired pull requests |
 
 OpenCoven/coven#1027 merged at `1294a893` through `cacb6470`. It did not merge
 the branch's later `976218d5` fixture finalization. The combined contribution
@@ -115,6 +115,10 @@ as an authority red; its Linux-only regression subsequently passed.
 | [34693820017](https://github.com/OpenCoven/coven/actions/runs/34693820017) | Native merge `2de44ef5b9e3b0f591b8286efc6d02e7f9d34572`, core `2c7a305e` | Authority E2E 70 passed; 83 passing manifests represent 6 smoke plus 77 feature journeys, including 45 auto cases and 8 identity packets. Dedicated CLI lifecycle was 5/6; the overall run failed |
 | [34696513592](https://github.com/OpenCoven/coven-threads/actions/runs/34696513592) | Core `2c7a305e`, CLI-repaired daemon `df0ccd91` | 103 passing Linux journeys, including 71 auto cases and 8 identity packets |
 | [34696507398](https://github.com/OpenCoven/coven/actions/runs/34696507398) | Native merge `a8486f407d518398f5e6ac1c4866101e0d0d86d1`, core `2c7a305e` | All 6 original CLI cases plus 5 diagnostic tests passed. Authority target 69/70; 82/83 manifests passed, including all 45 auto and 8 identity packets. Owned startup failed before the clock-restart scenario; overall acceptance failed |
+| [34697650776](https://github.com/OpenCoven/coven/actions/runs/34697650776) | Documentation-only `b439b4d1`, native merge `4a2e5acb`, same runtime as failing `a8486f40` | All native gates and 83 manifests passed. This is a same-runtime comparison, not a causal correction |
+| [34701978989](https://github.com/OpenCoven/coven-threads/actions/runs/34701978989) | Clean current core `040feca`, store correction `bec643fb` | 103 passing Linux journeys, including 71 auto and 8 identity packets |
+| [34701969412](https://github.com/OpenCoven/coven/actions/runs/34701969412) | Store correction `bec643fb`, native merge `c77e49c3` | All 77 native feature manifests passed, including 45 auto and 8 identity packets. Both OS workspaces failed an old live-byte test expectation before the dedicated CLI cases |
+| [34703393798](https://github.com/OpenCoven/coven/actions/runs/34703393798) | Final `d01136f7`, native merge `e4a586375d01d7b5769adf8991d8a024c5af594c` | Both OS workspaces and the PR gate passed. Native E2E 35 without clock / 70 with clock; all 6 original CLI cases plus 5 diagnostics; 83 passing manifests = 6 smoke + 77 feature, including 45 auto and 8 identity packets |
 
 The native merge and published daemon `84b8dcc7` have identical Git tree
 `6713db280c487181404db04be8418fe6baa76757`. Unix-specific symlink and encoding
@@ -148,7 +152,7 @@ connection setup, 2,907 ms for Ward, 3,626 ms for runtime, 3,634 ms for main
 schema, 8,136 ms for commit, and 13,436 ms for initialization end. No
 `daemon-store-end` checkpoint was retained before cleanup. The child's exit
 code 1 is explicitly marked `fixture_termination_requested`, not a spontaneous
-daemon failure. OpenCoven/coven#1031 investigates the exact store path; the
+daemon failure. OpenCoven/coven#1031 investigated the exact store path; the
 unobserved remainder is not assigned an invented cause.
 
 The same run's policy guard also rejected a public CLI guide edit. The
@@ -156,6 +160,43 @@ documentation-only `b439b4d1` moved the deadline contract into the existing
 source-adjacent E2E reference without exempting that public page. It changes no
 runtime source, fixture, or dependency. Its automatic CI run is not a causal
 repair for the store failure.
+
+### Store correction and final acceptance
+
+`bec643fb` removes a reproduced redundant boundary in both production
+store-open paths: initialization/commit, last-connection checkpoint, then
+immediate reopen for hub/cache setup. The initialized connection now receives
+the same runtime guards and stays open through setup. One explicit final
+close still completes before readiness. No SQL, migration ordering,
+synchronization pragma, authentication, authority fixture, deadline, or
+dependency changes. There is no lifelong keeper connection or deferred
+shutdown checkpoint.
+
+Correct reds showed the initialization WAL deleted or reopened empty before
+startup finished. Regressions cover runtime audit guards, autocommit,
+unpinned checkpoints, final cleanup, and committed WAL recovery after process
+exit without destructors. `prior_observer_ms` records completed prior
+checkpoint append attempts, including scheduling inside them, not pure disk
+time or the current append. `store-close-begin` identifies the final close.
+Old and new `store-initialize-end` boundaries differ; the earlier 5,300-ms
+interval is not claimed as SQLite close time or time saved.
+
+The first corrected-source CI exposed a coupled test assumption: file bytes
+changed from 4,096 to 655,360 when the retained initialization WAL closed.
+The existing health accessor intentionally samples those bytes live while
+retaining cached maintenance/backlog fields. The parent reproduced the failure
+locally. Test-only `d01136f7` compares live bytes with filesystem metadata and
+keeps all cached-data, error, and recovery assertions. All 3,269 local binary
+tests then passed, with three ignored.
+
+Final native merge `e4a58637` and published `d01136f7` have identical tree
+`0b1f0c13752bdbb5b19e6671847c54ffafdde9f9`. Both formerly failing startup
+scenarios pass. The largest retained `daemon-store-end` in that run was
+492 ms, with at most 56 ms of prior observer time. These are observations
+of that run, not a causal decomposition of the earlier host outlier or a
+long-term reliability guarantee. Final documentation-checkout observations
+are attached to #57 and OpenCoven/coven#1029 without rewriting this packet
+to cite its own future commit.
 
 The combined local targets passed E2E 91, identity invariants 41, protected
 intake 35, and terminal recovery 30; no-clock E2E passed 36. Shared helper tests
@@ -167,8 +208,9 @@ separate receipt, not inferred from cross compilation.
 
 Native CI ran `cargo test --workspace --locked`, including the six original
 Windows CLI cases and five diagnostics, successfully. It then ran the following
-feature target, which was 69/70 on Windows and passed with 103 Linux journey
-manifests in the current-core observation:
+feature target, which was 69/70 in the retained startup-failure run, 70/70
+in final native acceptance, and passed with 103 Linux journey manifests in
+the corrected-source current-core observation:
 
 ```sh
 cargo test --locked -p coven-cli --features threads-test-clock \
@@ -183,6 +225,14 @@ cargo +1.95.0 test --offline --locked -p coven-cli \
   --bin coven --test daemon_startup_diagnostics -- \
   lifecycle_operation_budgets_separate_startup_from_stop_and_status \
   startup_failure_checkpoints --quiet
+```
+
+After the live-byte assertion correction, the parent ran the complete
+feature-enabled daemon binary suite (3,269 passed, three ignored):
+
+```sh
+cargo +1.95.0 test --offline --locked -p coven-cli --bin coven \
+  --features threads-test-clock --quiet -- --test-threads=2
 ```
 
 ## Artifact receipts
@@ -200,6 +250,10 @@ identity audit packets were inspected independently of workflow success.
 | Combined native authority evidence `10297893087` | `c36ec471a3035de28a4ec5f2f19a41fe442342abc1058895729d93e581be6e90` |
 | CLI-repaired current-core observation `10297964782` | `9be24fdabd67b778a341036d9add93a5b73da12ae23191547e73eda3b18d0dc7` |
 | CLI repair and new owned-start failure `10298638899` | `0596f02019af72dfb75bfd59aaeb9430e1372ef1a1ceb93a4e8fa95d18162164` |
+| Same-runtime native comparison `10299980111` | `d4c9507ba45c50dca9a10645de90dcaf802bd6ebc7dadef65e69786f5ca144a5` |
+| Corrected-store current-core observation `10300319081` | `a355264bbf11dde9a3146bba923b2d4e18ce6e8c1f60a3ab0c50c8abed289bfe` |
+| Corrected-store native feature evidence `10301640462` | `d420f4a375600178c4fcb89bc521b39a4080c7f3bb8394ba046020947c667645` |
+| Final complete native acceptance `10300912681` | `95ad5d35a5242ee099ad38188ef5c82c8fd970b25300e0e27a7633f50561f9d6` |
 
 Git dependency receipts can report `threads_dirty=true` because Cargo creates
 an empty, untracked `.cargo-ok` marker. The inspected marker-only state has
@@ -217,6 +271,7 @@ types, and the
 exports, corpus, and architecture docs; daemon intake, probes, Ward resolution,
 private replay evidence, fixtures, and their source-adjacent tests. The CLI
 follow-up consulted `crates/coven-cli/src/daemon.rs`,
+`crates/coven-cli/src/store.rs`,
 `crates/coven-cli/tests/windows_daemon_lifecycle.rs`, and the shared
 `crates/coven-cli/tests/fixtures/threads_admission.rs`. Its new diagnostics
 live in `crates/coven-cli/tests/fixtures/daemon_startup_diagnostics.rs` with a
@@ -243,3 +298,6 @@ core SHA or repeat affected proof after rewriting it. Cave live-daemon human
 acceptance was not run because this work does not deploy a Cave/daemon pair.
 No 30-day reliability target, required pinned-daemon check, stable-pin rollout,
 Nova coherence decision, or Val freeze is claimed.
+The unresolved physical attribution of the earlier host timing outlier and
+longer-run startup reliability remain within the broader
+OpenCoven/coven#884 and OpenCoven/coven#1000 work.

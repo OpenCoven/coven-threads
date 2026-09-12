@@ -105,7 +105,7 @@ later native repair. Keep those earlier receipts dated rather than calling
 them current blockers.
 
 The next integration step is the paired #57 / OpenCoven/coven#1029 candidate:
-core `2c7a305e`, daemon `b439b4d1`, and existing owner base `8d48bf79`.
+core `2c7a305e`, daemon `d01136f7`, and existing owner base `8d48bf79`.
 Review its final native/current-core packet and land it through the existing
 owner, rather than reopening parallel fixture implementations. Preserve the
 exact pinned core commit, or update the pin and repeat the affected proof if
@@ -113,10 +113,12 @@ history is rewritten. The new region is strictly bounded output formatting,
 not a reason to downgrade protected memory or migration policy.
 The earlier `84b8dcc7` authority target passed natively, but its dedicated CLI
 startup gate failed. The OpenCoven/coven#1030 deadline repair now passes all six
-original native CLI cases. A new owned-start cold-store failure is retained in
-OpenCoven/coven#1031. Require an evidence-driven correction and fresh full
-acceptance; neither a passing CLI-only target nor the documentation-only
-`b439b4d1` rerun explains that failure.
+original native CLI cases. The subsequent OpenCoven/coven#1031 correction
+removes a reproduced redundant store checkpoint/reopen without widening the
+fixture or production deadlines. Final native run `34703393798` passes the
+whole workspace and authority target. Preserve both failed runs, the
+same-runtime documentation-only comparison, and the corrected-source proof;
+none establishes the longer-term reliability target by itself.
 
 The all-ceremony proof above is broader than OpenCoven/coven#888's requirement
 for a minimal valid retired-Ward case. Keep the corpus remediation in
