@@ -362,6 +362,45 @@ requirement must fail visibly until this separate pin is deliberately updated.
 - protect `main` with quality, Cargo compatibility, and daemon E2E checks;
 - fail if the Cargo override is inactive.
 
+`.github/workflows/daemon-compatibility.yml` supplies the separate
+`Pinned daemon compatibility` job for every pull request and `main` push.
+It has no path filter, scheduled latest-main input, or success-on-error path.
+Its read-only checkouts do not retain credentials.
+
+`scripts/daemon-compatibility.mjs` reads `e2e/compatibility.toml` using Python
+3.11+'s standard-library TOML parser. Duplicate keys and malformed TOML fail.
+The manifest must declare `status = "ready"`, full daemon and committed-core
+SHAs, and all four `required_test_targets` in this order:
+
+```text
+threads_e2e
+threads_identity_invariants
+threads_protected_intake
+threads_terminal_recovery
+```
+
+`current_threads_rev` identifies the selected daemon's committed Git dependency,
+not the pull request's Threads checkout. Before installing the local override,
+the job checks that committed dependency against the manifest. The runner then
+proves the actual local dependency edge in the same way as observation.
+
+The required job sets `COVEN_THREADS_DAEMON_SUITE=compatibility`. That profile
+requires an immutable `COVEN_REF` even on a scheduled/manual caller, proves all
+four source and Cargo test targets exist, and runs them in one locked,
+feature-enabled Cargo command. All existing source/config/lock guards apply
+before and after the command. Missing companions, failures, or final metadata
+drift fail the receipt. The receipt records the suite, all selected targets,
+and exact command; default advisory observations still select `threads_e2e`
+only. Artifacts remain unique to each run and attempt.
+
+The manifest's `ready` state records pin eligibility, not a GitHub ruleset
+mutation or Phase-5 acceptance. Select a reviewed protected-main revision
+after normal downstream landing and exact-source revalidation. Only then add
+the new required context while preserving the existing strict checks.
+The old `harness-required` state must fail this job; it is not silently promoted
+and cannot fall back to `main`. Global deployed-history resolution, live Cave
+acceptance, and long-run reliability remain distinct obligations.
+
 ### Expansion
 
 - run Linux/macOS/Windows on schedule;
