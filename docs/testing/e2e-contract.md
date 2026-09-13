@@ -334,9 +334,15 @@ The recorded configuration overlay must remain the sole regular Cargo config
 file after each metadata query and daemon execution. Changed or missing bytes,
 symlink replacements, and newly ambiguous config filenames fail the observation,
 even if the dependency graph still selects the current Threads checkout.
+Both checkout HEADs and source cleanliness are rechecked after every Cargo
+metadata query and daemon execution. Only the exact recorded Coven config
+overlay and `Cargo.lock` are exempt from the source check; their bytes are
+checked separately. Staged, unstaged, and non-ignored untracked source changes
+fail rather than attributing the result to the original clean revisions.
 The resolved overlay lockfile is also rechecked after daemon execution and the
 final metadata query before a passing receipt is written. These boundary checks
-do not attest to transient changes restored between commands.
+do not attest to transient changes restored between commands, ignored build
+outputs, or hermetic execution.
 
 Until the selected downstream revision has the full harness, observation fails
 explicitly rather than skipping or substituting a library test. A failed

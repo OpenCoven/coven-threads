@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const testArgs = [
@@ -129,6 +129,22 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
       `coven-threads-core = { path = ${JSON.stringify(dirname(threadsManifest))} }\n`,
       { flag: existingConfig ? "a" : "wx" });
     receipt.coven_config_overlay_sha256 = hashFile(configPath);
+    const proveSourcesUnchanged = () => {
+      for (const [name, root] of [["threads", threads], ["coven", coven]]) {
+        if (execute("git", ["rev-parse", "HEAD"], root) !== receipt[`${name}_sha`]) {
+          throw new Error(`${name} checkout revision changed during observation`);
+        }
+        // Only the recorded downstream overlay may differ from its commit.
+        const exclusions = name === "coven"
+          ? [":(top,literal,exclude)Cargo.lock",
+            `:(top,literal,exclude)${relative(coven, configPath).split("\\").join("/")}`]
+          : [];
+        if (execute("git", ["status", "--porcelain", "--untracked-files=all",
+          "--ignore-submodules=none", "--", ".", ...exclusions], root)) {
+          throw new Error(`${name} checkout source changed during observation`);
+        }
+      }
+    };
     const proveConfigUnchanged = () => {
       if (downstreamConfig(coven) !== configPath ||
           hashFile(configPath) !== receipt.coven_config_overlay_sha256) {
@@ -142,8 +158,10 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     // Resolve once explicitly; the test and its nested metadata use --locked.
     execute("cargo", metadataArgs, coven, { env });
     proveConfigUnchanged();
+    proveSourcesUnchanged();
     const metadata = JSON.parse(execute("cargo", [...metadataArgs, "--locked"], coven, { env }));
     proveConfigUnchanged();
+    proveSourcesUnchanged();
     Object.assign(receipt, proveOverride(metadata, covenManifest, threadsManifest));
     receipt.coven_lock_overlay_sha256 = hashFile(join(coven, "Cargo.lock"));
     receipt.overlay_resolution_command = ["cargo", ...metadataArgs];
@@ -159,6 +177,7 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     });
     const proveOverlayUnchanged = () => {
       proveConfigUnchanged();
+      proveSourcesUnchanged();
       if (hashFile(join(coven, "Cargo.lock")) !== receipt.coven_lock_overlay_sha256) {
         throw new Error("daemon execution changed the resolved overlay lockfile");
       }
