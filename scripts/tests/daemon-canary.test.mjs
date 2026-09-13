@@ -279,11 +279,24 @@ for (const checkout of ["threads", "coven"]) {
   }
 }
 
-for (const mode of ["overlay-only", "tracked", "staged", "untracked", "other-config"]) {
+for (const mode of ["overlay-only", "tracked", "staged", "untracked", "other-config",
+  "submodule-tracked", "submodule-untracked"]) {
   test(`real Git source check handles ${mode} without exempting other source paths`, (t) => {
     const f = fixture(t);
     const git = (args) => execFileSync("git", args, { cwd: f.coven, encoding: "utf8" }).trim();
     git(["init", "--quiet"]);
+    if (mode.startsWith("submodule-")) {
+      const source = join(f.coven, "../submodule-source");
+      git(["init", "--quiet", source]);
+      writeFileSync(join(source, "source.rs"), "// original\n");
+      git(["-C", source, "add", "."]);
+      git(["-C", source, "-c", "user.name=Synthetic Fixture",
+        "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "--quiet", "-m", "Synthetic submodule"]);
+      git(["-c", "protocol.file.allow=always", "submodule", "add", "--quiet",
+        source, "vendor/nested"]);
+      git(["config", "submodule.vendor/nested.ignore", "all"]);
+    }
     git(["add", "."]);
     git(["-c", "user.name=Synthetic Fixture", "-c", "user.email=fixture@example.invalid",
       "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Synthetic baseline"]);
@@ -297,6 +310,10 @@ for (const mode of ["overlay-only", "tracked", "staged", "untracked", "other-con
         }
         if (mode === "untracked") writeFileSync(join(f.coven, "injected.rs"), "// drift\n");
         if (mode === "other-config") writeFileSync(join(f.coven, ".cargo/extra.toml"), "# drift\n");
+        if (mode.startsWith("submodule-")) {
+          writeFileSync(join(f.coven, "vendor/nested",
+            mode === "submodule-tracked" ? "source.rs" : "injected.rs"), "// drift\n");
+        }
       }
       return result;
     };
