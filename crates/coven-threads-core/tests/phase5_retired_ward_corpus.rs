@@ -248,6 +248,6 @@ fn canonical_generator_output_has_a_pinned_sha256_digest() {
     let digest = Sha256::digest(corpus::canonical_corpus_json().as_bytes());
     assert_eq!(
         format!("{digest:x}"),
-        "4ebe9d63398e6b14f2a097ce66197c96a577559984515ce03ce4297c0b0c7e10"
+        "b1ca801ec152218b774ebe1dd78291276580d9932ee4712152919ef67a605769"
     );
 }

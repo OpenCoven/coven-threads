@@ -132,6 +132,32 @@ Two supporting designs feed classification, both under the same descriptor-vs-pr
 - **Identity invariants** (`identity_invariants.rs`, bead `threads-uqx.4`) — an `IdentityInvariantDeclaration` compiles into typed predicates; the invariant *strings* are never authority. Checks are deterministic where possible and **fail closed on ambiguity** — no silent fallback to model judgment. Advisory probes (model-judgment signals) are non-gating Gate-3 evidence, never sole authority.
 - **Surface regions** (`surface_regions.rs`, bead `threads-uqx.5`) — daemon-replayable semantic regions (e.g. `ExecutionPromptRegion`, `HeartbeatBehaviorRegion`, `ToolDefaultsRegion`) extracted from materialized diffs by pure predicates: no Cave state, no agent self-report, no stale metadata. The `evidence_replay_hash` commits to region evidence, which is what lets Gate 4 replay it at deadline. Region reclassification is forward-only — retroactive projection would corrupt the authority trail.
 
+### Bounded output-format region
+
+`OutputFormatRegion` adds `output_format` to the default registry without
+changing any existing floor. It covers only a replacement of the root
+`output-format.json`. Both complete images must be UTF-8 JSON of at most 256
+bytes with exactly `schema: "coven.output-format/v1"`, integer `indent: 2 | 4`,
+and boolean `final_newline`. The top-level value must be an object and `schema`
+must be a string; Serde sequence and externally tagged enum representations
+are not accepted. Typed deserialization retains duplicate-field rejection.
+Unknown, duplicate, missing, or differently typed
+fields, other versions, creation, and deletion produce blocking floor-0
+evidence; valid replacements have floor 2. Invalid content never disappears
+from region coverage. Both public validation and registry materialization enforce
+the single-replacement boundary; mixed batches retain output-format coverage at
+blocking floor 0.
+
+This predicate supplies bounded evidence, not automatic approval authority.
+The daemon must require explicit literal **and effective** tier 2, a compiled
+approval binding, and fresh deterministic regression evidence for auto paths.
+It owns intake, submission commitments, replay, and final conditional writes.
+No template, prompt, arbitrary configuration, or memory content is included.
+`MEMORY.md` remains protected. Synthetic positive auto corpus vectors now use
+this dedicated region; they do not demonstrate or authorize lowering a
+retired-Ward migration tier. Older daemon consumers must not infer a new
+supported auto route from the registry alone.
+
 ## Compatibility contract
 
 From the frozen design (§6), the promises to the rest of the repo family:

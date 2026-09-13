@@ -45,6 +45,8 @@ fn valid_case(
     })
 }
 
+// Auto vectors describe new explicit output-format policy, not legacy migration
+// granting a lower tier. The retired-Ward migrator remains conservative.
 pub fn synthetic_retired_ward_corpus() -> Value {
     json!({
         "schema_version": "phase5-retired-ward-synthetic-v1",
@@ -69,13 +71,13 @@ pub fn synthetic_retired_ward_corpus() -> Value {
                 }),
                 json!([
                     {
-                        "path": "MEMORY.md",
-                        "before": "synthetic memory v1",
-                        "after": "synthetic memory v2"
+                        "path": "output-format.json",
+                        "before": "{\"schema\":\"coven.output-format/v1\",\"indent\":2,\"final_newline\":true}",
+                        "after": "{\"schema\":\"coven.output-format/v1\",\"indent\":4,\"final_newline\":true}"
                     }
                 ]),
-                json!([]),
-                u8::MAX
+                json!(["output_format"]),
+                2
             ),
             valid_case(
                 "auto-no-veto",
@@ -87,13 +89,13 @@ pub fn synthetic_retired_ward_corpus() -> Value {
                 }),
                 json!([
                     {
-                        "path": "MEMORY.md",
-                        "before": "synthetic memory v2",
-                        "after": "synthetic memory v3"
+                        "path": "output-format.json",
+                        "before": "{\"schema\":\"coven.output-format/v1\",\"indent\":4,\"final_newline\":true}",
+                        "after": "{\"schema\":\"coven.output-format/v1\",\"indent\":2,\"final_newline\":false}"
                     }
                 ]),
-                json!([]),
-                u8::MAX
+                json!(["output_format"]),
+                2
             ),
             valid_case(
                 "familiar-review",
