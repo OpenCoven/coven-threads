@@ -215,6 +215,12 @@ exceptions, and rollback evidence. Nova's decision must identify its accepted
 scope; Val decides after that gate. An agent persona, author-side comment,
 commit trailer, or green check cannot supply either decision.
 
+The [solo-maintainer Phase-5 proposal](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md)
+documents Val's requested self-review model and separate adoption, coherence,
+and freeze records. It is pending review under #59; the active gate does not
+change until explicit human adoption and reference reconciliation. Engineering
+remediation can continue while that proposal is reviewed.
+
 Before publishing a Threads release, reconcile the license texts and package
 metadata through an explicit maintainer decision, and distinguish the
 `0.2.0` unreleased changelog from downstream release ancestry. Do not rewrite
