@@ -11,6 +11,10 @@ You can contribute implementation changes and documentation corrections within t
 
 ## Local verification
 
+Compatibility metadata validation uses Python 3.11+ and its standard-library
+`tomllib`, without additional Python packages. The repository scripts also
+require Node.js and the pinned Rust toolchain.
+
 From the repository root:
 
 ```bash

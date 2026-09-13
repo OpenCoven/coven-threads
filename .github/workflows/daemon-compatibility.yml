@@ -1,0 +1,58 @@
+name: Daemon compatibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-compatibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compatibility:
+    name: Pinned daemon compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: threads
+          persist-credentials: false
+      - name: Resolve the reviewed immutable compatibility pin
+        id: pin
+        working-directory: threads
+        run: |
+          ref="$(node scripts/daemon-compatibility.mjs e2e/compatibility.toml)"
+          echo "coven_ref=$ref" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: OpenCoven/coven
+          ref: ${{ steps.pin.outputs.coven_ref }}
+          path: coven
+          persist-credentials: false
+      - name: Verify the committed downstream dependency before overlay
+        working-directory: threads
+        run: node scripts/daemon-compatibility.mjs e2e/compatibility.toml ../coven
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master
+        with:
+          toolchain: 1.95.0
+      - name: Exercise all four daemon targets with the current Threads checkout
+        working-directory: threads
+        env:
+          COVEN_REF: ${{ steps.pin.outputs.coven_ref }}
+          COVEN_THREADS_DAEMON_SUITE: compatibility
+          COVEN_THREADS_OBSERVATION_ROOT: ${{ runner.temp }}/threads-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node scripts/run-daemon-canary.mjs ../coven "$COVEN_THREADS_OBSERVATION_ROOT"
+      - name: Retain exact-attempt compatibility and sanitized journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: threads-daemon-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/threads-compatibility-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
