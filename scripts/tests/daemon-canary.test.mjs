@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -157,6 +157,66 @@ test("rejects ambiguous config names without modifying either file", (t) => {
   for (const name of ["config", "config.toml"]) {
     assert.equal(readFileSync(join(f.coven, ".cargo", name), "utf8"), "original");
   }
+});
+
+for (const name of ["config", "config.toml"]) {
+  for (const phase of ["resolution", "locked-metadata", "daemon", "final-metadata"]) {
+    for (const mode of ["changed", "missing", "ambiguous", "symlink"]) {
+      test(`rejects ${name} ${mode} during ${phase} despite an unchanged dependency graph`, (t) => {
+        const f = fixture(t);
+        mkdirSync(join(f.coven, ".cargo"));
+        const config = join(f.coven, ".cargo", name);
+        writeFileSync(config, "[net]\ngit-fetch-with-cli = true\n");
+        let metadataCalls = 0;
+        const execute = (exe, args, cwd, options) => {
+          const result = f.execute(exe, args, cwd, options);
+          if (exe === "cargo" && args[0] === "metadata") metadataCalls += 1;
+          const mutate = exe === "cargo" && (
+            (phase === "resolution" && args[0] === "metadata" && metadataCalls === 1) ||
+            (phase === "locked-metadata" && args[0] === "metadata" && metadataCalls === 2) ||
+            (phase === "daemon" && args[0] === "test") ||
+            (phase === "final-metadata" && args[0] === "metadata" && metadataCalls === 3)
+          );
+          if (mutate) {
+            if (mode === "changed") writeFileSync(config, "\n[build]\njobs = 1\n", { flag: "a" });
+            if (mode === "missing") rmSync(config);
+            if (mode === "ambiguous") {
+              writeFileSync(join(f.coven, ".cargo", name === "config" ? "config.toml" : "config"),
+                readFileSync(config));
+            }
+            if (mode === "symlink") {
+              const replacement = join(f.coven, "replacement-config");
+              writeFileSync(replacement, readFileSync(config));
+              rmSync(config);
+              symlinkSync(replacement, config);
+            }
+          }
+          return result;
+        };
+        assert.throws(() => runCanary(f.coven, f.artifacts, {}, execute), /configuration/);
+        const receipt = JSON.parse(readFileSync(join(f.artifacts, "observation.json")));
+        assert.equal(receipt.status, "failed");
+        assert(receipt.finished_at);
+        if (phase === "resolution" || phase === "locked-metadata") {
+          assert(!f.invocations.some((call) => call.exe === "cargo" && call.args[0] === "test"));
+        }
+      });
+    }
+  }
+}
+
+test("rejects lockfile drift during final metadata before marking the receipt passed", (t) => {
+  const f = fixture(t);
+  let metadataCalls = 0;
+  const execute = (exe, args, cwd, options) => {
+    const result = f.execute(exe, args, cwd, options);
+    if (exe === "cargo" && args[0] === "metadata" && ++metadataCalls === 3) {
+      writeFileSync(join(f.coven, "Cargo.lock"), "changed during final metadata");
+    }
+    return result;
+  };
+  assert.throws(() => runCanary(f.coven, f.artifacts, {}, execute), /lockfile/);
+  assert.equal(JSON.parse(readFileSync(join(f.artifacts, "observation.json"))).status, "failed");
 });
 
 for (const mode of ["wrong-override", "daemon-failed", "lock-changed", "missing-target", "dirty"]) {

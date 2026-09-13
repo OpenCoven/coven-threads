@@ -60,6 +60,23 @@ function hashFile(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+function downstreamConfig(coven) {
+  const configDir = join(coven, ".cargo");
+  const directory = lstatSync(configDir, { throwIfNoEntry: false });
+  if (directory && !directory.isDirectory()) {
+    throw new Error("downstream Cargo configuration directory must not be a symlink or file");
+  }
+  const configs = ["config", "config.toml"].map((name) => join(configDir, name))
+    .filter((path) => lstatSync(path, { throwIfNoEntry: false }));
+  if (configs.length > 1) {
+    throw new Error("ambiguous downstream Cargo configuration files require reconciliation");
+  }
+  if (configs.length && !lstatSync(configs[0]).isFile()) {
+    throw new Error("downstream Cargo configuration must be a regular file");
+  }
+  return configs[0] ?? null;
+}
+
 export function runCanary(covenPath, artifactPath, env = process.env, execute = command) {
   const threads = realpathSync(new URL("..", import.meta.url));
   const coven = realpathSync(covenPath);
@@ -100,19 +117,9 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
       throw new Error("selected Coven revision has no real-daemon threads_e2e target");
     }
     const configDir = join(coven, ".cargo");
-    if (existsSync(configDir) && !lstatSync(configDir).isDirectory()) {
-      throw new Error("downstream Cargo configuration directory must not be a symlink or file");
-    }
-    const configs = ["config", "config.toml"].map((name) => join(configDir, name))
-      .filter((path) => existsSync(path));
-    if (configs.length > 1) {
-      throw new Error("ambiguous downstream Cargo configuration files require reconciliation");
-    }
-    const configPath = configs[0] ?? join(configDir, "config.toml");
-    if (configs.length && !lstatSync(configPath).isFile()) {
-      throw new Error("downstream Cargo configuration must be a regular file");
-    }
-    receipt.coven_config_before_sha256 = configs.length ? hashFile(configPath) : null;
+    const existingConfig = downstreamConfig(coven);
+    const configPath = existingConfig ?? join(configDir, "config.toml");
+    receipt.coven_config_before_sha256 = existingConfig ? hashFile(configPath) : null;
     receipt.coven_lock_before_sha256 = hashFile(join(coven, "Cargo.lock"));
     mkdirSync(configDir, { recursive: true });
     // Preserve the daemon's existing network/build settings. Cargo rejects
@@ -120,15 +127,23 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     writeFileSync(configPath,
       `\n[patch."https://github.com/OpenCoven/coven-threads"]\n` +
       `coven-threads-core = { path = ${JSON.stringify(dirname(threadsManifest))} }\n`,
-      { flag: configs.length ? "a" : "wx" });
+      { flag: existingConfig ? "a" : "wx" });
     receipt.coven_config_overlay_sha256 = hashFile(configPath);
+    const proveConfigUnchanged = () => {
+      if (downstreamConfig(coven) !== configPath ||
+          hashFile(configPath) !== receipt.coven_config_overlay_sha256) {
+        throw new Error("Cargo configuration no longer matches the recorded overlay");
+      }
+    };
     receipt.stage = "overlay-resolution";
     save();
     const metadataArgs = ["metadata", "--format-version", "1", "--features", "threads-test-clock"];
     // The overlay necessarily changes Git-source lock entries to path entries.
     // Resolve once explicitly; the test and its nested metadata use --locked.
     execute("cargo", metadataArgs, coven, { env });
+    proveConfigUnchanged();
     const metadata = JSON.parse(execute("cargo", [...metadataArgs, "--locked"], coven, { env }));
+    proveConfigUnchanged();
     Object.assign(receipt, proveOverride(metadata, covenManifest, threadsManifest));
     receipt.coven_lock_overlay_sha256 = hashFile(join(coven, "Cargo.lock"));
     receipt.overlay_resolution_command = ["cargo", ...metadataArgs];
@@ -142,10 +157,15 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
         COVEN_THREADS_E2E_ARTIFACT_ROOT: join(artifacts, "journeys"),
       },
     });
-    if (hashFile(join(coven, "Cargo.lock")) !== receipt.coven_lock_overlay_sha256) {
-      throw new Error("daemon execution changed the resolved overlay lockfile");
-    }
+    const proveOverlayUnchanged = () => {
+      proveConfigUnchanged();
+      if (hashFile(join(coven, "Cargo.lock")) !== receipt.coven_lock_overlay_sha256) {
+        throw new Error("daemon execution changed the resolved overlay lockfile");
+      }
+    };
+    proveOverlayUnchanged();
     const after = JSON.parse(execute("cargo", [...metadataArgs, "--locked"], coven, { env }));
+    proveOverlayUnchanged();
     proveOverride(after, covenManifest, threadsManifest);
     receipt.status = "passed";
     receipt.stage = "complete";
