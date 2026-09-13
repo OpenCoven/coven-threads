@@ -138,7 +138,12 @@ In the daemon — coven PR https://github.com/OpenCoven/coven/pull/430 — not i
 
 `coven-threads-core` v0.2.0 ships the types and the contract: `ApprovalPath` with its wire-label round-trip, `VetoWindow`, `ProposalClassification` with `evidence_replay_hash`, `WindowCloseReason`, the surface-region predicates and registry, the identity-invariant compiler, and the canonical evidence-hash function. What it deliberately does not ship is anything with a clock or a side effect: proposal classification at intake, the delayed-apply scheduler, deadline revalidation, and audit appends into `coven.sqlite3` are daemon-owned (spec §7, `threads-uqx.6`). This is the same division of labor as Phase 2: the crate is a pure computation, the daemon is the trust boundary that hosts it — everything that touches time, disk, or `ward.audit` lives behind the daemon boundary, where an untrusted client can't reach it.
 
-Phase 5 remains **active, not frozen**. The upstream RFC dependencies have landed. Closure still requires the remaining remediation gates, Nova's independent coherence review, and Val's freeze. See [the delivery ledger](phases.md) for current evidence and blockers.
+Phase 5 remains **active, not frozen**. The upstream RFC dependencies have
+landed. Closure still requires the remaining remediation gates, Val's human
+coherence acceptance, and a subsequent scoped freeze/reaffirmation under the
+[adopted solo-maintainer policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md).
+Agent review remains evidence, not a second human approval. See
+[the delivery ledger](phases.md) for current evidence and blockers.
 
 ---
 

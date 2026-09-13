@@ -2,8 +2,16 @@
 
 **Status:** ACTIVE; INITIAL IMPLEMENTATION LANDED; REMEDIATION BLOCKS HUMAN SIGN-OFF (Sections 0–5 preserve
 the reviewed proposal; Sections 6–8 record Val's implementation opening and
-the resulting delivery state. Independent Nova coherence sign-off and final
-Val freeze remain gated.)
+the resulting delivery state. Val's human coherence acceptance and subsequent
+scoped freeze/reaffirmation remain gated under the adopted solo-maintainer policy.)
+
+> **Review-ownership amendment (2026-09-13, #59):** Val adopted the
+> [solo-maintainer Phase-5 review policy](PHASE-5-SOLO-MAINTAINER-REVIEW.md).
+> Val may author and self-review; agent review is supporting evidence, not a
+> separate human approval. This changes reviewer ownership only, preserves the
+> eight design defaults and all technical criteria, and supplies neither
+> implementation acceptance nor a current-scope freeze. Earlier decision and
+> refusal records below retain their original dates.
 
 > **Delivery-status erratum (2026-09-11, #44):** Sections 6–8 record the
 > initial implementation opening and delivery, not completion of all
@@ -315,7 +323,7 @@ exists; until then unknown or stale veto state renders blocked under Phase 4 §4
 
 ---
 
-## 6. Recorded design defaults (Val; Nova attestation pending)
+## 6. Recorded design defaults (Val; human coherence acceptance pending)
 
 Val recorded all eight questions on Sage's recommended defaults and opened
 implementation against them. The upstream RFC dependencies have since landed.
@@ -323,9 +331,10 @@ implementation against them. The upstream RFC dependencies have since landed.
 Record provenance: commit `b085fc8` (`spec(phase-5): record Val+Nova decisions,
 open Phase 5`) is authored by Val Alexander and carries
 `Co-authored-by: Nova <nova@opencoven.dev>`. This document treats that trailer
-as attribution only. `threads-uqx.9` requires Nova to approve an identified
-commit through an independently attributable channel; agents, commit authors,
-and trailers cannot satisfy or simulate that gate.
+as attribution only. Under the September 13 reviewer-ownership amendment,
+`threads-uqx.9` requires Val's explicit human acceptance of identified
+implementation revisions and their coherence evidence. Agent output, a commit
+author field, or a trailer cannot satisfy or simulate that gate.
 
 1. **`ApprovalPath` separate from `Channel`? → YES.**
    Channel remains the load axis (why a thread is stressed). ApprovalPath is
@@ -416,13 +425,16 @@ remediation:
   (OpenCoven/coven PR #464).
 
 Two human gates remain and must not be simulated. They are not the only
-remaining work: the remediation gates recorded in `docs/phases.md` block
-independent sign-off (2026-09-11 erratum, #44).
+remaining work: the remediation gates recorded in `docs/phases.md` still block
+coherence acceptance. The September 13 amendment changes the human reviewer
+model, not those prerequisites.
 
-- `threads-uqx.9` — Nova coherence sign-off over the identified landed commits:
+- `threads-uqx.9` — Val's human coherence acceptance over the identified landed commits:
   RFC round-trip, Gate-4 fail-closed proof, `Channel`/`ApprovalPath` separation,
   predicate authority, audit coherence, migration fidelity, and Cave behavior.
-- `threads-uqx.10` — Val freezes or rejects Phase 5 after Nova's sign-off.
+- `threads-uqx.10` — Val freezes, reaffirms, defers, or rejects the current
+  Phase-5 scope after coherence acceptance. The July 29 statement on #14 is
+  retained; it is not automatically transferred to later revisions.
 
 Making this decision-record PR ready for review does not satisfy either gate.
 
@@ -431,8 +443,8 @@ Making this decision-record PR ready for review does not satisfy either gate.
 ## 8. Recommendation: initial implementation executed; remediation and freeze outstanding
 
 Val opened Phase 5 implementation to recover semantic approval behavior, not
-just document why it was lost. The repository does not infer Nova approval from
-a commit trailer; independent sign-off remains explicit in `threads-uqx.9`.
+just document why it was lost. The repository does not infer human approval from
+a commit trailer; Val's coherence acceptance remains explicit in `threads-uqx.9`.
 
 Carry forward: approval paths as typed promotion ceremony over existing
 channels; harness blocks as daemon-replayable surface-region classifiers;
