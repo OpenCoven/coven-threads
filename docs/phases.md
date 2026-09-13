@@ -17,6 +17,11 @@ original dates; a later observation does not transfer acceptance between heads.
 Keep Phase 5 active and finish root acceptance and compatibility enforcement.
 Do not reopen the already-landed integration or reproduce its fixtures.
 
+A [solo-maintainer review policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md)
+is proposed under #59 so Val can review the implementation as the sole human
+maintainer. Drafting or merging that proposal is not adoption, coherence
+acceptance, or freeze; the current human gates remain unchanged.
+
 | Contribution | Landed disposition |
 | --- | --- |
 | Bounded output-format region and registry mixed-batch refusal | #57 merged as `1fe26a12609ec11744808af3f4209df475ecf8d8`, preserving corrected core `0021fd2662d0b82328371ee3a6957d645f776fda` |

@@ -61,3 +61,8 @@ authority or waive the design gates below.
 ## Design gates
 
 The Phase-0 design freeze is complete. Phase-5 remediation, Nova's independent coherence review, and Val's freeze remain outstanding. Agents may prepare evidence; they cannot replace either human decision.
+
+The [proposed Phase-5 solo-maintainer review policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md)
+would let Val perform the human coherence review without claiming a separate
+human reviewer. It is available for review under #59, not yet adopted.
+Publishing the proposal does not change these active gates.
