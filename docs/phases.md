@@ -107,9 +107,10 @@ from a required pinned daemon gate. OpenCoven/coven#931 is a **landed historical
 integration checkpoint**, not full J1–J8 acceptance. Deterministic scheduler
 control landed through OpenCoven/coven#968 at `066727f1`; supported scheduled
 publication landed through OpenCoven/coven#1022 and OpenCoven/coven#972.
-Their earlier combined real-daemon evidence is scoped to its recorded revisions. The stable
-compatibility pin remains unchanged; local integration does not make an
-unreviewed downstream revision a required gate.
+Their earlier combined real-daemon evidence is scoped to its recorded revisions.
+The stable pin was unchanged at that checkpoint; #65 subsequently selected
+reviewed daemon `226bfcc8`. Local integration alone does not make an unreviewed
+downstream revision a required gate.
 
 **Bounded remediation landings, refreshed 2026-09-13:** protected intake
 OpenCoven/coven#933 merged at `b7b3b4e17cfe21fd440e0f0429f3e38eae1785aa`;
@@ -119,7 +120,10 @@ typed-terminal recovery OpenCoven/coven#932 merged at
 full `threads_e2e.rs` target. The standalone terminal target explicitly seeds legacy
 opened-window history after public coherence intake; it does not establish
 supported scheduled publication. The refreshed review records exact-head
-receipts and remaining route/recovery coverage. Neither root issue is closed.
+receipts and the then-remaining route/recovery coverage. Neither root issue
+was closed by those bounded component landings. The later accepted matrix
+closed OpenCoven/coven#887; OpenCoven/coven#886 still needs deployed-history
+resolution.
 
 ## Phase 0 — Design `[FROZEN]`
 
@@ -144,7 +148,7 @@ The frozen doc is change-controlled. These docs describe it; they do not amend i
 **Status, in two halves:**
 
 - **Crate side — landed** (commit `5e68957`): `audit.rs` defines the `ward.audit` record shape and DDL (append-only via triggers, RFC-0001 §5.6 event vocabulary); `staging.rs` defines the pending-proposal record shape. The crate owns the *contracts*; the daemon owns the connection, the writes, and the directory.
-- **Daemon side** `[IN RELEASE TAG]`: the validator call site, staging path, and audit table landed via OpenCoven/coven#382 and are present in the release ancestry above. The Phase 2 epic `threads-986.14`, freeze `threads-986.20`, and merge gate `threads-986.19` are closed. The merge gate was resolved by making this repository public so downstream CI could fetch the pinned dependency. This does not close the later protected-proposal route defect, `threads-dgg`.
+- **Daemon side** `[IN RELEASE TAG]`: the validator call site, staging path, and audit table landed via OpenCoven/coven#382 and are present in the release ancestry above. The Phase 2 epic `threads-986.14`, freeze `threads-986.20`, and merge gate `threads-986.19` are closed. The merge gate was resolved by making this repository public so downstream CI could fetch the pinned dependency. That release integration did not close the later protected-proposal route defect; `threads-dgg` was separately accepted at daemon `226bfcc8`.
 
 The daemon calls the validator on protected edits. That integration does not
 establish that every proposal, replay, or recovery route satisfies Phase 5.
