@@ -1,12 +1,16 @@
 # coven-threads
 
 **Status (2026-09-13):** Engineering phases 0–4 remain **frozen**. Phase 5 is
-**active**, with four unresolved remediation gates. The
+**active**. Three of the four root engineering blockers are closed;
+historical audit closure remains open in OpenCoven/coven#886. The
 [adopted solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) lets
 Val author and self-review; human coherence acceptance and a subsequent scoped
-freeze remain separate. Baseline protection requires PRs and five strict
-checks on `main`, not an independent approving reviewer. Required pinned-daemon
-acceptance is still missing. Coven `v0.4.3` includes the earlier integration,
+freeze remain separate. Protection requires PRs and six strict checks on
+`main`, including the four-target pinned-daemon compatibility lane, not an
+independent approving reviewer. The
+[engineering acceptance handoff](docs/reviews/2026-09-13-engineering-acceptance.md)
+records the accepted sources and remaining operator work.
+Coven `v0.4.3` includes the earlier integration,
 not proof of full Phase-5 conformance. Start with the
 [delivery strategy](docs/strategy.md), [evidence ledger](docs/phases.md), and
 [readiness review](docs/reviews/2026-09-11-landscape-and-readiness.md).
@@ -103,10 +107,10 @@ Honest labels; the detailed ledger is [docs/phases.md](docs/phases.md).
 
 - **Phase 0 — design doc + beads scaffolding + repo skeleton.** ✅ **FROZEN v0.2** (2026-07-14, tag `v0.2-phase0-design`). Nova sign-off; RFC-0001 §5 round-trip verified. No enforcement code, by design.
 - **Phase 1: core crate.** `[FROZEN; IN RELEASE TAG]`. `coven-threads-core` provides typed validation and conformance vectors. Coven `v0.4.3` imports revision `c102844`; it does not automatically test this checkout. `threads-986.18` is closed.
-- **Phase 2: daemon integration.** `[FROZEN; IN RELEASE TAG]`. Contracts in `audit.rs` and `staging.rs` are consumed by the integration from OpenCoven/coven#382. Beads `.14`, `.20`, and `.19` are closed; later proposal-route defects remain Phase-5 blockers.
+- **Phase 2: daemon integration.** `[FROZEN; IN RELEASE TAG]`. Contracts in `audit.rs` and `staging.rs` are consumed by the integration from OpenCoven/coven#382. Beads `.14`, `.20`, and `.19` are closed; later Phase-5 acceptance is tracked separately.
 - **Phase 3 — portability contract.** C7 round-trip semantics implemented and tested (`portability` module + 17-test round-trip suite); the interchange envelope is **decided** (`threads-986.16` closed): **Shape B (`.weave`) canonical, plus a lossy one-way `.af` exporter** — see the §6 decision record in `specs/PHASE-3-PORTABILITY.md`.
 - **Phase 4: cockpit integration.** `[COMPLETE; FROZEN 2026-07-17]`. The weave rail, thread pane, strand inspector, and proposal flow landed in OpenCoven/coven-cave#3223 with the recorded human gates. The daemon-adapter follow-up (`threads-v3g`) and degraded-familiar follow-up (`threads-k9s`) are also closed. New Phase-5 live-daemon acceptance remains separate.
-- **Phase 5: approval semantics.** `[ACTIVE]`, not frozen. `ApprovalPath` and `Channel` remain independent; delayed apply requires live evidence replay and exactly one typed terminal close. The earlier core, scheduler, Cave contract, RFC alignment, and corpus implementation beads are closed, but `threads-okc`, `threads-980`, `threads-dgg`, and `threads-zav` remain unresolved. The shared harness and component fixes have landed; component receipts are not complete root closure. Val's coherence acceptance (`threads-uqx.9`) and subsequent freeze/reaffirmation (`threads-uqx.10`) remain separate human gates.
+- **Phase 5: approval semantics.** `[ACTIVE]`, not frozen. `ApprovalPath` and `Channel` remain independent; delayed apply requires live evidence replay and exactly one typed terminal close. The finite identity, protected-route, and retired-corpus obligations (`threads-okc`, `threads-dgg`, and `threads-zav`) are closed. `threads-980` remains open for deployed/unprovable historical audit closure. The [engineering handoff](docs/reviews/2026-09-13-engineering-acceptance.md) records exact acceptance and remaining work. Val's coherence acceptance (`threads-uqx.9`) and subsequent freeze/reaffirmation (`threads-uqx.10`) remain separate human gates.
 
 ## Anti-goals
 
