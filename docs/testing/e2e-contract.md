@@ -289,8 +289,11 @@ Its implementation pull request must contain:
 5. the named CI check and failure artifact;
 6. migration and rollback notes where persisted state changes.
 
-Human sign-off gates remain human. Agents may assemble evidence and recommend a
-decision; they must never simulate Nova's independent review or Val's freeze.
+Human sign-off gates remain human. Under the
+[adopted solo-maintainer policy](../../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md),
+Val owns coherence acceptance and the subsequent scoped freeze/reaffirmation.
+Agents may assemble evidence and recommend a decision; they must never
+simulate either human decision or claim independent human approval.
 
 ## 10. CI rollout
 

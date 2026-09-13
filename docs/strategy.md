@@ -206,20 +206,20 @@ observed data.
 
 ### 5. Request the reserved decisions and reconcile release metadata
 
-**Owners:** Nova's independently attributable coherence gate, then Val's
-freeze decision; maintainer for release metadata.
-**Tracking:** #13; `threads-uqx.9`, `threads-uqx.10`.
+**Owner:** Val for human coherence acceptance, then scoped freeze/reaffirmation
+and release-metadata decisions. Agent lanes prepare engineering evidence.
+**Tracking:** #13, #14; `threads-uqx.9`, `threads-uqx.10`.
 
 Present the eight-item coherence mapping, accepted commits, remaining
-exceptions, and rollback evidence. Nova's decision must identify its accepted
-scope; Val decides after that gate. An agent persona, author-side comment,
-commit trailer, or green check cannot supply either decision.
+exceptions, and rollback evidence. Val's coherence decision must identify its
+accepted scope; the freeze decision follows that gate. An agent persona,
+account name, commit trailer, or green check cannot supply either decision.
 
-The [solo-maintainer Phase-5 proposal](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md)
-documents Val's requested self-review model and separate adoption, coherence,
-and freeze records. It is pending review under #59; the active gate does not
-change until explicit human adoption and reference reconciliation. Engineering
-remediation can continue while that proposal is reviewed.
+The [adopted solo-maintainer Phase-5 policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md)
+records Val's approval under #59 of the self-review model. Val may author and
+self-review without inventing a second human reviewer. This adoption changes
+review ownership only; it does not accept the implementation, reaffirm the
+historical #14 freeze for new revisions, or close an engineering gate.
 
 Before publishing a Threads release, reconcile the license texts and package
 metadata through an explicit maintainer decision, and distinguish the

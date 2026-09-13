@@ -17,10 +17,12 @@ original dates; a later observation does not transfer acceptance between heads.
 Keep Phase 5 active and finish root acceptance and compatibility enforcement.
 Do not reopen the already-landed integration or reproduce its fixtures.
 
-A [solo-maintainer review policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md)
-is proposed under #59 so Val can review the implementation as the sole human
-maintainer. Drafting or merging that proposal is not adoption, coherence
-acceptance, or freeze; the current human gates remain unchanged.
+Val [adopted the solo-maintainer review policy](https://github.com/OpenCoven/coven-threads/issues/59#issuecomment-5653889552)
+under #59 for policy revision `ae12e3ccf656cdce493cb748b7692fb8172a8ecd`.
+The [active policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) permits Val's
+self-review, with agent work supplying evidence rather than independent human
+approval. It does not accept implementation coherence, close a root issue, or
+reaffirm the historical #14 freeze for current revisions.
 
 | Contribution | Landed disposition |
 | --- | --- |
@@ -160,9 +162,9 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 **Initial implementation ledger, reconciled 2026-09-11:**
 
 - **Closed:** `.3` core approval types — `ApprovalPath`, `ApprovalPathKind`, `VetoWindow`, `ProposalClassification` (`approval.rs`); `.4` identity invariant predicates + advisory probes (`identity_invariants.rs`); `.5` `SurfaceRegionPredicate` + Gate-4 replay (`surface_regions.rs`); `.6` delayed-apply scheduler + audit — implemented **daemon-side in OpenCoven/coven#430** (daemon-owned classification and scheduler, deadline/minimum-visible revalidation, fail-closed committed-evidence replay, cross-platform conditional atomic writes, startup recovery); `.11` authority review findings resolved; `.2` RFC closure/provenance amendments; `.7` Cave veto-window contract; `.8` implementation and migration fidelity; `.12` RFC-0001 approval-tier alignment; `.13` authorized retired-Ward migration fixture. The proposal/decision-record PR #6 merged 2026-07-27 as `091607f`.
-- **Open human gates:** `.9` Nova coherence sign-off and `.10` Val freeze. They are not the whole remaining implementation scope: the four remediation beads below still block sign-off. Agents must never simulate either decision.
+- **Open human gates:** `.9` Val's coherence acceptance and `.10` subsequent scoped freeze/reaffirmation, under the adopted solo-maintainer policy. They are not the whole remaining implementation scope: the four remediation beads below still block acceptance. Agents must never simulate either decision.
 
-**Nova's sign-off is BLOCKED, not pending (2026-07-29).** This is the single most important fact about Phase 5 and it is easy to miss from the bead counts alone. Nova ran independent core and integration reviews against coven `f3cd322`, coven-threads `091607f`, merged OpenCoven/coven#430 and OpenCoven/coven#464, merged OpenCoven/coven-cave#3581 and OpenCoven/coven-cave#3628, and OpenCoven/familiar-contract#3 and OpenCoven/familiar-contract#4, and **refused sign-off**. The design choices were explicitly affirmed as coherent — Channel and `ApprovalPath` remain separate axes, delayed apply is correct, Cave stays thin and fail-closed. What blocks is implementation, in five named beads:
+**Historical coherence refusal (2026-07-29).** Nova ran independent core and integration reviews against coven `f3cd322`, coven-threads `091607f`, merged OpenCoven/coven#430 and OpenCoven/coven#464, merged OpenCoven/coven-cave#3581 and OpenCoven/coven-cave#3628, and OpenCoven/familiar-contract#3 and OpenCoven/familiar-contract#4, and **refused sign-off**. The design choices were explicitly affirmed as coherent — Channel and `ApprovalPath` remain separate axes, delayed apply is correct, Cave stays thin and fail-closed. The September 13 reviewer-ownership amendment does not erase those findings or supply their engineering closure. The original review identified five beads:
 
 | Bead | Blocking finding | Status |
 |---|---|---|
@@ -421,13 +423,14 @@ preserving the later privacy required check.
 
 The effective branch-rules API and `main.protected=true` confirm activation.
 #46 merged this policy ledger at `91ff511609cfb717bf71c3cafe07c0cbb2a2a317`.
-This is baseline governance, not completion of #31: the reviewed pinned daemon
-E2E check is not yet available to require,
-the scheduled latest-main canary is not wired, and coverage remains
-informational. The solo-maintainer policy does not waive
-the separate Nova coherence or Val freeze gates, or their engineering
-prerequisites. [The authorization and exact policy change](https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5642501227)
-are recorded on #31.
+This is baseline governance, not completion of #31: the required pinned daemon
+lane remains unactivated, the separate advisory latest-main schedule is active,
+and coverage remains informational. The merge policy does not waive human
+acceptance or its engineering prerequisites.
+[Its authorization and exact rule change](https://github.com/OpenCoven/coven-threads/issues/31#issuecomment-5642501227)
+are recorded on #31. The separate September 13
+[Phase-5 review policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) changes human
+review ownership, not those requirements or GitHub protection.
 
 #38 merged as `af013612`; #37 is closed. It pins the existing
 external CI actions and preserves explicit Rust 1.88.0 inputs in every
@@ -490,7 +493,7 @@ those owner-specific integrations separate from Phase-5 closure.
 | 2 | Daemon integration | `[FROZEN; IN RELEASE TAG]`; `.14`, `.20`, and `.19` closed | Phase-5 route and replay defects remain separate |
 | 3 | Portability format | `[ENGINEERING FROZEN]`; `.21`, `.16`, and exporter follow-up `threads-jq4` closed | No `.af` import or authority-preserving `.af` round-trip |
 | 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`; `threads-986.17`, adapter follow-up `threads-v3g`, and degraded-familiar follow-up `threads-k9s` closed | New Phase-5 live-daemon acceptance remains separate |
-| 5 | Approval semantics | `[ACTIVE]`; sign-off refused 2026-07-29; four remediation beads remain unresolved, with draft harness and fix work underway | Real-daemon remediation evidence, then independent Nova sign-off (`.9`) and Val freeze (`.10`) |
+| 5 | Approval semantics | `[ACTIVE]`; historical refusal retained; four remediation beads remain unresolved despite landed harness and component fixes | Real-daemon remediation evidence, then Val coherence acceptance (`.9`) and scoped freeze/reaffirmation (`.10`) |
 
 ## Known housekeeping discrepancies
 

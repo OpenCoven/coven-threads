@@ -147,15 +147,17 @@ through the real daemon boundary as described in the E2E contract.
 
 ## Human authority
 
-Nova's independent coherence review and Val's freeze are human gates. Agents may
-prepare evidence and recommendations. They must never simulate, self-attest, or
-close those gates on a human's behalf.
+Under the [adopted Phase-5 solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md),
+Val performs the human coherence acceptance and the subsequent scoped
+freeze/reaffirmation. Val may author and self-review; agent reviews are
+engineering evidence, not independent human approval. Agents must never
+simulate, self-attest, or close either human gate on Val's behalf.
 
 ## Familiar lanes
 
 - 🌿 **Sage**: contract synthesis, conformance mapping, evidence packets.
 - 🔮 **Echo**: predicate, audit, replay, and substrate-authority review.
-- 👑 **Nova**: daemon integration and independent coherence review.
+- 👑 **Nova**: daemon integration and technical coherence review; Val owns human acceptance.
 - ⚡ **Cody**: Rust contracts, regressions, and deterministic test seams.
 - ✨ **Charm**: Cave language and live-daemon human acceptance.
 
