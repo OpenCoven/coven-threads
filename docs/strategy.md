@@ -3,7 +3,7 @@
 Finish the real-daemon authority boundary before declaring Phase 5 complete
 or expanding its authority claims.
 
-**Planning baseline: 2026-09-11; repository rollout updated 2026-09-12 (UTC).**
+**Planning baseline: 2026-09-11; repository rollout updated 2026-09-13 (UTC).**
 This is an explanatory delivery strategy,
 not a new normative contract, task tracker, or approval. [GitHub #31](https://github.com/OpenCoven/coven-threads/issues/31)
 and its linked issues own cross-repository work; Beads owns local task status.
@@ -16,6 +16,8 @@ The [execution checkpoint](reviews/2026-09-12-execution-checkpoint.md) records
 the subsequent advisory-lane landing and exact-current-checkout daemon result.
 The [boundary remediation packet](reviews/2026-09-12-boundary-proof-remediation.md)
 records the later Windows, identity-replay, and bounded-auto contributions.
+The [current decision](phases.md#current-decision) records their subsequent
+main landings and the advisory provenance correction.
 
 ## Starting position
 
@@ -25,7 +27,7 @@ records the later Windows, identity-replay, and bounded-auto contributions.
 | Automation Authority Profile v1 | Schemas, reference validator, signed evidence contracts, and exact vectors | Production scheduler, credential issuance, runtime-adapter adoption, or Rust API integration |
 | Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret scanning, and a required separate privacy job | Required daemon compatibility, immutable checker authority, or a coverage ratchet |
 | Governance | Authorized solo-maintainer policy, required PRs, resolved conversations, and five strict required checks | GitHub-enforced independent review, a required pinned-daemon check, or either Phase-5 human decision |
-| Downstream integration | Earlier release-source integration and substantial draft process-boundary evidence | Reviewed landing of the four remediations, full acceptance, or installed-binary conformance |
+| Downstream integration | Landed publication, replay, bounded-auto, recovery, and native-startup contributions | Complete root acceptance, installed-binary conformance, or human approval |
 
 The core's three verdicts and the automation profile's four outcomes answer
 different questions. Do not add an automation approval outcome to the Rust
@@ -64,21 +66,22 @@ This completes the bounded rollout, not the daemon acceptance work below.
 A required scanner job is not tamper-proof enforcement against
 changes to the checker or calling workflow.
 
-### 2. Close the implementation and acceptance gaps in Coven
+### 2. Complete remaining root acceptance in Coven
 
 **Owners:** daemon integration lane and Cody for implementation; Echo for
 predicate/audit/replay review; Sage for evidence mapping.
 **Tracking:** OpenCoven/coven#1022, OpenCoven/coven#931, OpenCoven/coven#976,
-OpenCoven/coven#977; `threads-8pz`.
+OpenCoven/coven#977; `threads-8pz`. The integration PRs are now landed
+checkpoints, not invitations to build parallel implementations.
 
 The original September 12 target was
 `ea3f455aa66bb92880d95f57eeb7ca8d845b7fe6`, against main
-`aa527d2dbcd1edcda470483c1a91a519f24e8406`. Its shared branch remains
+`aa527d2dbcd1edcda470483c1a91a519f24e8406`. That checkpoint left the shared branch
 untouched. The separate draft OpenCoven/coven#1022 initially composed both parents
 at `65766b89b4c945d325853cefdd05f364ee87cbac`; that head's exact-current-Threads
 Linux observation and native macOS boundary targets pass, with retained
 failure history in the execution checkpoint. Those receipts remain historical;
-review the current paired candidate below rather than landing an obsolete
+review the landed paired contribution below rather than reviving an obsolete
 head. Preserve the clock
 (OpenCoven/coven#968), protected-intake (OpenCoven/coven#933), and typed-terminal
 (OpenCoven/coven#932) checkpoints already landed on main. Reconcile overlapping
@@ -88,7 +91,7 @@ rejected null-close approach.
 | Obligation | Existing work owner | Required closure evidence |
 | --- | --- | --- |
 | Identity binding from classification through replay | OpenCoven/coven#885; `threads-okc` | Bind supported predicate/candidate evidence at intake; prove changed-but-still-valid evidence cannot reuse stale authority, including restart |
-| Every approval ceremony reaches supported intake | Existing integration OpenCoven/coven#1022; bounded auto OpenCoven/coven#1029 and #57; separate publication owner OpenCoven/coven#972 | Accept exact-head native/current-core proof of both auto variants and the human paths; preserve protected floors and reject injected positive envelopes. #13 is the downstream acceptance gate, not the implementation owner |
+| Every approval ceremony reaches supported intake | Daemon acceptance OpenCoven/coven#884; landed OpenCoven/coven#1022, OpenCoven/coven#972, OpenCoven/coven#1029, and #57 | Accept exact-head native/current-core proof of both auto variants and the human paths; preserve protected floors and reject injected positive envelopes. #13 is the downstream acceptance gate, not the implementation owner |
 | Complete submission/opening/typed-close chain | OpenCoven/coven#886; `threads-980`; bounded OpenCoven/coven#932 fix is on main | Matching and ordered submission/opening/close evidence across crashes, complete terminal/recovery matrix, duplicate prevention, and explicit resolution of ambiguous applying state without fabricated receipts |
 | Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg`; bounded OpenCoven/coven#933 fix is on main | Full known-route, retry, cross-familiar, stale-claim, and recovery refusal matrix with persisted effects |
 | Retired-Ward schedulability | OpenCoven/coven#888; `threads-zav` | Supported migration/intake, observable minimum visibility, exact time boundaries, restart, and unsupported-input refusal |
@@ -105,15 +108,17 @@ to OpenCoven/coven#888. OpenCoven/coven#1019 supplied synthetic budget interpret
 later native repair. Keep those earlier receipts dated rather than calling
 them current blockers.
 
-The next integration step remains the paired #57 / OpenCoven/coven#1029
-contribution. Core `2c7a305e`, daemon `d01136f7`, and owner base `8d48bf79`
-identify its earlier checkpoint, not the later composed source. Use the paired
-pull requests for current revisions and fresh native/current-core acceptance,
-including the registry's corrected mixed-batch refusal. Land through the existing
-owner, rather than reopening parallel fixture implementations. Preserve the
-exact pinned core commit, or update the pin and repeat the affected proof if
-history is rewritten. The new region is strictly bounded output formatting,
-not a reason to downgrade protected memory or migration policy.
+The paired #57 / OpenCoven/coven#1029 contribution is now on main: Threads
+merge `1fe26a12609ec11744808af3f4209df475ecf8d8` and Coven merge
+`abcf926500d5dcf2dbec2f8d3bfd15a7b393c619`. Coven pins corrected core
+`0021fd2662d0b82328371ee3a6957d645f776fda`, including registry mixed-batch
+refusal. Core `2c7a305e`, daemon `d01136f7`, and owner base `8d48bf79`
+identify earlier checkpoints, not the final composed source.
+Use the paired pull requests' exact-head acceptance and preserve pin ancestry;
+repeat affected proof when either side changes. The new region is strictly
+bounded output formatting, not a reason to downgrade protected memory or
+migration policy. The next work is the unresolved root evidence, not another
+fixture integration.
 The earlier `84b8dcc7` authority target passed natively, but its dedicated CLI
 startup gate failed. The OpenCoven/coven#1030 deadline repair now passes all six
 original native CLI cases. The subsequent OpenCoven/coven#1031 correction
@@ -140,9 +145,14 @@ canonical contract, obtain that decision rather than silently narrowing #13.
 **Owners:** Sage and the release/governance maintainer.
 **Tracking:** #31 and [`e2e/compatibility.toml`](../e2e/compatibility.toml).
 
-After the daemon target and fixes land through review, propose a full-SHA pin
-to that accepted downstream revision. Keep the current pin unchanged until
-then; `status = "harness-required"` is honest today.
+The daemon target and paired fixes have landed. Next, propose a reviewed
+full-SHA compatibility pin and a dedicated pull-request lane, retaining the
+separate non-blocking latest-main schedule. The old pin remains
+`39feb6de98816d10b490091e918f62035e6ce0df` with
+`status = "harness-required"`; it is not a record of the newly accepted daemon.
+Review the eight-journey stability and failure-evidence prerequisites before
+changing enforcement. Neither a successful manual observation nor a mutable
+`main` ref is permission to change protected rules.
 
 The required topology is:
 
@@ -158,15 +168,21 @@ in for the pull request's checkout.
 
 Follow the [E2E rollout contract](testing/e2e-contract.md#10-ci-rollout):
 observe the non-required lane, prove intentional red cases and stable
-diagnostics, then require pinned Linux daemon acceptance. Implement the
-non-blocking scheduled `coven/main` canary separately. The TOML declaration
-alone does not schedule it.
+diagnostics, then require pinned Linux daemon acceptance. Keep the existing
+non-blocking scheduled `coven/main` canary separate. The TOML declaration alone
+does not create a required check.
 
 The `daemon-observation.yml` workflow now supplies that advisory schedule and
 manual full-SHA candidate runs. It records exact revisions and overlay
 resolution, rejects any dependency edge not pointing to the current Threads
 checkout, and fails visibly when the selected daemon lacks `threads_e2e`.
 It landed through #49, #50, and #51 and is active on the default branch.
+#56 subsequently landed at `1a3a88e4`, closing #54's provenance gap:
+configuration identity/bytes and the final metadata lockfile are rechecked at
+command boundaries. Its fresh post-merge run exercised 110 real-daemon
+scenarios against immutable Coven `08ebe853`, with the actual local override
+and complete artifacts inspected. This does not claim hermeticity or detect
+transient changes restored between commands.
 The execution checkpoint records the first bounded successful observation and
 the retained setup failures. Neither activation nor that exact-head result
 authorizes a new required check, replacement stable pin, or Phase-5 freeze.
