@@ -32,3 +32,4 @@ __pycache__/
 /.fastembed_cache
 *.bak-*
 /.playwright-cli
+/.psyche

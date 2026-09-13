@@ -505,6 +505,90 @@ impl SurfaceRegionPredicate for HeartbeatBehaviorRegion {
     }
 }
 
+/// Replacement-only JSON presentation settings; no content or executable fields.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OutputFormatRegion;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OutputFormatSettings {
+    schema: String,
+    indent: u8,
+    final_newline: bool,
+}
+
+impl OutputFormatRegion {
+    /// The only supported path. The daemon must resolve aliases before extraction.
+    pub const SURFACE: &'static str = "output-format.json";
+
+    /// Validate a single complete replacement without accepting arbitrary batches.
+    pub fn validate(diff: &MaterializedDiff) -> Result<(), &'static str> {
+        let [surface] = diff.surfaces() else {
+            return Err("output-format requires exactly one replacement");
+        };
+        if surface.surface.as_str() != Self::SURFACE {
+            return Err("output-format requires its dedicated surface");
+        }
+        Self::validate_surface(surface)
+    }
+
+    fn validate_surface(surface: &SurfaceDiff) -> Result<(), &'static str> {
+        for bytes in [surface.before.as_deref(), surface.after.as_deref()] {
+            let bytes = bytes.ok_or("output-format creation and deletion are not supported")?;
+            if bytes.len() > 256 {
+                return Err("output-format image exceeds 256 bytes");
+            }
+            // Serde's derived struct also accepts sequences; this contract does not.
+            if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) != Some(&b'{') {
+                return Err("output-format requires a JSON object");
+            }
+            let settings: OutputFormatSettings = serde_json::from_slice(bytes)
+                .map_err(|_| "output-format requires the closed v1 JSON schema")?;
+            let OutputFormatSettings {
+                schema,
+                indent,
+                final_newline,
+            } = settings;
+            let _ = final_newline;
+            if schema != "coven.output-format/v1" {
+                return Err("output-format requires schema string coven.output-format/v1");
+            }
+            if !matches!(indent, 2 | 4) {
+                return Err("output-format indent must be 2 or 4");
+            }
+        }
+        Ok(())
+    }
+}
+
+impl SurfaceRegionPredicate for OutputFormatRegion {
+    fn materialize(&self, proposal: &MaterializedDiff) -> Option<RegionEvidence> {
+        let surface = proposal.for_surface(&SurfaceId::new(Self::SURFACE))?;
+        let affected_surfaces = vec![surface.surface.clone()];
+        Some(RegionEvidence {
+            region_id: SurfaceRegionId::new("output_format"),
+            replay_bytes: materialized_surface_replay(proposal, &affected_surfaces),
+            affected_surfaces,
+            min_path_tier: if Self::validate(proposal).is_ok() {
+                2
+            } else {
+                0
+            },
+            rationale: "Only closed v1 output-format replacements are proposal-eligible".into(),
+        })
+    }
+
+    fn describe(&self) -> SurfaceRegionDescriptor {
+        SurfaceRegionDescriptor {
+            region_id: SurfaceRegionId::new("output_format"),
+            label: "Output Format".into(),
+            candidate_surfaces: vec![SurfaceId::new(Self::SURFACE)],
+            typical_min_tier: 2,
+            description: "Finite JSON indentation and final-newline settings; no content.".into(),
+        }
+    }
+}
+
 /// A registry of region predicates. The daemon holds one of these and calls
 /// `classify_all` at proposal intake to populate
 /// `ProposalClassification.affected_regions`.
@@ -526,12 +610,13 @@ impl SurfaceRegionRegistry {
         Self { predicates }
     }
 
-    /// Default registry: execution prompt + tool defaults + heartbeat.
+    /// Default registry: execution prompt, tool defaults, heartbeat, and bounded output format.
     pub fn default_registry() -> Self {
         Self::new(vec![
             Box::new(ExecutionPromptRegion::default_protected()),
             Box::new(ToolDefaultsRegion::default_protected()),
             Box::new(HeartbeatBehaviorRegion::default_protected()),
+            Box::new(OutputFormatRegion),
         ])
     }
 
@@ -821,11 +906,12 @@ mod tests {
     fn registry_descriptors_covers_all_registered_regions() {
         let registry = SurfaceRegionRegistry::default_registry();
         let descs = registry.descriptors();
-        assert_eq!(descs.len(), 3);
+        assert_eq!(descs.len(), 4);
         let ids: Vec<&str> = descs.iter().map(|d| d.region_id.as_str()).collect();
         assert!(ids.contains(&"execution_prompt"));
         assert!(ids.contains(&"tool_defaults"));
         assert!(ids.contains(&"heartbeat_behavior"));
+        assert!(ids.contains(&"output_format"));
     }
 
     #[test]

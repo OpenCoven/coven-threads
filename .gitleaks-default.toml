@@ -1,0 +1,3 @@
+# Built-in rules of the checksum-pinned Gitleaks release; no repo allowlists.
+[extend]
+useDefault = true

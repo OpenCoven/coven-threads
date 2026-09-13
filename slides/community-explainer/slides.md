@@ -53,7 +53,18 @@ code { color: var(--oc-purple-accent); background: rgba(212,181,255,0.08); paddi
 layout: default
 ---
 
-<div style="position:absolute; inset:0; width:100%; height:100%; background-image:url('/s-showspells.jpg'); background-size:cover; background-position:center; background-repeat:no-repeat;"></div>
+<div class="label">Weekly Open Coven · 2026-07-14</div>
+
+# Show'n Spells
+
+<p class="pull mt-8">Introducing <code>coven-threads</code>: the authority contract for a familiar's protected memory.</p>
+
+<div class="grid grid-cols-2 gap-6 mt-8">
+  <div class="card"><strong>The show</strong><p>A vocabulary you can inspect: Threads, Weaves, Strands, and Channels.</p></div>
+  <div class="card"><strong>The spell</strong><p>Enforce on authoritative predicates. Keep derived descriptions for legibility.</p></div>
+</div>
+
+<p class="mt-6" style="color:var(--oc-purple-light);">Historical launch: Phase-0 design frozen. Enforcement follows in Phase 1+.</p>
 
 
 <!--
@@ -118,7 +129,18 @@ This is the launch moment. What we're releasing is the frozen design — the voc
 layout: default
 ---
 
-<div style="position:absolute; inset:0; width:100%; height:100%; background-image:url('/s-coremove.jpg'); background-size:cover; background-position:center; background-repeat:no-repeat;"></div>
+<div class="label">The core vocabulary</div>
+
+# One question. Four concepts.
+
+<div class="grid grid-cols-2 gap-4 mt-6">
+  <div class="card"><strong>Thread</strong><p>An authority relationship from one surface to one writer.</p></div>
+  <div class="card"><strong>Weave</strong><p>The enforced pattern of Threads that must hold together.</p></div>
+  <div class="card"><strong>Strand</strong><p>A commitment inside a Thread: a hash, signature, manifest entry, audit trail, or serialization marker.</p></div>
+  <div class="card"><strong>Channel</strong><p>The load: <code>Deliberate</code>, <code>Forced</code>, <code>Serialization</code>, or <code>Mutation</code>.</p></div>
+</div>
+
+<p class="pull mt-6">Does Thread T hold under Channel C?</p>
 
 
 <!--
@@ -187,10 +209,19 @@ Discord-reply ammo if a Letta contributor pushes back: in the memory-block schem
 layout: default
 ---
 
-<div style="position:absolute; inset:0; width:100%; height:100%; background-image:url('/s-enforcement.jpg'); background-size:cover; background-position:center; background-repeat:no-repeat;"></div>
-<div style="position:absolute; top: 24px; left: 50%; transform: translateX(-50%); background: rgba(15,10,20,0.70); border:1px solid rgba(212,181,255,0.3); border-radius: 999px; padding: 0.4rem 1.4rem; font-size: 0.85rem; letter-spacing:0.1em; text-transform:uppercase; color: #D4B5FF; z-index:10;">
-Show'n Spells &middot; cast it live
+<div class="label">Show'n Spells · the designed enforcement flow</div>
+
+# The daemon owns the boundary.
+
+<p class="pull mt-5">Untrusted client → trusted daemon → Threads validator</p>
+
+<div class="grid grid-cols-3 gap-4 mt-6">
+  <div class="card"><strong><code>Permit</code></strong><p>The daemon may perform the authorized write and audit it.</p></div>
+  <div class="card"><strong><code>DegradeToProposal</code></strong><p>No direct write. Staging requires proposal eligibility and a separate approval ceremony.</p></div>
+  <div class="card"><strong><code>Reject</code></strong><p>No write. Surface the named failure and its audit record.</p></div>
 </div>
+
+<p class="mt-6" style="color:var(--oc-purple-light);">The validator computes; the daemon acts. Protected targets cannot be promoted through the proposal pipeline.</p>
 
 <!--
 This is the fun part. Live terminal, or walk the enforcement flow on this slide. Untrusted client → coven daemon → coven-threads → load weave → check strands under channel → Permit / DegradeToProposal / Reject. Try to break the familiar, show the gate holding. If demo gremlins strike, this slide IS the fallback. The daemon is the trust boundary — every client is untrusted for enforcement purposes.

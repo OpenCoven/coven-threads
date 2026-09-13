@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opencoven.dev/automation-authority/v1/keyring.schema.json",
+  "title": "Automation Authority Keyring v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "keys"],
+  "properties": {
+    "schema_version": {
+      "const": "opencoven.automation-authority-test-keyring/v1"
+    },
+    "keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^.+$": {
+          "$ref": "#/$defs/key"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "key": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "public_key_pem"],
+          "properties": {
+            "role": {
+              "const": "threads_authority"
+            },
+            "public_key_pem": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "principal_id", "public_key_pem"],
+          "properties": {
+            "role": {
+              "enum": ["principal", "protected_owner", "auditor"]
+            },
+            "principal_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "public_key_pem": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

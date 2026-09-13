@@ -58,20 +58,21 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- END BEADS INTEGRATION -->
 
 
-## Build & Test
+## Build and verification
 
-_Add your build and test commands here_
+Read [`AGENTS.md`](AGENTS.md) for repository ownership and conventions, and
+[`agent/manifest.yaml`](agent/manifest.yaml) for the bootstrap and verification
+contract.
 
 ```bash
-# Example:
-# npm install
-# npm test
+bash scripts/agent-bootstrap.sh
+bash scripts/agent-check.sh fast
+bash scripts/agent-check.sh full
 ```
 
-## Architecture Overview
+## Architecture and current work
 
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
+Threads owns validator and audit-schema contracts. Coven owns runtime authority
+and effects. Follow the canonical ownership and normative precedence in
+`AGENTS.md`; consult [`docs/phases.md`](docs/phases.md) for delivery evidence
+and unresolved gates. A successful check does not replace human approval.

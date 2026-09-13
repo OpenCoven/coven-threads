@@ -3,7 +3,17 @@
 **Status:** DECIDED — Val selected **Shape B + lossy one-way `.af` exporter** on 2026-07-15 (see §6). The `.weave` envelope is the canonical portability format.
 **Date:** 2026-07-15
 **Upstream:** RFC-0001 §5 (round-trip anchor); `PHASE-0-DESIGN.md` §2.4 `Channel::Serialization`, §3.3 C7
-**Implemented substrate (shape-agnostic):** `coven-threads-core::portability` — `PortableWeave` envelope, `SerializationContract`, `export_weave` / `import_weave` with the fail-visibly matrix; C7 round-trip conformance suite green (11 tests, `tests/c7_roundtrip.rs`)
+**Design-time substrate (2026-07-15, shape-agnostic):** `coven-threads-core::portability` — `PortableWeave` envelope, `SerializationContract`, `export_weave` / `import_weave` with the fail-visibly matrix; C7 round-trip conformance suite green (11 tests, `tests/c7_roundtrip.rs`)
+
+> **Delivery erratum (2026-09-11, #44):** The follow-up described in §6 landed
+> in #2 (`5b4a51a`), closing `threads-jq4`, as recorded in
+> [`docs/phases.md`](../docs/phases.md). `PortableWeave` now carries optional
+> surface payloads, `export_weave_with_surfaces` verifies their commitments,
+> and `export_af` produces the explicitly lossy one-way handoff. Legacy
+> envelopes without payloads remain supported. The comparison's
+> implementation-distance statements, §6 follow-up status, and 11-test counts
+> below describe the July 15 decision checkpoint, not current implementation.
+> This erratum does not change the selected format or its conformance rules.
 
 ---
 

@@ -30,7 +30,7 @@
 //! predicate result is authoritative; probe output feeds `advisory_probes` on
 //! the proposal surface, never `probes`.
 //!
-//! See [`AdvisoryProbe`] and [`AdvisoryProbeResult`] for the type shapes.
+//! See [`AdvisoryProbes`] and [`AdvisoryProbeResult`] for the type shapes.
 //!
 //! ## Fail-closed ambiguity rule (decision 4)
 //!
@@ -198,6 +198,13 @@ pub struct IdentityInvariantSet {
 impl IdentityInvariantSet {
     /// Compile retired Ward declaration strings such as
     /// `familiar.name == 'Example'` and `familiar.purpose includes 'review'`.
+    ///
+    /// This is the concrete implementation of the compilation story required by
+    /// RFC-0001 §5.2 (identity-invariant storage and enforcement) and §4.2
+    /// (Ward declaration format). Retired declaration strings are parsed,
+    /// validated, and assembled into a [`IdentityInvariantSet`] that can be
+    /// serialised for durable storage and later evaluated against candidate
+    /// identity facts.
     ///
     /// `familiar.name` and `familiar.person` are mandatory. Unknown fields,
     /// unknown operators, duplicate declarations, and empty values fail closed.

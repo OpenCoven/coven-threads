@@ -1,6 +1,6 @@
 # Concepts
 
-> Status of everything on this page: `[DESIGNED]` — frozen in `specs/PHASE-0-DESIGN.md` v0.2 (2026-07-14). Types exist in `coven-threads-core` mirroring this design, but no enforcement is deployed.
+> This page describes the frozen Phase-0 vocabulary and the explicitly marked Phase-5 additions. Types exist in `coven-threads-core`, and daemon release tags include the integration. This conceptual description is not evidence of complete runtime conformance; see [the delivery ledger](phases.md).
 
 `coven-threads` is named around a weaving metaphor. The metaphor was named by Val (2026-07-14) and is kept **only where it carries semantic weight**. The rule that makes this safe is the **metaphor-referent binding rule** (design doc §2.5): every metaphor term is defined at first use with its concrete referent, and if a contributor uses a term without meaning its referent, they are wrong — and, wherever possible, the code will not compile. Without that rule, the vocabulary drifts ahead of the semantics and we become the thing we're avoiding: beautiful language, unclear meaning.
 
@@ -21,7 +21,11 @@ A thread has **tension**: it either holds under load, or it degrades. Load means
 
 That question is what the metaphor buys us. It is the enforcement vocabulary of the whole layer, and it appears in the type sketch as `Thread::holds_under(channel)`.
 
-Threads are first-class inspectable objects. The design requires that `coven-threads inspect <thread-id>` return the thread's current tension state (Holds / Frayed / Snapped — see [authority-model.md](authority-model.md) for the state machine).
+Threads are first-class inspectable objects. The frozen design sketches
+`coven-threads inspect <thread-id>`, but this repository ships a library, not
+that executable. Inspection must use a supported daemon or Cave surface.
+See the [tension state machine](authority-model.md#the-thread-tension-state-machine)
+for `Holds`, `Frayed`, and `Snapped`.
 
 ## Weave — the enforced pattern of threads
 
@@ -69,7 +73,7 @@ A **Channel** (*the axis of load a thread must hold under*) names the path by wh
 Phase 5 (open, not frozen; authoritative record: `specs/PHASE-5-APPROVAL-SEMANTICS.md`) adds a second axis beside Channel, and the distinction is bound here because it is the likeliest conflation for a new contributor:
 
 - **Channel** answers *why a thread is stressed* — the axis of load, exactly as defined above. It is frozen Phase-0 vocabulary and remains a **first-class enforcement axis**: every gate check is still "does thread T hold under channel C?", an unknown channel still rejects, and C7 still requires a `SerializationMarker` under `Channel::Serialization`. Nothing in Phase 5 changes any of this.
-- **ApprovalPath** answers *which ceremony must approve applying a staged proposal* — auto-regression, familiar-coherence review, human approval, or human approval with rationale (the RFC-0001 §5.3 tiers). It is a Phase 5 addition, assigned by daemon-side classification at proposal intake.
+- **`ApprovalPath`** answers *which ceremony must approve a proposal-eligible change*: auto-regression, familiar-coherence review, human approval, or human approval with rationale (the RFC-0001 §5.3 tiers). Daemon classification assigns it at intake. Protected targets cannot be promoted through this pipeline; they require a separate audited authority path. Not every approval path has a veto window: human paths wait for explicit approval, while `AutoRegression { veto: None }` has no veto period. Every path still requires final live revalidation.
 
 The two axes are orthogonal, and each is authoritative in its own dimension. The binding rule (spec decision 1): **never derive ApprovalPath from Channel.** A mutation that requires human rationale is still `Channel::Mutation` — the channel names the load, not the ceremony. And Channel is not a "derived descriptor" of anything; describing it that way would demote frozen enforcement vocabulary, which is exactly the drift the metaphor-referent rule exists to catch.
 

@@ -1,81 +1,41 @@
-# Beads - AI-Native Issue Tracking
+# Beads task tracking
 
-Welcome to Beads! This repository uses **Beads** for issue tracking - a modern, AI-native tool designed to live directly in your codebase alongside your code.
-
-## What is Beads?
-
-Beads is issue tracking that lives in your repo, making it perfect for AI coding agents and developers who want their issues close to their code. No web UI required - everything works through the CLI and integrates seamlessly with git.
-
-**Learn more:** [github.com/steveyegge/beads](https://github.com/steveyegge/beads)
-
-## Quick Start
-
-### Essential Commands
+Use Beads for local project tasks, dependencies, and handoffs. Start with the
+repository workflow:
 
 ```bash
-# Create new issues
-bd create "Add user authentication"
+bd prime
+bd ready
+```
 
-# View all issues
-bd list
+Inspect and claim an existing task before implementation:
 
-# View issue details
+```bash
 bd show <issue-id>
-
-# Update issue status
 bd update <issue-id> --claim
-bd update <issue-id> --status done
-
-# Sync with Dolt remote
-bd dolt push
 ```
 
-### Working with Issues
-
-Issues in Beads are:
-- **Git-native**: Stored in Dolt database with version control and branching
-- **AI-friendly**: CLI-first design works perfectly with AI coding agents
-- **Branch-aware**: Issues can follow your branch workflow
-- **Sync-ready**: Uses Dolt remotes for backup and team sharing
-
-## Why Beads?
-
-✨ **AI-Native Design**
-- Built specifically for AI-assisted development workflows
-- CLI-first interface works seamlessly with AI coding agents
-- No context switching to web UIs
-
-🚀 **Developer Focused**
-- Issues live in your repo, right next to your code
-- Works offline, syncs when you push
-- Fast, lightweight, and stays out of your way
-
-🔧 **Git Integration**
-- Dolt-native sync via bd dolt push / bd dolt pull
-- Branch-aware issue tracking
-- Dolt-native three-way merge resolution
-
-## Get Started with Beads
-
-Try Beads in your own projects:
+Close a task only when its acceptance criteria are met:
 
 ```bash
-# Install Beads
-curl -sSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
-
-# Initialize in your repo
-bd init
-
-# Create your first issue
-bd create "Try out Beads"
+bd close <issue-id> --reason="Describe the completed outcome"
 ```
 
-## Learn More
+## Storage and synchronization
 
-- **Documentation**: [github.com/steveyegge/beads/docs](https://github.com/steveyegge/beads/tree/main/docs)
-- **Quick Start Guide**: Run `bd quickstart`
-- **Examples**: [github.com/steveyegge/beads/examples](https://github.com/steveyegge/beads/tree/main/examples)
+Issues live in a local Dolt database. `.beads/issues.jsonl`, when present, is a
+passive export, not the writable source of truth. Do not commit mutable
+interaction logs to satisfy task bookkeeping.
 
----
+Remote synchronization is separate from local tracking. Run `bd dolt push`
+or `bd dolt pull` only when the active instructions authorize it; a Git push
+does not establish that the issue database was synchronized.
 
-*Beads: Issue tracking that moves at the speed of thought* ⚡
+## Repository boundaries
+
+Follow [the root agent guide](../AGENTS.md) for canonical ownership, GitHub
+issue requirements, human gates, and commit/push authority. Clean-clone
+bootstrap and CI must not depend on a personal Beads database.
+
+See [the Beads documentation](https://github.com/gastownhall/beads) for tracker
+installation and command details.

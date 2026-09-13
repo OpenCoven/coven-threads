@@ -1,0 +1,22 @@
+schema_version = "opencoven.threads-compatibility/v1alpha1"
+
+[downstream.coven]
+repository = "OpenCoven/coven"
+# Reviewed protected-main commit used by the required compatibility lane once
+# the black-box `threads_e2e` target lands downstream.
+ref = "39feb6de98816d10b490091e918f62035e6ce0df"
+package = "coven-cli"
+threads_dependency_manifest = "crates/coven-cli/Cargo.toml"
+current_threads_rev = "c102844"
+required_test_target = "threads_e2e"
+status = "harness-required"
+
+[downstream.coven.canary]
+ref = "main"
+schedule = "nightly"
+blocking = false
+
+[artifacts]
+root = "target/e2e-artifacts"
+retention_days = 14
+synthetic_fixtures_only = true

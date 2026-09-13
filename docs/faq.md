@@ -1,6 +1,6 @@
 # FAQ
 
-Honest answers to the questions we expect. Sources cited inline; when in doubt, the order of authority is RFC-0001 §5, then `specs/PHASE-0-DESIGN.md` (frozen v0.2), then the `coven-grimoire` Ward Layer Spec Brief §9. Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
+These answers explain the authority contracts and their limits. When sources disagree, follow the [normative source order](README.md#normative-sources): RFC-0001, frozen or active decision records under `specs/`, public Rust contracts and conformance vectors, then explanatory documentation. The Ward Layer Spec Brief §9 remains the cited canonical home of WARD-C1–C7. Vocabulary (bound in [concepts.md](concepts.md)): **Thread** = authority relationship *surface → writer*; **Weave** = enforced pattern of threads; **Strand** = fiber inside a thread; **Channel** = axis of load.
 
 ## Why not just make SOUL.md read-only at the filesystem level?
 
@@ -8,18 +8,20 @@ Because `chmod 444` answers the wrong question. Filesystem permissions gate *whe
 
 Walk through what read-only-on-disk actually fails to cover:
 
-- **Legitimate writes have to happen.** SOUL.md and MEMORY.md are living surfaces — the dreaming sweep promotes memory into them under principal consent (`Channel::Deliberate`). A read-only bit gives you a binary: either nobody writes (the surface is dead) or someone flips the bit to write (and while it's flipped, *anyone* with that privilege writes). There is no "writes permitted only through the gated proposal path" mode in POSIX permissions.
+- **Legitimate writes need distinct authority paths.** Proposal-eligible memory changes may use the approval pipeline; protected `SOUL.md` updates require a separate audited principal-authorized path. A read-only bit does not express which writer, channel, or ceremony authorizes a particular change. OS isolation supports this boundary but cannot replace those checks.
 - **The file on disk isn't the only copy that matters.** Protected content is *materialized into the context window* to take effect, and forced compaction (`Channel::Forced`) rewrites the window, not the file. The disk copy can be pristine while the working identity is silently paraphrased away. WARD-C1–C6 exist precisely because the file's permission bits are irrelevant to that mutation path (Ward Layer Spec Brief §9).
 - **Serialization leaves the filesystem entirely.** Export/import (`Channel::Serialization`) round-trips the identity through an artifact where no permission bit follows it. C7 exists because the protection must be a property of the *authority contract*, carried in the artifact and verified on import — not a property of one filesystem's metadata.
-- **No audit, no legibility, no degradation.** A blocked write under `chmod` is an `EACCES` and nothing else. The gate layer gives you a typed verdict, a named reason, an append-only `ward.audit` entry (RFC-0001 §5.6), and — for the repairable middle ground — `DegradeToProposal` staging so a human can approve the write rather than the write simply vanishing.
+- **No typed repair workflow.** A blocked write under `chmod` is an `EACCES`, not an authority decision with a named reason. The gate contract adds typed verdicts and daemon-owned `ward.audit` records. `DegradeToProposal` permits no direct write; staging and subsequent approval apply only to proposal-eligible targets.
 
-**Where this now lives in shipped code (2026-07-15).** PR https://github.com/OpenCoven/coven/pull/382 wired the gate into the coven daemon. On the daemon's protected-edit path (`crates/coven-cli/src/api.rs`), each proposal moves through three ordered steps:
+**Historical integration checkpoint (2026-07-15).** [OpenCoven/coven#382](https://github.com/OpenCoven/coven/pull/382) wired the gate into the daemon's protected-edit path (`crates/coven-cli/src/api.rs`) in three steps:
 
 1. `Ward::evaluate` — pure adjudication of targets against tiers, no side effects.
 2. If any target is `Blocked`, `Ward::apply` refuses the whole proposal as a unit (403). A blocked target never rides into a staged write.
 3. For Tier-0 (Protected) targets that survived, `threads_gate::gate_protected_edits` (`crates/coven-cli/src/threads_gate.rs`) runs — this is where `coven-threads-core` is called. It returns a `GateOutcome` of `Permitted`, `Rejected`, `Staged`, or `Errored`.
 
 Only on `Permitted` does `Ward::apply` then run the actual write. `Staged` proposals land in `~/.coven/pending/`, and every outcome appends to the `ward_audit` sqlite table (schema from `coven_threads_core::WARD_AUDIT_SCHEMA_SQL`, RFC-0001 §5.6 field set plus coven-threads extensions).
+
+That checkpoint is implementation history, not the current normative authority rule. Proposals touching protected surfaces MUST be rejected, not staged or approved. The [delivery ledger](phases.md) tracks the protected-route remediation separately from the earlier integration.
 
 None of that is expressible with a filesystem permission bit alone: `chmod` has no verdict, no channel, no writer identity, no staged-repair path, and no audit row. The gate answers a question `chmod` cannot state.
 
@@ -30,8 +32,8 @@ Filesystem permissions are still fine as *defense-in-depth*. They are just not a
 Ward is the **spec**; `coven-threads` is the **implementation receiver**. Precisely:
 
 - **RFC-0001 §5** ("The Ward") defines the normative requirements: authority-layer separation (§5.1), the ward file format (§5.2), approval tiers (§5.3), the four enforcement gates (§5.4), regression/identity probes (§5.5), and the audit log (§5.6). It says **what** must be checked and what conformance means.
-- **The `coven` daemon** is the shipped trust boundary those checks run behind (`coven/docs/SAFETY-MODEL.md`) — but today it validates *who* and *what action*, not *what the target surface's authority state permits*.
-- **`coven-threads`** is the missing piece between them: the *gate-shaped receiver* the daemon calls, which loads the weave, checks each affected thread's strands under the request's channel, and returns a verdict (design doc §1, §5). Ward's four gates are, in weave vocabulary, the **loom** — the fixed structure threads run through — not something this repo replaces.
+- **The `coven` daemon** is the shipped trust boundary those checks run behind (`coven/docs/SAFETY-MODEL.md`). It imports Threads for typed surface validation; Coven `v0.4.3` includes the earlier integration. Complete route, identity-predicate, and replay enforcement remains subject to the unresolved Phase-5 findings.
+- **`coven-threads`** supplies the *gate-shaped receiver*: it checks the daemon-supplied weave and request, then returns a verdict (design doc §1, §5). Ward's four gates are the **loom**, the fixed structure threads run through, not something this repo replaces.
 
 So the honest relationship: Ward specifies, the daemon hosts, coven-threads enforces. If coven-threads ever disagrees with RFC-0001, coven-threads is wrong by declaration (design doc §3.2: "RFC wins on any conflict").
 
@@ -67,7 +69,7 @@ Could you bend it into a general policy engine? Probably, and the design treats 
 
 This is *the* right question, and the answer has two honest halves.
 
-**Within the boundary the system defines:** no. RFC-0001 §5.1 requires that familiar-controlled processes have *no write path* to the daemon's authority surface, and the reference architecture runs familiars behind the daemon boundary — the untrusted client speaks over the socket, the daemon revalidates everything, and coven-threads is a crate inside the daemon, unreachable from familiar-controlled code (design doc §3.2). A familiar cannot modify the Ward file, restart the authority process, or bypass the gates, because there is nothing familiar-reachable to modify, restart, or bypass.
+**Within a conforming deployment:** RFC-0001 §5.1 requires that familiar-controlled processes have no write path to the authority surface, cannot restart the authority process, and cannot bypass the gates. The daemon must enforce those requirements with authentication, live validation, and process/filesystem isolation. Calling the public Threads library from familiar-controlled code grants no daemon authority. Library placement alone does not establish isolation, and the [Phase-5 findings](phases.md) remain relevant to runtime conformance.
 
 **Outside that boundary:** physics still applies. If a familiar-controlled process runs with raw OS write access to the protected files — same user, no sandbox — then yes, it can write the bytes, and no userspace gate can stop it. RFC-0001 is explicit that convention-based protection *is not* a protected surface (§5.1); the flip side is that the enforcement claim is only as strong as the actual process isolation underneath it. What the thread layer guarantees in that case is **detection, not prevention**: the out-of-band write breaks the `ContentHash` strand's commitment, the thread frays or snaps on next verification, the surface degrades to read-only through the gate, and the event is legible in `ward.audit` — tampering is caught by re-derivation from source, not silently absorbed (§3.3.1).
 
@@ -79,9 +81,9 @@ Different lifetimes, different roles — roughly the difference between a *stand
 
 A **Thread** is durable: the authority relationship from one protected surface to one writer, constructed once (with its strands committed), persisting across sessions, carrying tension state that evolves under load. It answers: *who may write this surface, under what channels, backed by what commitments, and is that relationship currently intact?*
 
-A **MutationRequest** is momentary: one attempted write, described by exactly three facts — which surface, which writer, which channel (`validate.rs`; design doc §5). It exists for the duration of one gate check and resolves to one verdict.
+A **`MutationRequest`** describes one attempted write through `surface`, `writer`, `channel`, and optional `identity_context` (`validate.rs`). Structural-only patterns ignore the identity context; identity-aware patterns reject absent, stale, or inconsistent evidence. The request exists for one gate check and resolves to one verdict.
 
-The gate check is where they meet: the request *names* a `(surface, writer)` pair; the validator finds the thread bound to that pair and asks whether it holds under the request's channel. Request without a matching thread → `Reject` (fail-closed: all protected surfaces MUST have threads). Thread frayed → `DegradeToProposal`. Thread holds → `Permit`. The request never carries authority of its own — authority lives in the thread, and the request is merely tested against it. (This is also why staged proposals are "data, not authority": replaying one is just submitting a new request, which meets the thread again — [authority-model.md](authority-model.md#degradetoproposal).)
+The request names a `(surface, writer)` pair. The validator checks its binding, channel coverage, tension, required strands, and contextual weave coherence. An unbound writer or uncovered channel rejects; a fray on a covered channel degrades without granting a write. `Permit` requires all applicable checks to pass. The request carries no authority of its own, and staging cannot bypass later checks. See [the verdict conditions](authority-model.md#how-tension-contributes-to-the-verdict).
 
 ## Why call it a "weave" and not just a "policy set"?
 
@@ -105,9 +107,20 @@ Deriving one from the other would collapse *where a write lands* with *which cer
 
 ## How do veto windows preserve Gate-4 fail-closed?
 
-By writing nothing before the deadline, and trusting nothing staged before it (decisions 2 and 8).
+The contract permits **delayed apply** only: a windowed proposal cannot write
+before its deadline and minimum-visible floor. The daemon must keep it
+pending-visible long enough for a human to act, then require no veto, matching
+live evidence, and final Gate-4 revalidation before committing.
 
-Phase 5 permits exactly one veto-window semantics: **delayed apply**. A proposal that passes its gates does not get written — it stages *pending-visible* through a `VetoWindow`, which carries both a `duration` and a `min_visible` floor guaranteeing the pending state was actually reachable by a human long enough to act on (same shape as the two-compaction contract's minimum-visibility requirement). At the deadline the daemon applies only if (a) no veto exists and (b) **live evidence replay matches**: it re-materializes the gate evidence and re-derives the classification's `evidence_replay_hash`. If the result differs, the proposal is rejected (`evidence_diverged`); if replay cannot produce authoritative evidence at all, it is rejected fail-closed (`revalidation_failed`). This is WARD-C7 generalized: evidence must survive the time gap, and a proposal whose evidence cannot be replayed at deadline fails closed — Gate 4's "final canonical check before apply" posture is preserved because *every* apply still happens after a live daemon re-materialization, never off a stale snapshot.
+`VetoWindow` represents the timing constraints; its presence alone does not
+prove UI reachability. Likewise, `evidence_replay_hash` commits materialized
+diff and region evidence, not every identity or runtime binding. The inspected
+draft reconstructs that hash at scheduled-envelope load and performs live
+checks at apply. Classification-time identity binding remains an explicit
+[acceptance gap](reviews/2026-09-11-landscape-and-readiness.md#phase-5-engineering-review).
+These implementation details do not narrow the required live-evidence
+contract. Divergence requires `evidence_diverged`; unavailable authoritative
+evidence requires `revalidation_failed`.
 
 Provisional apply — write now, roll back on veto — is explicitly forbidden until Val/Nova accept rollback semantics as a distinct threat model. And the window is a first-class audit interval, not a gap: every close event carries a typed `WindowCloseReason` (`applied | vetoed | evidence_diverged | revalidation_failed | superseded`). Deadline expiry is a trigger for revalidation, not a terminal state — there is no `proposal_expired`.
 
@@ -125,7 +138,7 @@ In the daemon — coven PR https://github.com/OpenCoven/coven/pull/430 — not i
 
 `coven-threads-core` v0.2.0 ships the types and the contract: `ApprovalPath` with its wire-label round-trip, `VetoWindow`, `ProposalClassification` with `evidence_replay_hash`, `WindowCloseReason`, the surface-region predicates and registry, the identity-invariant compiler, and the canonical evidence-hash function. What it deliberately does not ship is anything with a clock or a side effect: proposal classification at intake, the delayed-apply scheduler, deadline revalidation, and audit appends into `coven.sqlite3` are daemon-owned (spec §7, `threads-uqx.6`). This is the same division of labor as Phase 2: the crate is a pure computation, the daemon is the trust boundary that hosts it — everything that touches time, disk, or `ward.audit` lives behind the daemon boundary, where an untrusted client can't reach it.
 
-One status note for honesty: Phase 5 is **open, not frozen** (opened 2026-07-18 by Val + Nova). The upstream RFC amendments (familiar-contract PR #3), Nova sign-off, and Val's freeze decision all remain gates ahead of any Phase-5 freeze.
+Phase 5 remains **active, not frozen**. The upstream RFC dependencies have landed. Closure still requires the remaining remediation gates, Nova's independent coherence review, and Val's freeze. See [the delivery ledger](phases.md) for current evidence and blockers.
 
 ---
 

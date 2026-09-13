@@ -1,0 +1,11 @@
+# Repository-owned CI profile. `cargo test` remains the compatibility baseline;
+# nextest adds per-test isolation, JUnit output, and explicit flake detection.
+[profile.ci]
+fail-fast = false
+retries = 1
+flaky-result = "fail"
+
+[profile.ci.junit]
+path = "junit.xml"
+report-skipped = "ignored"
+flaky-fail-status = "failure"

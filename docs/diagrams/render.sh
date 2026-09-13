@@ -16,7 +16,7 @@ cd "$(dirname "$0")"
 
 MMDC="../../slides/community-explainer/node_modules/.bin/mmdc"
 if [ ! -x "$MMDC" ]; then
-  echo "mermaid-cli not found at $MMDC — run 'npm install' in slides/community-explainer first" >&2
+  echo "mermaid-cli not found at $MMDC; run 'pnpm --dir slides/community-explainer install --frozen-lockfile' from the repository root" >&2
   exit 1
 fi
 
