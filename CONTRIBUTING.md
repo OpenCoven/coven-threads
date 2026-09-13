@@ -48,7 +48,7 @@ Material changes outside the approved scope need renewed authorization.
 
 Ruleset `22910327` requires no approving review and disables latest-push and
 extra unattributed-change approvals. It retains pull requests, resolved review
-threads, stale-review dismissal, five strict required GitHub Actions checks,
+threads, stale-review dismissal, six strict required GitHub Actions checks,
 and deletion/non-fast-forward protection, with no bypass actors. GitHub
 enforces those controls, but does not enforce the conversational human-approval
 process or provide independent review.
@@ -56,6 +56,12 @@ process or provide independent review.
 The fifth required check, `Privacy policy guard`, was
 [separately authorized](https://github.com/OpenCoven/coven-threads/issues/39#issuecomment-5643712162)
 on 2026-09-12. It retains the checker-trust limits in [the security policy](SECURITY.md).
+
+The sixth, `Pinned daemon compatibility`, was
+[activated after accepted-main evidence and normal #65 landing](https://github.com/OpenCoven/coven-threads/issues/64#issuecomment-5656613112)
+on 2026-09-13 under the authorized engineering-closure scope. It runs all four
+daemon targets with the actual current Threads dependency. The separate
+latest-main canary remains advisory; neither job grants human acceptance.
 
 See the [governance ledger](docs/phases.md#repository-governance-baseline-active-boundary-enforcement-outstanding)
 for exact checks and rollback. Reassess independent review when another

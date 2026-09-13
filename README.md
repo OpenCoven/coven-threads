@@ -1,12 +1,16 @@
 # coven-threads
 
 **Status (2026-09-13):** Engineering phases 0–4 remain **frozen**. Phase 5 is
-**active**, with four unresolved remediation gates. The
+**active**. Three of the four root engineering blockers are closed;
+historical audit closure remains open in OpenCoven/coven#886. The
 [adopted solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) lets
 Val author and self-review; human coherence acceptance and a subsequent scoped
-freeze remain separate. Baseline protection requires PRs and five strict
-checks on `main`, not an independent approving reviewer. Required pinned-daemon
-acceptance is still missing. Coven `v0.4.3` includes the earlier integration,
+freeze remain separate. Protection requires PRs and six strict checks on
+`main`, including the four-target pinned-daemon compatibility lane, not an
+independent approving reviewer. The
+[engineering acceptance handoff](docs/reviews/2026-09-13-engineering-acceptance.md)
+records the accepted sources and remaining operator work.
+Coven `v0.4.3` includes the earlier integration,
 not proof of full Phase-5 conformance. Start with the
 [delivery strategy](docs/strategy.md), [evidence ledger](docs/phases.md), and
 [readiness review](docs/reviews/2026-09-11-landscape-and-readiness.md).

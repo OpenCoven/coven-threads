@@ -17,7 +17,10 @@ the subsequent advisory-lane landing and exact-current-checkout daemon result.
 The [boundary remediation packet](reviews/2026-09-12-boundary-proof-remediation.md)
 records the later Windows, identity-replay, and bounded-auto contributions.
 The [current decision](phases.md#current-decision) records their subsequent
-main landings and the advisory provenance correction.
+main landings and the advisory provenance correction. The
+[engineering acceptance handoff](reviews/2026-09-13-engineering-acceptance.md)
+records the later three root closures, required-lane activation, and remaining
+historical audit obligation.
 
 ## Starting position
 
@@ -25,9 +28,9 @@ main landings and the advisory provenance correction.
 | --- | --- | --- |
 | Rust core | Typed validation, approvals, identity predicates, audit schema/migrations, `.weave` portability, and conformance suites | Authentication, filesystem effects, or every daemon route |
 | Automation Authority Profile v1 | Schemas, reference validator, signed evidence contracts, and exact vectors | Production scheduler, credential issuance, runtime-adapter adoption, or Rust API integration |
-| Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret scanning, and a required separate privacy job | Required daemon compatibility, immutable checker authority, or a coverage ratchet |
-| Governance | Authorized solo-maintainer policy, required PRs, resolved conversations, and five strict required checks | GitHub-enforced independent review, a required pinned-daemon check, or either Phase-5 human decision |
-| Downstream integration | Landed publication, replay, bounded-auto, recovery, and native-startup contributions | Complete root acceptance, installed-binary conformance, or human approval |
+| Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret/privacy guards, and four-target daemon compatibility | Immutable checker authority, installed-binary conformance, or a coverage ratchet |
+| Governance | Adopted solo-maintainer policy, required PRs, resolved conversations, and six strict required checks | GitHub-enforced independent review or either Phase-5 human decision |
+| Downstream integration | Accepted current-route identity, protected proposal, and seven-case corpus engineering at `226bfcc8` | Deployed historical-audit closure, live Cave acceptance, long-run reliability, or human approval |
 
 The core's three verdicts and the automation profile's four outcomes answer
 different questions. Do not add an automation approval outcome to the Rust
@@ -68,6 +71,14 @@ changes to the checker or calling workflow.
 
 ### 2. Complete remaining root acceptance in Coven
 
+**Current disposition:** OpenCoven/coven#885, OpenCoven/coven#887, and
+OpenCoven/coven#888 are closed after normal component landing, native
+acceptance, and the fresh required current-Threads lane. OpenCoven/coven#886
+remains open: its census is read-only classification, not resolution of missing
+proposal evidence or unprovable interrupted apply. Start with the
+[operator handoff](reviews/2026-09-13-engineering-acceptance.md#remaining-operator-and-human-work),
+not a duplicate implementation of the accepted matrices.
+
 **Owners:** daemon integration lane and Cody for implementation; Echo for
 predicate/audit/replay review; Sage for evidence mapping.
 **Tracking:** OpenCoven/coven#1022, OpenCoven/coven#931, OpenCoven/coven#976,
@@ -90,11 +101,11 @@ rejected null-close approach.
 
 | Obligation | Existing work owner | Required closure evidence |
 | --- | --- | --- |
-| Identity binding from classification through replay | OpenCoven/coven#885; `threads-okc` | Bind supported predicate/candidate evidence at intake; prove changed-but-still-valid evidence cannot reuse stale authority, including restart |
+| Identity binding from classification through replay | OpenCoven/coven#885; `threads-okc` | Accepted and closed at `226bfcc8`, including the ordinary-write final-binding repair and all known intake/replay classes |
 | Every approval ceremony reaches supported intake | Daemon acceptance OpenCoven/coven#884; landed OpenCoven/coven#1022, OpenCoven/coven#972, OpenCoven/coven#1029, and #57 | Accept exact-head native/current-core proof of both auto variants and the human paths; preserve protected floors and reject injected positive envelopes. #13 is the downstream acceptance gate, not the implementation owner |
-| Complete submission/opening/typed-close chain | OpenCoven/coven#886; `threads-980`; bounded OpenCoven/coven#932 fix is on main | Matching and ordered submission/opening/close evidence across crashes, complete terminal/recovery matrix, duplicate prevention, and explicit resolution of ambiguous applying state without fabricated receipts |
-| Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg`; bounded OpenCoven/coven#933 fix is on main | Full known-route, retry, cross-familiar, stale-claim, and recovery refusal matrix with persisted effects |
-| Retired-Ward schedulability | OpenCoven/coven#888; `threads-zav` | Supported migration/intake, observable minimum visibility, exact time boundaries, restart, and unsupported-input refusal |
+| Complete submission/opening/typed-close chain | OpenCoven/coven#886; `threads-980` | Supported nine-case matrix and global read-only census landed; actual deployed inventory and evidence-backed disposition remain required |
+| Protected proposals never become writes | OpenCoven/coven#887; `threads-dgg` | Accepted and closed after full nine-route matrix; distinct protected writes stay disabled, and client source/fixture proof is not live Cave acceptance |
+| Retired-Ward schedulability | OpenCoven/coven#888; `threads-zav` | Accepted and closed after all seven actual corpus cases, true worker contention, original red/fix/green, and 13 required typed closes |
 | Final authority snapshot matches committed bytes | OpenCoven/coven#977; `threads-8pz.13` | Named authority-change interleavings, intended-file atomicity, audit agreement, and recovery/rollback evidence |
 | Native startup reliability and artifact provenance | Named repair OpenCoven/coven#1027; final fixture consolidation OpenCoven/coven#1029; broader OpenCoven/coven#884 and OpenCoven/coven#1000 | Preserve the original failure and exact native repair receipt; verify later heads separately, including launch/exit origin and dependency state. OpenCoven/coven#1001 is closed for measurement, not reliability |
 
@@ -140,19 +151,25 @@ Test existence, a serialized diagnostic retry, or an engineering recommendation
 does not close the blocker. If supporting every ceremony requires changing a
 canonical contract, obtain that decision rather than silently narrowing #13.
 
-### 3. Establish current-checkout compatibility
+### 3. Maintain current-checkout compatibility
 
 **Owners:** Sage and the release/governance maintainer.
-**Tracking:** #31 and [`e2e/compatibility.toml`](../e2e/compatibility.toml).
+**Tracking:** #31, completed rollout #64/#65, and
+[`e2e/compatibility.toml`](../e2e/compatibility.toml).
 
-The daemon target and paired fixes have landed. Next, propose a reviewed
-full-SHA compatibility pin and a dedicated pull-request lane, retaining the
-separate non-blocking latest-main schedule. The old pin remains
-`39feb6de98816d10b490091e918f62035e6ce0df` with
-`status = "harness-required"`; it is not a record of the newly accepted daemon.
-Review the eight-journey stability and failure-evidence prerequisites before
-changing enforcement. Neither a successful manual observation nor a mutable
-`main` ref is permission to change protected rules.
+The reviewed daemon pin is `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58`;
+its committed core is `0021fd2662d0b82328371ee3a6957d645f776fda`.
+The manifest is `ready` and the dedicated PR/main lane requires all four
+daemon targets. #65 normally landed, then the sixth strict required context
+was activated under the authorized engineering scope. The separate latest-main
+schedule remains non-blocking.
+
+First-attempt Linux run `34786471550` passed with actual clean current Threads
+`56cd22ba`, tree-identical to reviewed `a1545cf`. Its 104 / 44 / 38 / 33 target
+results and 112 complete E2E pairs were inspected independently. The first draft's
+unready-manifest refusal and original failure receipts remain recorded.
+Future pin changes still need normal protected-main selection, exact-source
+acceptance, and preserved failure evidence. A mutable `main` ref is not a pin.
 
 The required topology is:
 
@@ -184,8 +201,9 @@ scenarios against immutable Coven `08ebe853`, with the actual local override
 and complete artifacts inspected. This does not claim hermeticity or detect
 transient changes restored between commands.
 The execution checkpoint records the first bounded successful observation and
-the retained setup failures. Neither activation nor that exact-head result
-authorizes a new required check, replacement stable pin, or Phase-5 freeze.
+the retained setup failures. Those earlier observations did not authorize a new required check or pin:
+the subsequent #64/#65 rollout recorded that decision separately.
+Neither rollout supplies a Phase-5 freeze.
 
 ### 4. Complete resilience and human acceptance
 
