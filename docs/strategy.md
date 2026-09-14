@@ -4,6 +4,7 @@ Finish the real-daemon authority boundary before declaring Phase 5 complete
 or expanding its authority claims.
 
 **Planning baseline: 2026-09-11; repository rollout updated 2026-09-13 (UTC).**
+**Native reliability checkpoint: 2026-09-14 (UTC).**
 This is an explanatory delivery strategy,
 not a new normative contract, task tracker, or approval. [GitHub #31](https://github.com/OpenCoven/coven-threads/issues/31)
 and its linked issues own cross-repository work; Beads owns local task status.
@@ -21,6 +22,10 @@ main landings and the advisory provenance correction. The
 [engineering acceptance handoff](reviews/2026-09-13-engineering-acceptance.md)
 records the later three root closures, required-lane activation, and remaining
 historical audit obligation.
+The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
+records subsequent fixture corrections and accepted operation-level
+diagnostics. Use those observations for further native cause discrimination;
+do not mistake diagnostic acceptance for a runtime repair or a new pin.
 
 ## Starting position
 

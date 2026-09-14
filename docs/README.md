@@ -26,6 +26,9 @@ These docs describe frozen and active contracts without amending them. Use the
 [delivery strategy](strategy.md) for sequencing, the [ledger](phases.md) for
 delivery evidence, and the [dated readiness review](reviews/2026-09-11-landscape-and-readiness.md)
 for findings and remaining acceptance obligations.
+The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
+records the later fixture corrections, accepted diagnostics, and unresolved
+native causes without replacing the root acceptance record.
 
 ## Who this is for
 
@@ -45,6 +48,7 @@ for findings and remaining acceptance obligations.
 | [phases.md](phases.md) | Phase 0 → 5 with honest status labels: what is frozen, what is implemented, what is active, what is blocked. |
 | [strategy.md](strategy.md) | Workstream order, canonical owners, closure evidence, and release prerequisites. GitHub issues and Beads retain task status. |
 | [Readiness review](reviews/2026-09-11-landscape-and-readiness.md) | Dated landscape, documentation corrections, and engineering recommendations for the open review gates. |
+| [Native reliability handoff](reviews/2026-09-14-native-reliability.md) | September 14 fixture corrections, accepted diagnostics, exact source receipts, and remaining engineering/operator boundaries. |
 | [E2E contract](testing/e2e-contract.md) | Real-daemon topology, eight required journeys, deterministic time, and blocker-closure evidence. |
 | [faq.md](faq.md) | Anticipated questions, answered honestly with sources. |
 | [glossary.md](glossary.md) | Every named term, one line each, alphabetical, with links to depth. |
