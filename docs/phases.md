@@ -20,6 +20,11 @@ Keep Phase 5 active. Resolve deployed historical audit uncertainty, preserve
 native reliability follow-ups, and prepare Val's separate human decisions.
 Do not reopen accepted finite engineering roots or rebuild the landed lane.
 
+The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
+records subsequent fixture corrections and accepted Unix/Windows diagnostics.
+The native causes remain open; this continuation changes neither the required
+pin nor the root or human acceptance decisions recorded below.
+
 Val [adopted the solo-maintainer review policy](https://github.com/OpenCoven/coven-threads/issues/59#issuecomment-5653889552)
 under #59 for policy revision `ae12e3ccf656cdce493cb748b7692fb8172a8ecd`.
 The [active policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) permits Val's

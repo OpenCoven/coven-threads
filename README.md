@@ -10,6 +10,9 @@ freeze remain separate. Protection requires PRs and six strict checks on
 independent approving reviewer. The
 [engineering acceptance handoff](docs/reviews/2026-09-13-engineering-acceptance.md)
 records the accepted sources and remaining operator work.
+The [September 14 reliability handoff](docs/reviews/2026-09-14-native-reliability.md)
+records subsequent fixture corrections and diagnostic contributions without
+claiming a native timing repair or changing that acceptance scope.
 Coven `v0.4.3` includes the earlier integration,
 not proof of full Phase-5 conformance. Start with the
 [delivery strategy](docs/strategy.md), [evidence ledger](docs/phases.md), and
