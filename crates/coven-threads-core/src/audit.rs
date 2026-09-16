@@ -131,6 +131,9 @@ pub struct PrincipalAuthorizedWriteAuditDetail {
     pub principal_authorization: String,
 }
 
+/// Byte length of a weave-hash commitment (§4 Merkle root).
+const WEAVE_HASH_LEN: usize = 32;
+
 /// Event types recorded in `ward.audit`.
 ///
 /// The first five are RFC-0001 §5.6's named set, verbatim. The last two are the
@@ -417,6 +420,50 @@ impl WardAuditRecord {
         }
     }
 
+    /// Build an RFC-0001 §5.6 committed-Ward-state audit row.
+    ///
+    /// RFC-0001 defines committed Ward state as a `(ward_version, ward_hash)`
+    /// pair recorded by a `ward_updated` event, and the most recent such pair
+    /// identifies the Ward manifest the authority layer enforces. Both are
+    /// required here rather than optional, because an admission whose
+    /// `source_attestation` resolves to an event lacking them MUST be treated
+    /// as unverified.
+    ///
+    /// Principal-authorized Ward updates are not proposals: they occur outside
+    /// the gate pipeline (RFC-0001 §5.4), which is why this carries
+    /// `principal_authorization` and no proposal id. The genesis case is
+    /// expressible — the first Ward manifest is a principal-authorized write
+    /// whose authorization requires no prior committed Ward state, so the
+    /// provenance recursion bottoms out at the principal.
+    pub fn for_ward_updated(
+        familiar_id: FamiliarId,
+        ward_version: impl Into<String>,
+        ward_hash: &[u8],
+        principal_authorization: impl Into<String>,
+        decided_at: OffsetDateTime,
+    ) -> Self {
+        let detail = PrincipalAuthorizedWriteAuditDetail {
+            principal_authorization: principal_authorization.into(),
+        };
+        Self {
+            event_type: AuditEventType::WardUpdated,
+            proposal_id: None,
+            familiar_id,
+            ward_version: Some(ward_version.into()),
+            ward_hash: ward_hash.to_vec(),
+            tier: None,
+            decision: "updated".into(),
+            approver: None,
+            diff_hash: None,
+            detail: Some(serde_json::to_string(&detail).expect("serializing typed audit detail")),
+            files_touched: Vec::new(),
+            channel: None,
+            thread_id: None,
+            submitted_at: decided_at,
+            decided_at,
+        }
+    }
+
     /// Validate event-specific detail requirements before persistence.
     pub fn validate_event_detail(&self) -> Result<(), String> {
         if matches!(
@@ -492,6 +539,32 @@ impl WardAuditRecord {
                 .map_err(|error| format!("invalid principal authorization detail: {error}"))?;
                 if detail.principal_authorization.trim().is_empty() {
                     return Err("authorized Ward writes require principal_authorization".into());
+                }
+                // RFC-0001 §5.6: a `ward_updated` event MUST additionally carry
+                // `ward_version` and `ward_hash`, because committed Ward state is
+                // that pair. An attestation resolving to an event missing them
+                // MUST be treated as unverified, so reject the row at
+                // construction rather than recording an unusable anchor.
+                // `principal_authorized_write` has no such requirement.
+                if self.event_type == AuditEventType::WardUpdated {
+                    if self
+                        .ward_version
+                        .as_deref()
+                        .map(|version| version.trim().is_empty())
+                        .unwrap_or(true)
+                    {
+                        return Err("ward_updated requires ward_version".into());
+                    }
+                    // The other half of the pair. A weave hash is a 32-byte
+                    // commitment everywhere else in this crate, so a shorter or
+                    // empty value is not a Ward state anyone can resolve
+                    // against. Scoped to `ward_updated` because that is where
+                    // RFC-0001 §5.6 names `ward_hash` as required; widening the
+                    // check to every event type would change behaviour for
+                    // existing callers and belongs in its own change.
+                    if self.ward_hash.len() != WEAVE_HASH_LEN {
+                        return Err("ward_updated requires a 32-byte ward_hash".into());
+                    }
                 }
             }
             AuditEventType::ApplyAudit => {
@@ -2413,6 +2486,89 @@ mod tests {
             now,
         );
         assert!(write.validate_event_detail().is_ok());
+    }
+
+    /// `threads-vdv`: committed Ward state is the `(ward_version, ward_hash)`
+    /// pair a `ward_updated` event records, and RFC-0001 §5.6 requires both.
+    /// A promotion admission's `source_attestation` resolves against exactly
+    /// this row, so an event missing either field is an unusable anchor and is
+    /// rejected rather than recorded.
+    #[test]
+    fn ward_updated_requires_committed_ward_state_and_authorization() {
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let record = WardAuditRecord::for_ward_updated(
+            FamiliarId::new(),
+            "v0.2.0",
+            &[0xcc; 32],
+            "signature:principal",
+            now,
+        );
+        assert_eq!(record.event_type, AuditEventType::WardUpdated);
+        assert_eq!(record.ward_version.as_deref(), Some("v0.2.0"));
+        assert_eq!(record.ward_hash, vec![0xcc; 32]);
+        assert!(record.proposal_id.is_none(), "not a proposal (§5.4)");
+        assert!(record.validate_event_detail().is_ok());
+
+        // Genesis is expressible: the first Ward manifest is authorized by the
+        // principal with no prior committed Ward state to reference.
+        let genesis = WardAuditRecord::for_ward_updated(
+            FamiliarId::new(),
+            "v0.1.0",
+            &[0x11; 32],
+            "principal:genesis",
+            now,
+        );
+        assert!(genesis.validate_event_detail().is_ok());
+
+        // Missing or blank ward_version makes the anchor unusable.
+        for absent in [None, Some(String::new()), Some("   ".to_string())] {
+            let mut broken = record.clone();
+            broken.ward_version = absent;
+            assert_eq!(
+                broken.validate_event_detail().unwrap_err(),
+                "ward_updated requires ward_version"
+            );
+        }
+
+        // The other half of the pair: an empty or short ward_hash is not a
+        // committed state anything can resolve against.
+        for bad in [vec![], vec![0xcc; 31], vec![0xcc; 33]] {
+            let mut broken = record.clone();
+            broken.ward_hash = bad;
+            assert_eq!(
+                broken.validate_event_detail().unwrap_err(),
+                "ward_updated requires a 32-byte ward_hash"
+            );
+        }
+
+        // Blank authorization is still refused, as before.
+        let mut unauthorized = record.clone();
+        unauthorized.detail = Some(
+            serde_json::to_string(&PrincipalAuthorizedWriteAuditDetail {
+                principal_authorization: "  ".to_string(),
+            })
+            .unwrap(),
+        );
+        assert!(unauthorized.validate_event_detail().is_err());
+
+        // The ward_version requirement is specific to ward_updated: a
+        // principal_authorized_write row carries none and stays valid.
+        let write = WardAuditRecord::for_principal_authorized_write(
+            FamiliarId::new(),
+            &[0xaa; 32],
+            WriterId::new("principal:val"),
+            "signature:abc",
+            vec![SurfaceId::new("MEMORY.md")],
+            now,
+        );
+        assert!(write.ward_version.is_none());
+        assert!(write.validate_event_detail().is_ok());
+
+        // ...and the ward_hash length check is scoped the same way, so
+        // widening it later is a deliberate change rather than an accident.
+        let mut short_write = write.clone();
+        short_write.ward_hash = vec![0xaa; 8];
+        assert!(short_write.validate_event_detail().is_ok());
     }
 
     /// `threads-55s`: the admission row must be able to say which channel it
