@@ -17,8 +17,9 @@ The core insight of this page: a thread does not "hold" in the abstract. It hold
 Familiar-initiated, principal-gated compaction: memory promotion, dreaming, deliberate flush. This is the *consented* half of the two-compaction contract — the familiar (or its person) chooses to consolidate scratch memory into durable memory, and the act flows through the Ward gates as a reviewable proposal.
 
 > Runtime status: this is the channel contract, not a shipped promotion
-> command. `threads-xpo` tracks daemon reachability; draft #25 describes the
-> future seam. Neither makes `coven memory promote` an available command.
+> command. `threads-xpo` tracks daemon reachability; the seam contract merged
+> in #25 describes the future seam and places effective-channel determination
+> on the daemon. Neither makes `coven memory promote` an available command.
 
 Because consent and review are present, `Deliberate` imposes **no structural strand floor** beyond an intact thread: the gate here is the principal's consent path, not a cryptographic survival requirement. That is not laxity — it is a recognition that the protection on this channel is procedural (tiers, review, veto windows per RFC-0001 §5.3) rather than structural.
 
