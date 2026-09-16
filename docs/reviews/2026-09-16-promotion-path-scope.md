@@ -15,9 +15,11 @@ absent, and two of those were blocked on decisions rather than effort.
 
 **Status since publication.** Both §3 decisions were settled on 2026-09-16 and
 `threads-vd8` and `threads-7gw` are closed. The anchor decision produced a
-prerequisite larger than itself, `threads-vdv`. What remains under §3 is
-engineering, not decisions: `threads-vdv`, `threads-dr2`, and the M2 substrate
-work. The rest of the scope stands as written.
+prerequisite larger than itself, `threads-vdv`. What remains under §3 is no longer
+blocked on decisions here: `threads-dr2` is deferred with a guardrail, and
+`threads-vdv` is blocked on `threads-19p` — no conforming promotion admission is
+reachable until authenticated, operation-bound principal authority exists. That
+floor governs the whole programme. The rest of the scope stands as written.
 
 Scoping first avoids starting at the visible symptom and discovering the real
 blockers halfway in.
@@ -161,6 +163,30 @@ change is free today and will not stay free.
   but the working branch its last note describes exists neither in the local
   coven checkout nor on the remote. Treat that work as lost, not resumable.
 
+**Decided 2026-09-16 (`threads-dr2`, closed on the deferral branch of its own
+acceptance).** Reachability is deferred, with one guardrail recorded so the
+obvious fix is not made later under time pressure.
+
+**Do not add a `coven-cli` → `coven-memory` dependency.** The contract module
+needs only `anyhow`, `serde` and `uuid`, all of which `coven-cli` already
+carries, so the edge looks free. It is not. `coven-memory` also pulls
+`fastembed` — configured to download ONNX runtime binaries — and `turbovec`.
+Adding the edge would drag an ML runtime and a vector index into an R4 authority
+binary, enlarging its build, its size and its supply-chain surface, to reach 455
+lines of pure contract types.
+
+When promotion does proceed, the correct shape is a **leaf contract crate**
+carrying only those three dependencies, which both `coven-memory` and
+`coven-cli` depend on. That costs the daemon nothing it does not already have.
+Feature-gating the existing crate was considered and is weaker: the daemon would
+still name the ML crate, and default-feature drift would silently reintroduce
+the weight.
+
+Deferral is the honest disposition rather than a delay, because `threads-19p`
+puts a hard floor under the whole programme: no conforming promotion admission
+is reachable until authenticated, operation-bound authority exists. Wiring a
+module the daemon still could not lawfully use would be motion, not progress.
+
 ## 4. Implementation surface, once the decisions land
 
 `threads_gate.rs` is where `Mutation` is nailed down — **five literals and one
@@ -231,7 +257,9 @@ of `threads-980`; §5.2 of the seam contract records that dependency.
 2. ~~Decide provenance anchoring~~ — done 2026-09-16 (`threads-vd8`). It
    produced `threads-vdv`: emit `ward_updated` so the anchor exists.
 3. ~~Decide per-thread `Deliberate` coverage~~ — done 2026-09-16 (`threads-7gw`).
-4. Establish the crate edge or adapter so the daemon can reach promotion (§3.3).
+4. ~~Establish the crate edge or adapter~~ — deferred 2026-09-16 (`threads-dr2`)
+   with a recorded guardrail: a leaf contract crate, never a direct
+   `coven-cli` → `coven-memory` edge (§3.3).
 5. Define the scratch tier and the `coven memory promote` surface (M2, `cmem-1ev`).
 6. Thread the channel through `threads_gate.rs`; add the route, handler and
    `memory_entry_admitted` emission.
