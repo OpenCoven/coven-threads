@@ -11,7 +11,12 @@ verified on 2026-09-16 against `origin/main` of the named repository.
 `Channel::Deliberate`. That is true, but it is the smallest part of the gap. The
 surrounding machinery — a scratch tier to promote from, a reachable promotion
 module, an admission audit event, and a resolvable provenance anchor — is also
-absent, and two of those are blocked on decisions rather than effort.
+absent, and two of those were blocked on decisions rather than effort.
+
+**Status since publication.** The provenance-anchor decision (§3.1) was settled
+on 2026-09-16 and `threads-vd8` is closed; it produced a prerequisite larger
+than itself, `threads-vdv`. The `Deliberate` coverage decision (§3.2) remains
+open as `threads-7gw`. The rest of the scope stands as written.
 
 Scoping first avoids starting at the visible symptom and discovering the real
 blockers halfway in.
@@ -85,9 +90,25 @@ fail-closed, and OpenCoven/coven#887 closed on that basis. So the only anchor a
 promotion could resolve against today is `ward_updated`, which is also never
 emitted.
 
-**Decision needed before any implementation:** what anchors a promotion
-admission's provenance, given that neither referent type is currently written to
-the log. This cannot be resolved by writing code against the existing types.
+**Decided 2026-09-16 (`threads-vd8`, closed).** Both RFC-0001 referents stay
+valid; a promotion admission resolves against **committed Ward state**
+(`ward_updated`), while `principal_authorized_write` remains valid but
+unreachable while OpenCoven/coven#887 keeps that route disabled fail-closed.
+Recorded in §5.1 of the seam contract.
+
+Two consequences followed, and both are larger than the decision itself:
+
+- **`ward_updated` is never emitted either**, so the anchor does not yet exist
+  at runtime and every conforming admission would fail closed. Filed as
+  `threads-vdv` (P1) and added as a blocker of `threads-xpo`. It is distinct
+  from the disabled protected-write authority and must not be used to re-enable
+  it.
+- **Authorization scope was settled per-admission.** Promotion is a
+  self-improvement loop under RFC-0001 §3.4 and unknown origin is treated as
+  loop-originated, so every promoted entry carries its own
+  `principal_authorization`; a standing, session-wide or batch grant does not
+  satisfy §3.4. **Promotion is therefore a review queue, not a background
+  process** — which should be weighed before building it.
 
 ### 3.2 No thread holds under `Deliberate` — design decision required
 
@@ -193,7 +214,8 @@ of `threads-980`; §5.2 of the seam contract records that dependency.
 ## 7. Recommended sequence
 
 1. ~~Land `threads-55s`~~ — done 2026-09-16; no migration, no fingerprint change.
-2. Decide provenance anchoring (§3.1). Nothing downstream is safe to build first.
+2. ~~Decide provenance anchoring~~ — done 2026-09-16 (`threads-vd8`). It
+   produced `threads-vdv`: emit `ward_updated` so the anchor exists.
 3. Decide per-thread `Deliberate` coverage versus the structural floor (§3.2).
 4. Establish the crate edge or adapter so the daemon can reach promotion (§3.3).
 5. Define the scratch tier and the `coven memory promote` surface (M2, `cmem-1ev`).
@@ -220,7 +242,9 @@ cmem-r59` resolves it.
 
 ## 9. What this scope does not do
 
-- It authorizes no implementation and settles neither decision in §3.
+- It authorizes no implementation. The §3.1 decision was settled separately and
+  is recorded in the seam contract, not granted here; the §3.2 decision
+  (`threads-7gw`) remains open.
 - It closes no bead. `threads-xpo` stays open; the submission path does not exist.
 - It changes no normative contract, required pin, or protected path.
 - It is not a commitment to build promotion. The §3.1 finding may reasonably
