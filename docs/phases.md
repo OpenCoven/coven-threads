@@ -532,7 +532,7 @@ those owner-specific integrations separate from Phase-5 closure.
 | 2 | Daemon integration | `[FROZEN; IN RELEASE TAG]`; `.14`, `.20`, and `.19` closed | Phase-5 route and replay defects remain separate |
 | 3 | Portability format | `[ENGINEERING FROZEN]`; `.21`, `.16`, and exporter follow-up `threads-jq4` closed | No `.af` import or authority-preserving `.af` round-trip |
 | 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`; `threads-986.17`, adapter follow-up `threads-v3g`, and degraded-familiar follow-up `threads-k9s` closed | New Phase-5 live-daemon acceptance remains separate |
-| 5 | Approval semantics | `[ACTIVE]`; three root engineering blockers closed; historical audit closure remains in `threads-980` | Deployed-history disposition and broader acceptance, then Val coherence acceptance (`.9`) and scoped freeze/reaffirmation (`.10`) |
+| 5 | Approval semantics | `[ACTIVE]`; three root engineering blockers closed; historical audit closure remains in `threads-980` | Deployed-history disposition (accessible profile inventoried 2026-09-15, zero opened windows; global scope still open) and broader acceptance, then Val coherence acceptance (`.9`) and scoped freeze/reaffirmation (`.10`) |
 
 ## Known housekeeping discrepancies
 
