@@ -163,12 +163,17 @@ It is low-risk and self-contained: `for_apply` already takes
 every schema variant, and the `memory_entry_admitted` CHECK constrains only
 `detail` — never `channel`. **No migration, no fingerprint change.**
 
-It is currently blocked on `threads-xpo`, on the reasoning that without a caller
-able to supply `Deliberate` the constructor would record `Mutation` forever. That
+It was blocked on `threads-xpo`, on the reasoning that without a caller able to
+supply `Deliberate` the constructor would record `Mutation` forever. That
 argument applies to its *end-to-end* acceptance criterion, not to the change
 itself, which is a prerequisite for the daemon work rather than a consequence of
-it. Recommend re-sequencing it first with constructor-level acceptance, and
-holding the round-trip criterion until a submission path exists.
+it.
+
+**Landed 2026-09-16.** The dependency was removed and the acceptance criterion
+split rather than weakened: the constructor half is satisfied here, and the
+end-to-end round-trip moved to `threads-xpo`. §5.3 of the seam contract was
+updated in the same change so the normative text does not describe a fixed gap
+as still open.
 
 ## 6. Evidence bar
 
@@ -187,7 +192,7 @@ of `threads-980`; §5.2 of the seam contract records that dependency.
 
 ## 7. Recommended sequence
 
-1. Land `threads-55s` now — Threads-side, unblocked, no migration.
+1. ~~Land `threads-55s`~~ — done 2026-09-16; no migration, no fingerprint change.
 2. Decide provenance anchoring (§3.1). Nothing downstream is safe to build first.
 3. Decide per-thread `Deliberate` coverage versus the structural floor (§3.2).
 4. Establish the crate edge or adapter so the daemon can reach promotion (§3.3).

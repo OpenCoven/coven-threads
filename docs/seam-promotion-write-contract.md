@@ -242,19 +242,26 @@ window to evade its terminal-close obligation.
 > branches currently emit `window_close=None`. Promotion writes inherit that
 > defect. This contract cannot be verified end-to-end until `threads-980` closes.
 
-### 5.3 Defect found while drafting — `channel` is dropped
+### 5.3 Defect found while drafting — `channel` was dropped
 
 `WardAuditRecord::for_memory_entry_admitted` (`crates/coven-threads-core/src/audit.rs`)
-constructs its row with `channel: None`.
+constructed its row with `channel: None`.
 
 This contract requires promotion writes to be `Channel::Deliberate`, and requires
-that fact to be *auditable*. As written, the admission row cannot distinguish a
-promotion-driven admission from any other. That is a legibility hole in the
+that fact to be *auditable*. As written, the admission row could not distinguish a
+promotion-driven admission from any other. That was a legibility hole in the
 single daemon-owned `ward.audit` store Phase 0 §3.4 exists to keep coherent.
 
-**Requested change (Cody):** `for_memory_entry_admitted` should accept and record
-the channel. Filed as a follow-up bead rather than patched here, since it touches
-the audit row shape and belongs with the other audit work.
+**Resolved 2026-09-16 (`threads-55s`).** The constructor now takes
+`channel: Option<Channel>` and records it, matching `for_apply` in the same file.
+The column is nullable, the `memory_entry_admitted` CHECK constrains only
+`detail`, and no trigger reads `channel`, so this required no migration and left
+the main-schema and trigger fingerprints unchanged.
+
+The fix is constructor-level. No daemon submission path can supply
+`Channel::Deliberate` yet (`threads-xpo`), so the end-to-end round-trip this
+section ultimately needs — a real promotion admission observable as `deliberate`
+in `ward_audit` — remains unproven and is tracked there, not here.
 
 ---
 
