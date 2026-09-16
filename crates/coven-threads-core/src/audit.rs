@@ -131,6 +131,9 @@ pub struct PrincipalAuthorizedWriteAuditDetail {
     pub principal_authorization: String,
 }
 
+/// Byte length of a weave-hash commitment (§4 Merkle root).
+const WEAVE_HASH_LEN: usize = 32;
+
 /// Event types recorded in `ward.audit`.
 ///
 /// The first five are RFC-0001 §5.6's named set, verbatim. The last two are the
@@ -543,14 +546,25 @@ impl WardAuditRecord {
                 // MUST be treated as unverified, so reject the row at
                 // construction rather than recording an unusable anchor.
                 // `principal_authorized_write` has no such requirement.
-                if self.event_type == AuditEventType::WardUpdated
-                    && self
+                if self.event_type == AuditEventType::WardUpdated {
+                    if self
                         .ward_version
                         .as_deref()
                         .map(|version| version.trim().is_empty())
                         .unwrap_or(true)
-                {
-                    return Err("ward_updated requires ward_version".into());
+                    {
+                        return Err("ward_updated requires ward_version".into());
+                    }
+                    // The other half of the pair. A weave hash is a 32-byte
+                    // commitment everywhere else in this crate, so a shorter or
+                    // empty value is not a Ward state anyone can resolve
+                    // against. Scoped to `ward_updated` because that is where
+                    // RFC-0001 §5.6 names `ward_hash` as required; widening the
+                    // check to every event type would change behaviour for
+                    // existing callers and belongs in its own change.
+                    if self.ward_hash.len() != WEAVE_HASH_LEN {
+                        return Err("ward_updated requires a 32-byte ward_hash".into());
+                    }
                 }
             }
             AuditEventType::ApplyAudit => {
@@ -2516,6 +2530,17 @@ mod tests {
             );
         }
 
+        // The other half of the pair: an empty or short ward_hash is not a
+        // committed state anything can resolve against.
+        for bad in [vec![], vec![0xcc; 31], vec![0xcc; 33]] {
+            let mut broken = record.clone();
+            broken.ward_hash = bad;
+            assert_eq!(
+                broken.validate_event_detail().unwrap_err(),
+                "ward_updated requires a 32-byte ward_hash"
+            );
+        }
+
         // Blank authorization is still refused, as before.
         let mut unauthorized = record.clone();
         unauthorized.detail = Some(
@@ -2538,6 +2563,12 @@ mod tests {
         );
         assert!(write.ward_version.is_none());
         assert!(write.validate_event_detail().is_ok());
+
+        // ...and the ward_hash length check is scoped the same way, so
+        // widening it later is a deliberate change rather than an accident.
+        let mut short_write = write.clone();
+        short_write.ward_hash = vec![0xaa; 8];
+        assert!(short_write.validate_event_detail().is_ok());
     }
 
     /// `threads-55s`: the admission row must be able to say which channel it
