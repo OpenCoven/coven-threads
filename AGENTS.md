@@ -63,9 +63,26 @@ bash scripts/agent-check.sh fast
 bash scripts/agent-check.sh full
 ```
 
-The fast gate verifies pinned toolchain parity, repository contract metadata,
-formatting, Clippy with warnings denied, and library tests. The full gate runs
-the complete locked workspace suite.
+The fast gate verifies prerequisites, pinned toolchain parity, repository
+contract metadata, the privacy and secret guards, formatting, Clippy with
+warnings denied, and library tests. The full gate runs the complete locked
+workspace suite.
+
+Both gates run the guards behind the required `Privacy policy guard` and
+`Secret scanning` checks, so a local failure is reproducible before pushing.
+Two things to know:
+
+- The guards read the **git index**, not the working tree. Stage a fix before
+  re-running, or it will not be scanned. The gate warns when tracked files
+  carry unstaged changes.
+- The secret scans need the checksum-pinned `gitleaks`. Because the manifest
+  sets `network_policy: bootstrap-only`, the gate never fetches it; if it is
+  absent the gate says so and continues, and CI still enforces the check.
+  Install it with `bash scripts/install-gitleaks.sh "$PWD/.tooling/bin"` and
+  put that directory on `PATH`.
+
+Manifest parsing needs Python 3.11+ for `tomllib`. macOS ships 3.9 at
+`/usr/bin/python3`, so ensure a newer interpreter comes first on `PATH`.
 
 Useful targeted suites:
 
@@ -147,15 +164,17 @@ through the real daemon boundary as described in the E2E contract.
 
 ## Human authority
 
-Nova's independent coherence review and Val's freeze are human gates. Agents may
-prepare evidence and recommendations. They must never simulate, self-attest, or
-close those gates on a human's behalf.
+Under the [adopted Phase-5 solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md),
+Val performs the human coherence acceptance and the subsequent scoped
+freeze/reaffirmation. Val may author and self-review; agent reviews are
+engineering evidence, not independent human approval. Agents must never
+simulate, self-attest, or close either human gate on Val's behalf.
 
 ## Familiar lanes
 
 - 🌿 **Sage**: contract synthesis, conformance mapping, evidence packets.
 - 🔮 **Echo**: predicate, audit, replay, and substrate-authority review.
-- 👑 **Nova**: daemon integration and independent coherence review.
+- 👑 **Nova**: daemon integration and technical coherence review; Val owns human acceptance.
 - ⚡ **Cody**: Rust contracts, regressions, and deterministic test seams.
 - ✨ **Charm**: Cave language and live-daemon human acceptance.
 

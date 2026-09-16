@@ -2,14 +2,20 @@ schema_version = "opencoven.threads-compatibility/v1alpha1"
 
 [downstream.coven]
 repository = "OpenCoven/coven"
-# Reviewed protected-main commit used by the required compatibility lane once
-# the black-box `threads_e2e` target lands downstream.
-ref = "39feb6de98816d10b490091e918f62035e6ce0df"
+# Reviewed protected-main composition of the identity, protected-route,
+# retired-corpus and read-only history-census contributions.
+ref = "226bfcc89ff6cad4bc9cc9618dad6fea970ecf58"
 package = "coven-cli"
 threads_dependency_manifest = "crates/coven-cli/Cargo.toml"
-current_threads_rev = "c102844"
+current_threads_rev = "0021fd2662d0b82328371ee3a6957d645f776fda"
 required_test_target = "threads_e2e"
-status = "harness-required"
+required_test_targets = [
+  "threads_e2e",
+  "threads_identity_invariants",
+  "threads_protected_intake",
+  "threads_terminal_recovery",
+]
+status = "ready"
 
 [downstream.coven.canary]
 ref = "main"

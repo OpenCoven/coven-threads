@@ -8,17 +8,17 @@ findings.
 
 If you are new here, read [concepts.md](concepts.md) first. Everything else assumes its vocabulary.
 
-## Current status (2026-09-12 UTC)
+## Current status (2026-09-13 UTC)
 
 - **Phase 0 (design) — `[FROZEN]`.** The design doc `specs/PHASE-0-DESIGN.md` is frozen at v0.2 (2026-07-14, tag `v0.2-phase0-design`), with Nova sign-off and an RFC-0001 §5 round-trip verified.
 - **Phases 1–2: `[FROZEN; IN RELEASE TAG]`; Phase 3: `[ENGINEERING FROZEN]`.** Coven `v0.4.3` includes the daemon integration and pins Threads to `c102844`. This is release-source provenance, not verification of deployed configuration or current-checkout compatibility. Phase 3 retains the decided `.weave` envelope and lossy one-way `.af` export semantics.
 - **Phase 4: `[FROZEN]` (2026-07-17).** The four Cave surfaces and their recorded human gates are complete under `threads-986.17`. The daemon-adapter follow-up `threads-v3g` and degraded-familiar follow-up `threads-k9s` are closed. See the delivery ledger for merge evidence.
-- **Phase 5: `[ACTIVE]`.** The earlier core, scheduler, Cave contract (`.7`), and RFC alignment (`.12`) implementation beads are closed. Four daemon-boundary blockers still prevent coherence sign-off. The shared harness and protected/terminal fixes are draft checkpoints, and neither Nova's review nor Val's freeze can be replaced by agent evidence. See [phases.md](phases.md) for the work graph and [the E2E contract](testing/e2e-contract.md) for closure requirements.
+- **Phase 5: `[ACTIVE]`.** Identity, protected-route, and seven-scenario retired-corpus engineering are accepted in OpenCoven/coven#885, OpenCoven/coven#887, and OpenCoven/coven#888. Global deployed-history closure remains open in OpenCoven/coven#886; the accessible deployed profile was inventoried read-only on 2026-09-15 and holds zero opened veto windows, which narrows that root without closing it. Under the [adopted solo-maintainer policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md), Val may author and self-review; agent evidence supplies neither Val's coherence acceptance nor the subsequent scoped freeze. See the [engineering handoff](reviews/2026-09-13-engineering-acceptance.md), [phases.md](phases.md), and [the E2E contract](testing/e2e-contract.md).
 
 Baseline `main` protection is active under the
 [authorized solo-maintainer policy](../CONTRIBUTING.md#solo-maintainer-merge-policy).
-The separate privacy job has landed and is now a required check. The required
-pinned-daemon check and scheduled canary are not wired. The Automation Authority Profile v1 is a
+The separate privacy job and four-target pinned-daemon lane are required
+checks. The latest-main schedule remains advisory. The Automation Authority Profile v1 is a
 separate shipped schema/reference-validator contract, not evidence of daemon
 adoption or a replacement for the Rust gate.
 
@@ -26,6 +26,9 @@ These docs describe frozen and active contracts without amending them. Use the
 [delivery strategy](strategy.md) for sequencing, the [ledger](phases.md) for
 delivery evidence, and the [dated readiness review](reviews/2026-09-11-landscape-and-readiness.md)
 for findings and remaining acceptance obligations.
+The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
+records the later fixture corrections, accepted diagnostics, and unresolved
+native causes without replacing the root acceptance record.
 
 ## Who this is for
 
@@ -45,6 +48,8 @@ for findings and remaining acceptance obligations.
 | [phases.md](phases.md) | Phase 0 → 5 with honest status labels: what is frozen, what is implemented, what is active, what is blocked. |
 | [strategy.md](strategy.md) | Workstream order, canonical owners, closure evidence, and release prerequisites. GitHub issues and Beads retain task status. |
 | [Readiness review](reviews/2026-09-11-landscape-and-readiness.md) | Dated landscape, documentation corrections, and engineering recommendations for the open review gates. |
+| [Native reliability handoff](reviews/2026-09-14-native-reliability.md) | September 14 fixture corrections, accepted diagnostics, exact source receipts, and remaining engineering/operator boundaries. |
+| [Deployed audit-census](reviews/2026-09-15-deployed-audit-census.md) | September 15 read-only disposition of the accessible deployed profile for `threads-980` / OpenCoven/coven#886: zero opened veto windows, and the scope limits of that negative. |
 | [E2E contract](testing/e2e-contract.md) | Real-daemon topology, eight required journeys, deterministic time, and blocker-closure evidence. |
 | [faq.md](faq.md) | Anticipated questions, answered honestly with sources. |
 | [glossary.md](glossary.md) | Every named term, one line each, alphabetical, with links to depth. |

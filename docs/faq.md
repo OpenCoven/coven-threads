@@ -32,7 +32,7 @@ Filesystem permissions are still fine as *defense-in-depth*. They are just not a
 Ward is the **spec**; `coven-threads` is the **implementation receiver**. Precisely:
 
 - **RFC-0001 §5** ("The Ward") defines the normative requirements: authority-layer separation (§5.1), the ward file format (§5.2), approval tiers (§5.3), the four enforcement gates (§5.4), regression/identity probes (§5.5), and the audit log (§5.6). It says **what** must be checked and what conformance means.
-- **The `coven` daemon** is the shipped trust boundary those checks run behind (`coven/docs/SAFETY-MODEL.md`). It imports Threads for typed surface validation; Coven `v0.4.3` includes the earlier integration. Complete route, identity-predicate, and replay enforcement remains subject to the unresolved Phase-5 findings.
+- **The `coven` daemon** is the shipped trust boundary those checks run behind (`coven/docs/SAFETY-MODEL.md`). It imports Threads for typed surface validation; Coven `v0.4.3` includes the earlier integration. Later daemon `226bfcc8` has accepted current-route identity, protected-proposal, and retired-corpus engineering. Deployed historical audit closure and broader Phase-5 acceptance remain open; see the [engineering handoff](reviews/2026-09-13-engineering-acceptance.md).
 - **`coven-threads`** supplies the *gate-shaped receiver*: it checks the daemon-supplied weave and request, then returns a verdict (design doc §1, §5). Ward's four gates are the **loom**, the fixed structure threads run through, not something this repo replaces.
 
 So the honest relationship: Ward specifies, the daemon hosts, coven-threads enforces. If coven-threads ever disagrees with RFC-0001, coven-threads is wrong by declaration (design doc §3.2: "RFC wins on any conflict").
@@ -138,7 +138,13 @@ In the daemon — coven PR https://github.com/OpenCoven/coven/pull/430 — not i
 
 `coven-threads-core` v0.2.0 ships the types and the contract: `ApprovalPath` with its wire-label round-trip, `VetoWindow`, `ProposalClassification` with `evidence_replay_hash`, `WindowCloseReason`, the surface-region predicates and registry, the identity-invariant compiler, and the canonical evidence-hash function. What it deliberately does not ship is anything with a clock or a side effect: proposal classification at intake, the delayed-apply scheduler, deadline revalidation, and audit appends into `coven.sqlite3` are daemon-owned (spec §7, `threads-uqx.6`). This is the same division of labor as Phase 2: the crate is a pure computation, the daemon is the trust boundary that hosts it — everything that touches time, disk, or `ward.audit` lives behind the daemon boundary, where an untrusted client can't reach it.
 
-Phase 5 remains **active, not frozen**. The upstream RFC dependencies have landed. Closure still requires the remaining remediation gates, Nova's independent coherence review, and Val's freeze. See [the delivery ledger](phases.md) for current evidence and blockers.
+Phase 5 remains **active, not frozen**. The upstream RFC dependencies have
+landed. Closure still requires historical audit disposition, broader
+live-daemon acceptance, Val's human coherence acceptance, and a subsequent
+scoped freeze/reaffirmation under the
+[adopted solo-maintainer policy](../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md).
+Agent review remains evidence, not a second human approval. See
+[the delivery ledger](phases.md) for current evidence and blockers.
 
 ---
 

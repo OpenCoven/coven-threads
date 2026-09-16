@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
@@ -8,6 +9,10 @@ import { proveOverride, runCanary, testArgs, validateRef } from "../run-daemon-c
 
 const COVEN = "/synthetic/coven/crates/coven-cli/Cargo.toml";
 const THREADS = "/synthetic/threads/crates/coven-threads-core/Cargo.toml";
+const COMPATIBILITY_TARGETS = [
+  "threads_e2e", "threads_identity_invariants",
+  "threads_protected_intake", "threads_terminal_recovery",
+];
 
 function metadata() {
   return {
@@ -135,6 +140,118 @@ test("records explicit overlay resolution, inherited patch, exact invocation and
   assert.throws(() => runCanary(f.coven, f.artifacts, {}, f.execute), /EEXIST/);
 });
 
+function compatibilityFixture(t) {
+  const f = fixture(t);
+  f.graph.packages[0].targets = COMPATIBILITY_TARGETS.map((name) => ({
+    name, kind: ["test"],
+  }));
+  for (const name of COMPATIBILITY_TARGETS) {
+    writeFileSync(join(f.coven, `crates/coven-cli/tests/${name}.rs`), "");
+  }
+  return f;
+}
+
+test("compatibility runs all four real-daemon targets under the same overlay guards", (t) => {
+  const f = compatibilityFixture(t);
+  let invocation;
+  const execute = (exe, args, cwd, options) => {
+    if (exe === "cargo" && args[0] === "test") {
+      invocation = { args, cwd, options };
+      return "";
+    }
+    return f.execute(exe, args, cwd, options);
+  };
+  const receipt = runCanary(f.coven, f.artifacts, {
+    COVEN_REF: "a".repeat(40),
+    COVEN_THREADS_DAEMON_SUITE: "compatibility",
+    GITHUB_EVENT_NAME: "pull_request",
+  }, execute);
+  assert.deepEqual(invocation.args, [
+    "test", "--locked", "-p", "coven-cli", "--features", "threads-test-clock",
+    ...COMPATIBILITY_TARGETS.flatMap((name) => ["--test", name]),
+    "--", "--nocapture",
+  ]);
+  assert.deepEqual(receipt.command, ["cargo", ...invocation.args]);
+  assert.equal(receipt.suite, "compatibility");
+  assert.deepEqual(receipt.test_targets, COMPATIBILITY_TARGETS);
+  assert.equal(invocation.options.env.COVEN_THREADS_E2E_REQUIRE_LOCAL_OVERRIDE, "1");
+  assert.equal(receipt.status, "passed");
+});
+
+for (const target of COMPATIBILITY_TARGETS.slice(1)) {
+  test(`compatibility refuses missing metadata target ${target}`, () => {
+    const graph = metadata();
+    graph.packages[0].targets = COMPATIBILITY_TARGETS.filter((name) => name !== target)
+      .map((name) => ({ name, kind: ["test"] }));
+    assert.throws(
+      () => proveOverride(graph, COVEN, THREADS, COMPATIBILITY_TARGETS),
+      new RegExp(target),
+    );
+  });
+
+  test(`compatibility refuses missing source target ${target} before Cargo`, (t) => {
+    const f = compatibilityFixture(t);
+    rmSync(join(f.coven, `crates/coven-cli/tests/${target}.rs`));
+    assert.throws(() => runCanary(f.coven, f.artifacts, {
+      COVEN_REF: "a".repeat(40), COVEN_THREADS_DAEMON_SUITE: "compatibility",
+    }, f.execute), new RegExp(target));
+    assert(!f.invocations.some((call) => call.exe === "cargo" && call.args[0] === "test"));
+    assert.equal(JSON.parse(readFileSync(join(f.artifacts, "observation.json"))).status, "failed");
+  });
+}
+
+test("compatibility cannot use a missing or mutable daemon pin", (t) => {
+  for (const ref of [undefined, "main"]) {
+    const f = fixture(t);
+    assert.throws(() => runCanary(f.coven, f.artifacts, {
+      COVEN_REF: ref, COVEN_THREADS_DAEMON_SUITE: "compatibility",
+      GITHUB_EVENT_NAME: "schedule",
+    }, f.execute), /compatibility.*immutable/);
+  }
+});
+
+test("unknown daemon suite cannot silently select advisory coverage", (t) => {
+  const f = fixture(t);
+  assert.throws(() => runCanary(f.coven, f.artifacts, {
+    COVEN_THREADS_DAEMON_SUITE: "compatibilty",
+  }, f.execute), /unknown daemon suite/);
+});
+
+for (const mode of ["companion-failed", "source-drift", "config-drift", "lock-drift",
+  "final-metadata-target"]) {
+  test(`compatibility retains a failed receipt for ${mode}`, (t) => {
+    const f = compatibilityFixture(t);
+    let afterTests = false;
+    const execute = (exe, args, cwd, options) => {
+      if (afterTests && mode === "source-drift" && exe === "git" && args[0] === "status") {
+        return " M crates/coven-cli/src/lib.rs";
+      }
+      if (exe === "cargo" && args[0] === "test") {
+        assert(args.includes("threads_identity_invariants"));
+        assert(args.includes("threads_protected_intake"));
+        assert(args.includes("threads_terminal_recovery"));
+        if (mode === "companion-failed") throw new Error("synthetic identity companion failure");
+        if (mode === "config-drift") writeFileSync(join(f.coven, ".cargo/config.toml"), "# changed");
+        if (mode === "lock-drift") writeFileSync(join(f.coven, "Cargo.lock"), "changed");
+        if (mode === "final-metadata-target") {
+          f.graph.packages[0].targets = f.graph.packages[0].targets
+            .filter((target) => target.name !== "threads_terminal_recovery");
+        }
+        afterTests = true;
+        return "";
+      }
+      return f.execute(exe, args, cwd, options);
+    };
+    assert.throws(() => runCanary(f.coven, f.artifacts, {
+      COVEN_REF: "a".repeat(40), COVEN_THREADS_DAEMON_SUITE: "compatibility",
+    }, execute));
+    const receipt = JSON.parse(readFileSync(join(f.artifacts, "observation.json")));
+    assert.equal(receipt.status, "failed");
+    assert.equal(receipt.suite, "compatibility");
+    assert(receipt.finished_at);
+  });
+}
+
 for (const name of ["config", "config.toml"]) {
   test(`preserves existing downstream ${name} network settings and records its overlay`, (t) => {
     const f = fixture(t);
@@ -237,5 +354,90 @@ for (const mode of ["wrong-override", "daemon-failed", "lock-changed", "missing-
     assert.equal(receipt.status, "failed");
     assert(receipt.failure);
     assert(receipt.finished_at);
+  });
+}
+
+for (const checkout of ["threads", "coven"]) {
+  for (const phase of ["resolution", "locked-metadata", "daemon", "final-metadata"]) {
+    for (const mode of ["head", "tracked", "untracked"]) {
+      test(`rejects ${checkout} ${mode} drift during ${phase}`, (t) => {
+        const f = fixture(t);
+        let metadataCalls = 0;
+        let changed = false;
+        const execute = (exe, args, cwd, options) => {
+          const result = f.execute(exe, args, cwd, options);
+          if (exe === "git" && changed && (checkout === "coven") === (cwd === f.coven)) {
+            if (mode === "head" && args[0] === "rev-parse") return "b".repeat(40);
+            if (mode !== "head" && args[0] === "status") {
+              return mode === "tracked" ? " M src/lib.rs" : "?? injected.rs";
+            }
+          }
+          if (exe === "cargo" && args[0] === "metadata") metadataCalls += 1;
+          if (exe === "cargo" && (
+            (phase === "resolution" && args[0] === "metadata" && metadataCalls === 1) ||
+            (phase === "locked-metadata" && args[0] === "metadata" && metadataCalls === 2) ||
+            (phase === "daemon" && args[0] === "test") ||
+            (phase === "final-metadata" && args[0] === "metadata" && metadataCalls === 3)
+          )) changed = true;
+          return result;
+        };
+        assert.throws(() => runCanary(f.coven, f.artifacts, {}, execute),
+          new RegExp(`${checkout} checkout (revision|source)`));
+        const receipt = JSON.parse(readFileSync(join(f.artifacts, "observation.json")));
+        assert.equal(receipt.status, "failed");
+        assert.equal(receipt[`${checkout}_sha`], "a".repeat(40));
+        assert(receipt.finished_at);
+        if (phase === "resolution" || phase === "locked-metadata") {
+          assert(!f.invocations.some((call) => call.exe === "cargo" && call.args[0] === "test"));
+        }
+      });
+    }
+  }
+}
+
+for (const mode of ["overlay-only", "tracked", "staged", "untracked", "other-config",
+  "submodule-tracked", "submodule-untracked"]) {
+  test(`real Git source check handles ${mode} without exempting other source paths`, (t) => {
+    const f = fixture(t);
+    const git = (args) => execFileSync("git", args, { cwd: f.coven, encoding: "utf8" }).trim();
+    git(["init", "--quiet"]);
+    if (mode.startsWith("submodule-")) {
+      const source = join(f.coven, "../submodule-source");
+      git(["init", "--quiet", source]);
+      writeFileSync(join(source, "source.rs"), "// original\n");
+      git(["-C", source, "add", "."]);
+      git(["-C", source, "-c", "user.name=Synthetic Fixture",
+        "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "--quiet", "-m", "Synthetic submodule"]);
+      git(["-c", "protocol.file.allow=always", "submodule", "add", "--quiet",
+        source, "vendor/nested"]);
+      git(["config", "submodule.vendor/nested.ignore", "all"]);
+    }
+    git(["add", "."]);
+    git(["-c", "user.name=Synthetic Fixture", "-c", "user.email=fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Synthetic baseline"]);
+    const execute = (exe, args, cwd, options) => {
+      if (exe === "git" && cwd === f.coven) return git(args);
+      const result = f.execute(exe, args, cwd, options);
+      if (exe === "cargo" && args[0] === "test") {
+        if (mode === "tracked" || mode === "staged") {
+          writeFileSync(join(f.coven, "crates/coven-cli/tests/threads_e2e.rs"), "// drift\n");
+          if (mode === "staged") git(["add", "."]);
+        }
+        if (mode === "untracked") writeFileSync(join(f.coven, "injected.rs"), "// drift\n");
+        if (mode === "other-config") writeFileSync(join(f.coven, ".cargo/extra.toml"), "# drift\n");
+        if (mode.startsWith("submodule-")) {
+          writeFileSync(join(f.coven, "vendor/nested",
+            mode === "submodule-tracked" ? "source.rs" : "injected.rs"), "// drift\n");
+        }
+      }
+      return result;
+    };
+    if (mode === "overlay-only") {
+      assert.equal(runCanary(f.coven, f.artifacts, {}, execute).status, "passed");
+    } else {
+      assert.throws(() => runCanary(f.coven, f.artifacts, {}, execute), /coven checkout source/);
+      assert.equal(JSON.parse(readFileSync(join(f.artifacts, "observation.json"))).status, "failed");
+    }
   });
 }

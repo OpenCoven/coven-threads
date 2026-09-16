@@ -3,13 +3,19 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const testArgs = [
-  "test", "--locked", "-p", "coven-cli", "--features", "threads-test-clock",
-  "--test", "threads_e2e", "--", "--nocapture",
+export const compatibilityTargets = [
+  "threads_e2e", "threads_identity_invariants",
+  "threads_protected_intake", "threads_terminal_recovery",
 ];
+
+const argsForTargets = (targets) => [
+  "test", "--locked", "-p", "coven-cli", "--features", "threads-test-clock",
+  ...targets.flatMap((target) => ["--test", target]), "--", "--nocapture",
+];
+export const testArgs = argsForTargets(["threads_e2e"]);
 
 export function validateRef(ref, event) {
   if (/^[0-9a-f]{40}$/.test(ref)) return ref;
@@ -17,7 +23,7 @@ export function validateRef(ref, event) {
   throw new Error("manual daemon observation requires a full 40-character Coven commit SHA");
 }
 
-export function proveOverride(metadata, covenManifest, threadsManifest) {
+export function proveOverride(metadata, covenManifest, threadsManifest, targets = ["threads_e2e"]) {
   const packages = metadata.packages;
   const nodes = metadata.resolve?.nodes;
   if (!Array.isArray(packages) || !Array.isArray(nodes)) {
@@ -28,9 +34,11 @@ export function proveOverride(metadata, covenManifest, threadsManifest) {
   );
   if (clients.length !== 1) throw new Error("metadata must identify the selected coven-cli checkout");
   const client = clients[0];
-  if (!client.targets?.some((target) =>
-    target.name === "threads_e2e" && target.kind?.includes("test"))) {
-    throw new Error("selected Coven revision has no real-daemon threads_e2e target");
+  for (const name of targets) {
+    if (!client.targets?.some((target) =>
+      target.name === name && target.kind?.includes("test"))) {
+      throw new Error(`selected Coven revision has no real-daemon ${name} target`);
+    }
   }
   const clientNodes = nodes.filter((node) => node.id === client.id);
   const deps = clientNodes.length === 1
@@ -99,6 +107,16 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
   const save = () => writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
   save();
   try {
+    const suite = env.COVEN_THREADS_DAEMON_SUITE ?? "advisory";
+    if (suite !== "advisory" && suite !== "compatibility") {
+      throw new Error("unknown daemon suite");
+    }
+    if (suite === "compatibility" && !/^[0-9a-f]{40}$/.test(env.COVEN_REF ?? "")) {
+      throw new Error("compatibility requires an immutable full Coven commit SHA");
+    }
+    const targets = suite === "compatibility" ? compatibilityTargets : ["threads_e2e"];
+    const args = argsForTargets(targets);
+    Object.assign(receipt, { suite, test_targets: targets, command: ["cargo", ...args] });
     if (env.COVEN_REF) validateRef(env.COVEN_REF, env.GITHUB_EVENT_NAME);
     for (const [name, root] of [["threads", threads], ["coven", coven]]) {
       receipt[`${name}_sha`] = execute("git", ["rev-parse", "HEAD"], root);
@@ -113,8 +131,10 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     receipt.cargo = execute("cargo", ["--version"], coven, { env });
     const covenManifest = realpathSync(join(coven, "crates/coven-cli/Cargo.toml"));
     const threadsManifest = realpathSync(join(threads, "crates/coven-threads-core/Cargo.toml"));
-    if (!existsSync(join(coven, "crates/coven-cli/tests/threads_e2e.rs"))) {
-      throw new Error("selected Coven revision has no real-daemon threads_e2e target");
+    for (const target of targets) {
+      if (!existsSync(join(coven, `crates/coven-cli/tests/${target}.rs`))) {
+        throw new Error(`selected Coven revision has no real-daemon ${target} target`);
+      }
     }
     const configDir = join(coven, ".cargo");
     const existingConfig = downstreamConfig(coven);
@@ -129,6 +149,22 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
       `coven-threads-core = { path = ${JSON.stringify(dirname(threadsManifest))} }\n`,
       { flag: existingConfig ? "a" : "wx" });
     receipt.coven_config_overlay_sha256 = hashFile(configPath);
+    const proveSourcesUnchanged = () => {
+      for (const [name, root] of [["threads", threads], ["coven", coven]]) {
+        if (execute("git", ["rev-parse", "HEAD"], root) !== receipt[`${name}_sha`]) {
+          throw new Error(`${name} checkout revision changed during observation`);
+        }
+        // Only the recorded downstream overlay may differ from its commit.
+        const exclusions = name === "coven"
+          ? [":(top,literal,exclude)Cargo.lock",
+            `:(top,literal,exclude)${relative(coven, configPath).split("\\").join("/")}`]
+          : [];
+        if (execute("git", ["status", "--porcelain", "--untracked-files=all",
+          "--ignore-submodules=none", "--", ".", ...exclusions], root)) {
+          throw new Error(`${name} checkout source changed during observation`);
+        }
+      }
+    };
     const proveConfigUnchanged = () => {
       if (downstreamConfig(coven) !== configPath ||
           hashFile(configPath) !== receipt.coven_config_overlay_sha256) {
@@ -142,14 +178,16 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     // Resolve once explicitly; the test and its nested metadata use --locked.
     execute("cargo", metadataArgs, coven, { env });
     proveConfigUnchanged();
+    proveSourcesUnchanged();
     const metadata = JSON.parse(execute("cargo", [...metadataArgs, "--locked"], coven, { env }));
     proveConfigUnchanged();
-    Object.assign(receipt, proveOverride(metadata, covenManifest, threadsManifest));
+    proveSourcesUnchanged();
+    Object.assign(receipt, proveOverride(metadata, covenManifest, threadsManifest, targets));
     receipt.coven_lock_overlay_sha256 = hashFile(join(coven, "Cargo.lock"));
     receipt.overlay_resolution_command = ["cargo", ...metadataArgs];
     receipt.stage = "daemon-journeys";
     save();
-    execute("cargo", testArgs, coven, {
+    execute("cargo", args, coven, {
       stdio: "inherit",
       env: {
         ...env,
@@ -159,6 +197,7 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     });
     const proveOverlayUnchanged = () => {
       proveConfigUnchanged();
+      proveSourcesUnchanged();
       if (hashFile(join(coven, "Cargo.lock")) !== receipt.coven_lock_overlay_sha256) {
         throw new Error("daemon execution changed the resolved overlay lockfile");
       }
@@ -166,7 +205,7 @@ export function runCanary(covenPath, artifactPath, env = process.env, execute = 
     proveOverlayUnchanged();
     const after = JSON.parse(execute("cargo", [...metadataArgs, "--locked"], coven, { env }));
     proveOverlayUnchanged();
-    proveOverride(after, covenManifest, threadsManifest);
+    proveOverride(after, covenManifest, threadsManifest, targets);
     receipt.status = "passed";
     receipt.stage = "complete";
   } catch (error) {

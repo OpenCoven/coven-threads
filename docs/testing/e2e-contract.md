@@ -289,8 +289,11 @@ Its implementation pull request must contain:
 5. the named CI check and failure artifact;
 6. migration and rollback notes where persisted state changes.
 
-Human sign-off gates remain human. Agents may assemble evidence and recommend a
-decision; they must never simulate Nova's independent review or Val's freeze.
+Human sign-off gates remain human. Under the
+[adopted solo-maintainer policy](../../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md),
+Val owns coherence acceptance and the subsequent scoped freeze/reaffirmation.
+Agents may assemble evidence and recommend a decision; they must never
+simulate either human decision or claim independent human approval.
 
 ## 10. CI rollout
 
@@ -331,9 +334,15 @@ The recorded configuration overlay must remain the sole regular Cargo config
 file after each metadata query and daemon execution. Changed or missing bytes,
 symlink replacements, and newly ambiguous config filenames fail the observation,
 even if the dependency graph still selects the current Threads checkout.
+Both checkout HEADs and source cleanliness are rechecked after every Cargo
+metadata query and daemon execution. Only the exact recorded Coven config
+overlay and `Cargo.lock` are exempt from the source check; their bytes are
+checked separately. Staged, unstaged, and non-ignored untracked source changes
+fail rather than attributing the result to the original clean revisions.
 The resolved overlay lockfile is also rechecked after daemon execution and the
 final metadata query before a passing receipt is written. These boundary checks
-do not attest to transient changes restored between commands.
+do not attest to transient changes restored between commands, ignored build
+outputs, or hermetic execution.
 
 Until the selected downstream revision has the full harness, observation fails
 explicitly rather than skipping or substituting a library test. A failed
@@ -352,6 +361,45 @@ requirement must fail visibly until this separate pin is deliberately updated.
 - require the pinned Linux daemon suite after all eight journeys are stable;
 - protect `main` with quality, Cargo compatibility, and daemon E2E checks;
 - fail if the Cargo override is inactive.
+
+`.github/workflows/daemon-compatibility.yml` supplies the separate
+`Pinned daemon compatibility` job for every pull request and `main` push.
+It has no path filter, scheduled latest-main input, or success-on-error path.
+Its read-only checkouts do not retain credentials.
+
+`scripts/daemon-compatibility.mjs` reads `e2e/compatibility.toml` using Python
+3.11+'s standard-library TOML parser. Duplicate keys and malformed TOML fail.
+The manifest must declare `status = "ready"`, full daemon and committed-core
+SHAs, and all four `required_test_targets` in this order:
+
+```text
+threads_e2e
+threads_identity_invariants
+threads_protected_intake
+threads_terminal_recovery
+```
+
+`current_threads_rev` identifies the selected daemon's committed Git dependency,
+not the pull request's Threads checkout. Before installing the local override,
+the job checks that committed dependency against the manifest. The runner then
+proves the actual local dependency edge in the same way as observation.
+
+The required job sets `COVEN_THREADS_DAEMON_SUITE=compatibility`. That profile
+requires an immutable `COVEN_REF` even on a scheduled/manual caller, proves all
+four source and Cargo test targets exist, and runs them in one locked,
+feature-enabled Cargo command. All existing source/config/lock guards apply
+before and after the command. Missing companions, failures, or final metadata
+drift fail the receipt. The receipt records the suite, all selected targets,
+and exact command; default advisory observations still select `threads_e2e`
+only. Artifacts remain unique to each run and attempt.
+
+The manifest's `ready` state records pin eligibility, not a GitHub ruleset
+mutation or Phase-5 acceptance. Select a reviewed protected-main revision
+after normal downstream landing and exact-source revalidation. Only then add
+the new required context while preserving the existing strict checks.
+The old `harness-required` state must fail this job; it is not silently promoted
+and cannot fall back to `main`. Global deployed-history resolution, live Cave
+acceptance, and long-run reliability remain distinct obligations.
 
 ### Expansion
 
