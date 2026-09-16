@@ -45,33 +45,56 @@ a protected write. Genesis writes the first version, which is consistent with
 RFC-0001: the first Ward manifest is a principal-authorized genesis write whose
 authorization requires no prior committed Ward state.
 
-## Decision 2 — `principal_authorization` binds to the existing Gate-1 check
+## Decision 2 — no anchor is emitted until authorization is authenticated
 
-A `ward_updated` row records a structured token in the shape the conformance
-corpus uses, and the daemon emits it **only when** the claimed fingerprint
-matches `principal_key_fingerprint` through the comparison Gate 1 already
-applies, over owner-gated local IPC.
+A `ward_updated` row is **not** emitted on descriptor-strength evidence.
+Committed Ward state stays absent, and anything depending on it fails closed,
+until an authenticated, operation-bound principal authority path exists.
 
-This is stated plainly rather than dressed up: that comparison is **string
-equality against a configured fingerprint, not signature verification**. The
-daemon verifies no signatures anywhere today. So the recorded authorization is
-**descriptor strength**, and this decision does not pretend otherwise.
+**This reverses the recommendation first made here.** The original proposal was
+to record a corpus-shaped token whenever a claimed fingerprint matched
+`principal_key_fingerprint` through the comparison Gate 1 already applies, and
+to label the result descriptor strength. Review showed that unsound, and the
+objection was correct.
 
-Rejected alternatives:
+`principal_key_fingerprint` is a configured descriptor. OpenCoven/coven#887's
+accepted disposition is explicit that it confers no authority:
 
-- **Require real signature verification.** The honest predicate, and closest to
-  RFC intent. It was rejected only because it blocks `ward_updated` behind
-  exactly the authenticated protected-write authority that OpenCoven/coven#887
-  keeps deliberately disabled fail-closed. Adopting it would make committed Ward
-  state unreachable for the same reason promotion already is.
-- **An unbound descriptor token.** Simplest and matches the sample literally,
-  but records an authorization claim nothing tested — the descriptor-as-predicate
-  mistake PHASE-0-DESIGN §2.2 exists to prevent.
+> Generic proposal intake no longer treats fingerprints or approval-reference
+> text as protected-write authority.
 
-**What this does not license.** Binding to the existing check is not a claim that
-protected-write authority is authenticated, and must not be cited to re-enable
-that route. When signature verification lands, this binding should be upgraded
-to it and the descriptor-strength caveat removed.
+> matching/null text or an old reference cannot upgrade authority.
+
+> no fingerprint or invented approval identifier grants protected-write
+> authority.
+
+Under the rejected proposal, a genesis or configured Ward supplying that value
+would mint a **valid** committed-state anchor, which `threads-vd8` then has
+promotion resolve against. That launders a descriptor into authorization across
+a trust boundary. Labelling it does not help: the label is prose, while the row
+is machine-consumed — `source_attestation` validation checks that the referent
+resolves and carries its required fields, not that a document called it weak.
+
+### The floor this exposes
+
+The anchor choice never mattered. RFC-0001 §5.6 requires `principal_authorization`
+on **both** referent types, `ward_updated` and `principal_authorized_write`. So
+**no conforming promotion admission is reachable until authenticated principal
+authorization exists**, whichever referent `threads-vd8` had selected.
+
+That is a floor under the whole promotion programme, not a property of one
+design choice, and it is better known now than discovered during implementation.
+
+### What this does not mean
+
+It is not a claim that the fingerprint comparison is worthless — it remains a
+useful Gate-1 check for what it does today. It is a refusal to promote that
+check into provenance authority for an append-only anchor other subsystems
+consume.
+
+Nor is it a decision to build the authenticated path. That work stays where
+OpenCoven/coven#887 left it: disabled fail-closed, an explicitly permitted
+disposition.
 
 ## Status
 
@@ -80,5 +103,10 @@ record contract landed separately in #75: `for_ward_updated` exists, and
 `ward_version` and a 32-byte `ward_hash` are both required of a `ward_updated`
 row so an unusable anchor cannot be recorded.
 
-What remains is daemon work in `OpenCoven/coven` — where a Ward commit is
-established, how genesis is identified, and emitting the event at those points.
+Decision 1 stands and is implementable whenever the daemon work proceeds.
+Decision 2 means that work does not proceed yet: emitting the event requires an
+authenticated, operation-bound authority path that does not exist, so
+`threads-vdv` now depends on that prerequisite rather than on wiring.
+
+The `for_ward_updated` doc comment names the field shapes Decision 1 settles, so
+the call site is ready when the floor lifts.
