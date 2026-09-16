@@ -274,6 +274,14 @@ at runtime. Emitting committed Ward state, including the genesis write whose
 `principal_authorization` requires no prior committed state, is a **prerequisite
 for any conforming promotion admission**, not a later refinement.
 
+**And a floor under both referents (2026-09-16).** RFC-0001 §5.6 requires
+`principal_authorization` on `ward_updated` *and* `principal_authorized_write`
+alike, and a fingerprint match is not authorization — OpenCoven/coven#887's
+accepted disposition is explicit that matching text cannot upgrade authority. So
+no conforming promotion admission is reachable until an authenticated,
+operation-bound principal authority path exists, whichever referent this section
+had selected. The anchor decision above stands; it is simply not yet reachable.
+
 **Authorization scope — decided by Val, 2026-09-16 (`threads-vd8`).** Promotion
 is a self-improvement loop under RFC-0001 §3.4, and an entry whose origin cannot
 be determined is treated as loop-originated, so this governs promotion generally

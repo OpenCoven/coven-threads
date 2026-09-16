@@ -431,7 +431,11 @@ impl WardAuditRecord {
     ///
     /// Principal-authorized Ward updates are not proposals: they occur outside
     /// the gate pipeline (RFC-0001 §5.4), which is why this carries
-    /// `principal_authorization` and no proposal id. The genesis case is
+    /// `principal_authorization` and no proposal id. RFC-0001 constrains
+    /// neither field's format; the normative conformance sample records
+    /// `ward_version` as a semver string and `principal_authorization` as a
+    /// structured `principal:date:purpose` token, which is what the daemon is
+    /// expected to supply. The genesis case is
     /// expressible — the first Ward manifest is a principal-authorized write
     /// whose authorization requires no prior committed Ward state, so the
     /// provenance recursion bottoms out at the principal.
