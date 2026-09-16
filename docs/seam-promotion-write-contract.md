@@ -92,6 +92,28 @@ side does not hold channel authority. It does not widen any write authority:
 determining a channel is not permission to commit, and §3 still decides whether
 the write may land.
 
+**Channel coverage — decided by Val, 2026-09-16 (`threads-7gw`).** A thread
+declares `Deliberate` coverage *per thread*, as `pattern.rs` already intends.
+`Deliberate` is **not** added to the RFC-0001 §4.1 structural floor.
+
+Concretely, the daemon's single `PROTECTED_CHANNELS` value is split into the two
+roles it currently serves at once: the `AllSurfacesHoldOnChannels` predicate goes
+on requiring `[Forced, Serialization, Mutation]`, while `holds_under` gains
+`Deliberate` only for promotion-eligible, non-protected surfaces.
+
+Protected (Tier 0) surfaces therefore keep refusing a `Deliberate` write at
+`RejectReason::ChannelNotCovered`, the earliest gate, rather than admitting it to
+a later tier refusal. §3.2 is unconditional either way; this keeps the refusal
+reason precise about *why* the write was refused.
+
+**Migration hazard, stated once.** `holds_under` is committed into each thread's
+weave leaf, so granting coverage changes `ward_hash`. A veto window records its
+`weave_hash` as part of its complete submission authority, and a window opened
+under the old hash cannot be reconciled against the new one. Land this while no
+window is open. The 2026-09-15 deployed census recorded zero opened windows and
+no pending state, so this change is currently free and will not stay that way
+once the system carries real traffic.
+
 ---
 
 ## 3. Target classification — the fork that matters

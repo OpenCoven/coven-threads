@@ -13,10 +13,11 @@ surrounding machinery — a scratch tier to promote from, a reachable promotion
 module, an admission audit event, and a resolvable provenance anchor — is also
 absent, and two of those were blocked on decisions rather than effort.
 
-**Status since publication.** The provenance-anchor decision (§3.1) was settled
-on 2026-09-16 and `threads-vd8` is closed; it produced a prerequisite larger
-than itself, `threads-vdv`. The `Deliberate` coverage decision (§3.2) remains
-open as `threads-7gw`. The rest of the scope stands as written.
+**Status since publication.** Both §3 decisions were settled on 2026-09-16 and
+`threads-vd8` and `threads-7gw` are closed. The anchor decision produced a
+prerequisite larger than itself, `threads-vdv`. What remains under §3 is
+engineering, not decisions: `threads-vdv`, `threads-dr2`, and the M2 substrate
+work. The rest of the scope stands as written.
 
 Scoping first avoids starting at the visible symptom and discovering the real
 blockers halfway in.
@@ -132,6 +133,19 @@ What is needed is per-thread `Deliberate` coverage for promotion-eligible
 surfaces, which means separating "channels this thread holds under" from "the
 floor the pattern predicate requires". Those are the same value today.
 
+**Decided 2026-09-16 (`threads-7gw`, closed).** Split the const into its two
+roles: the predicate keeps the §4.1 floor, and `holds_under` gains `Deliberate`
+only for promotion-eligible, non-protected surfaces. Protected surfaces keep
+refusing at `ChannelNotCovered`, the earliest gate. Recorded in §2 of the seam
+contract.
+
+One consequence found while deciding, and it sets the timing: `holds_under` is
+committed into the weave leaf, so granting coverage **changes `ward_hash`** — and
+a veto window records its `weave_hash` as part of its submission authority, so a
+window opened under the old hash cannot be reconciled against the new one. The
+2026-09-15 census recorded zero opened windows and no pending state, so the
+change is free today and will not stay free.
+
 ### 3.3 No scratch tier, and the promotion module is unreachable
 
 - The memory store has one tier. `crates/coven-memory/src/db.rs` creates `docs`
@@ -216,7 +230,7 @@ of `threads-980`; §5.2 of the seam contract records that dependency.
 1. ~~Land `threads-55s`~~ — done 2026-09-16; no migration, no fingerprint change.
 2. ~~Decide provenance anchoring~~ — done 2026-09-16 (`threads-vd8`). It
    produced `threads-vdv`: emit `ward_updated` so the anchor exists.
-3. Decide per-thread `Deliberate` coverage versus the structural floor (§3.2).
+3. ~~Decide per-thread `Deliberate` coverage~~ — done 2026-09-16 (`threads-7gw`).
 4. Establish the crate edge or adapter so the daemon can reach promotion (§3.3).
 5. Define the scratch tier and the `coven memory promote` surface (M2, `cmem-1ev`).
 6. Thread the channel through `threads_gate.rs`; add the route, handler and
@@ -242,9 +256,8 @@ cmem-r59` resolves it.
 
 ## 9. What this scope does not do
 
-- It authorizes no implementation. The §3.1 decision was settled separately and
-  is recorded in the seam contract, not granted here; the §3.2 decision
-  (`threads-7gw`) remains open.
+- It authorizes no implementation. Both §3 decisions were settled separately and
+  are recorded in the seam contract, not granted here.
 - It closes no bead. `threads-xpo` stays open; the submission path does not exist.
 - It changes no normative contract, required pin, or protected path.
 - It is not a commitment to build promotion. The §3.1 finding may reasonably
