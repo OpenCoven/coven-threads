@@ -252,7 +252,7 @@ changes.
 
 ## Keep adjacent work separate
 
-Draft #25 is language-only promotion-seam work. `threads-xpo` owns deliberate
+The promotion-seam contract merged in #25 is language-only. `threads-xpo` owns deliberate
 channel reachability, `threads-55s` owns admission-channel audit follow-through,
 and `threads-lm4` owns runtime conformance. `threads-5mn` retains the unresolved
 upstream mirror reference; do not invent an ID or a promotion command.

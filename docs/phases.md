@@ -407,8 +407,9 @@ interchangeable with the integrated result.
 
 **Related work outside the sign-off blocker set:** `threads-xpo` tracks the
 missing daemon promotion-channel path; `threads-55s` depends on it for auditable
-admission channels. `threads-ot6` is draft #25, with `threads-5mn` tracking its
-upstream work reference and `threads-lm4` tracking runtime conformance.
+admission channels. `threads-ot6`'s contract language landed in #25 on 2026-09-16, which also
+settled channel authority on the daemon; `threads-5mn` tracks its upstream work
+reference and `threads-lm4` tracking runtime conformance.
 `threads-76z` was reopened because its purported fix, #27, was closed **without
 merge** and superseded by stricter terminal-close work. Do not resurrect its
 null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` records the
@@ -552,7 +553,10 @@ Tracked in `docs/STATUS-2026-07-15.md` and worth knowing when reading the repo:
   needs a fourth `fabric` level, remains open and deferred.
 - **`Channel::Deliberate` runtime reachability remains open.** The channel is
   specified in `PHASE-0-DESIGN.md` and implemented in the library, but
-  `threads-xpo` still tracks the supported daemon promotion path. Draft #25
-  explicitly labels `coven memory promote` as planned, not available. Do not
+  `threads-xpo` still tracks the supported daemon promotion path. The seam
+  contract merged in #25 labels `coven memory promote` as planned, not
+  available, and places effective-channel determination on the daemon. Do not
   turn the earlier daemon-wide symbol snapshot into an undated claim about
-  every current code path.
+  every current code path: as of 2026-09-16 no submission path constructs
+  `Channel::Deliberate`, though the census classifier does read a stored
+  `"deliberate"` value out of existing audit history.
