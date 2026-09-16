@@ -11,7 +11,12 @@ verified on 2026-09-16 against `origin/main` of the named repository.
 `Channel::Deliberate`. That is true, but it is the smallest part of the gap. The
 surrounding machinery — a scratch tier to promote from, a reachable promotion
 module, an admission audit event, and a resolvable provenance anchor — is also
-absent, and two of those are blocked on decisions rather than effort.
+absent, and two of those were blocked on decisions rather than effort.
+
+**Status since publication.** The provenance-anchor decision (§3.1) was settled
+on 2026-09-16 and `threads-vd8` is closed; it produced a prerequisite larger
+than itself, `threads-vdv`. The `Deliberate` coverage decision (§3.2) remains
+open as `threads-7gw`. The rest of the scope stands as written.
 
 Scoping first avoids starting at the visible symptom and discovering the real
 blockers halfway in.
@@ -237,7 +242,9 @@ cmem-r59` resolves it.
 
 ## 9. What this scope does not do
 
-- It authorizes no implementation and settles neither decision in §3.
+- It authorizes no implementation. The §3.1 decision was settled separately and
+  is recorded in the seam contract, not granted here; the §3.2 decision
+  (`threads-7gw`) remains open.
 - It closes no bead. `threads-xpo` stays open; the submission path does not exist.
 - It changes no normative contract, required pin, or protected path.
 - It is not a commitment to build promotion. The §3.1 finding may reasonably
