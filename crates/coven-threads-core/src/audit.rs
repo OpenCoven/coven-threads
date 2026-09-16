@@ -348,11 +348,19 @@ impl WardAuditRecord {
     }
 
     /// Build an RFC-0001 §5.6 standard memory-admission audit row.
+    ///
+    /// `channel` records which channel the admission arrived on (§2.4). The
+    /// promotion-write seam contract requires a promotion admission to be
+    /// `Channel::Deliberate` *and* requires that fact to be auditable, so the
+    /// caller supplies it rather than the constructor assuming one. `None`
+    /// stays representable for an admission with no meaningful channel; the
+    /// column is nullable and no `memory_entry_admitted` constraint reads it.
     pub fn for_memory_entry_admitted(
         familiar_id: FamiliarId,
         weave_hash: &[u8],
         entry_hash: &[u8],
         source_attestation: impl Into<String>,
+        channel: Option<Channel>,
         decided_at: OffsetDateTime,
     ) -> Self {
         let detail = MemoryEntryAdmissionAuditDetail {
@@ -371,7 +379,7 @@ impl WardAuditRecord {
             diff_hash: None,
             detail: Some(serde_json::to_string(&detail).expect("serializing typed audit detail")),
             files_touched: Vec::new(),
-            channel: None,
+            channel,
             thread_id: None,
             submitted_at: decided_at,
             decided_at,
@@ -2391,6 +2399,7 @@ mod tests {
             &[0xaa; 32],
             &[0xbb; 32],
             "ward:event-1",
+            Some(Channel::Deliberate),
             now,
         );
         assert!(admitted.validate_event_detail().is_ok());
@@ -2404,6 +2413,45 @@ mod tests {
             now,
         );
         assert!(write.validate_event_detail().is_ok());
+    }
+
+    /// `threads-55s`: the admission row must be able to say which channel it
+    /// arrived on, so a `Deliberate` promotion admission is distinguishable
+    /// from any other admission in `ward_audit`. Constructor-level scope: no
+    /// daemon submission path can supply `Deliberate` yet (`threads-xpo`), so
+    /// the end-to-end round-trip is deliberately not asserted here.
+    #[test]
+    fn memory_admission_records_the_channel_it_arrived_on() {
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let build = |channel| {
+            WardAuditRecord::for_memory_entry_admitted(
+                FamiliarId::new(),
+                &[0xaa; 32],
+                &[0xbb; 32],
+                "ward:event-1",
+                channel,
+                now,
+            )
+        };
+
+        for channel in Channel::ALL {
+            let record = build(Some(*channel));
+            assert_eq!(record.channel, Some(*channel));
+            assert!(record.validate_event_detail().is_ok());
+        }
+
+        // A Deliberate admission is distinguishable from a non-Deliberate one,
+        // which is the property the seam contract actually needs.
+        assert_ne!(
+            build(Some(Channel::Deliberate)).channel,
+            build(Some(Channel::Mutation)).channel
+        );
+
+        // `None` stays representable and still validates: the column is
+        // nullable and no `memory_entry_admitted` constraint reads it.
+        let unspecified = build(None);
+        assert_eq!(unspecified.channel, None);
+        assert!(unspecified.validate_event_detail().is_ok());
     }
 
     /// Exact shipped v0.1.3 `ward_audit` DDL from `origin/main` / the PR base.
