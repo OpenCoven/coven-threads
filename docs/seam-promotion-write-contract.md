@@ -34,6 +34,7 @@ Therefore:
 | What is worth promoting | coven-memory |
 | Candidate selection, ranking, dedup, dreaming | coven-memory |
 | Promotion trigger and cadence | coven-memory |
+| Effective channel determination (§2) | coven daemon |
 | Whether a promotion write may commit | coven-threads (via daemon) |
 | Classification, gate, approval, and audit-record contracts | coven-threads |
 | Staging, commit-time replay, filesystem writes, and audit persistence | coven daemon |
@@ -71,10 +72,25 @@ ceremony. They are orthogonal and both first-class. A promotion write being
 current daemon behavior.
 
 **NOT YET IMPLEMENTED — `threads-xpo`:** current daemon code does not expose a
-promotion submission path and does not reach `Channel::Deliberate`. When the
-boundary exists, any caller-supplied channel label is descriptive only: the
-daemon MUST authoritatively determine or revalidate the effective channel and
-reject a mismatch rather than coerce it.
+promotion submission path and does not reach `Channel::Deliberate`. Verified
+again on 2026-09-16 against coven `origin/main`: no construction site produces
+`Channel::Deliberate` and no `coven memory promote` surface exists. The census
+classifier at `crates/coven-cli/src/ward_audit_census.rs` does parse a stored
+`"deliberate"` channel, but that is a read path over existing audit history, not
+a submission path.
+
+**Channel authority — decided by Val, 2026-09-16.** When the boundary exists,
+the daemon determines the effective channel from the promotion route itself. A
+caller-supplied channel label is descriptive only and MUST NOT be an input to
+that determination. Where a label is supplied and disagrees with the determined
+channel, the daemon MUST reject the submission rather than coerce it or silently
+ignore the disagreement.
+
+This settles the question §2 previously left open between "the daemon
+determines" and "coven-memory declares, the daemon revalidates". The declaring
+side does not hold channel authority. It does not widen any write authority:
+determining a channel is not permission to commit, and §3 still decides whether
+the write may land.
 
 ---
 
@@ -258,9 +274,11 @@ the audit row shape and belongs with the other audit work.
 
 This document satisfies the language-only acceptance criteria when:
 
-1. Echo and Cody both agree the language as a specification; Cody's review is
-   limited to language correctness, not an implementation shape for a command
-   that does not yet exist.
+1. Val accepts the language as a specification under the adopted solo-maintainer
+   review policy (`specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md`). Agent passes —
+   Echo on contract language, Cody on language correctness, and neither on an
+   implementation shape for a command that does not yet exist — are supporting
+   engineering evidence, not a separate human acceptance.
 2. §2 stays explicit that it is normative for when built and carries the
    `NOT YET IMPLEMENTED — threads-xpo` marker while no
    `Channel::Deliberate` submission path exists.
