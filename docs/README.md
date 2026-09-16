@@ -50,6 +50,7 @@ native causes without replacing the root acceptance record.
 | [Readiness review](reviews/2026-09-11-landscape-and-readiness.md) | Dated landscape, documentation corrections, and engineering recommendations for the open review gates. |
 | [Native reliability handoff](reviews/2026-09-14-native-reliability.md) | September 14 fixture corrections, accepted diagnostics, exact source receipts, and remaining engineering/operator boundaries. |
 | [Deployed audit-census](reviews/2026-09-15-deployed-audit-census.md) | September 15 read-only disposition of the accessible deployed profile for `threads-980` / OpenCoven/coven#886: zero opened veto windows, and the scope limits of that negative. |
+| [Promotion-path scope](reviews/2026-09-16-promotion-path-scope.md) | September 16 scope for the `Channel::Deliberate` submission path (`threads-xpo`): what is already channel-generic, the two decisions that gate it, and the implementation surface. |
 | [E2E contract](testing/e2e-contract.md) | Real-daemon topology, eight required journeys, deterministic time, and blocker-closure evidence. |
 | [faq.md](faq.md) | Anticipated questions, answered honestly with sources. |
 | [glossary.md](glossary.md) | Every named term, one line each, alphabetical, with links to depth. |
