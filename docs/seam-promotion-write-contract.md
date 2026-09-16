@@ -120,8 +120,10 @@ entries, including sleep-time or reflection output, MUST carry explicit human
 authorization before admission, regardless of provenance validity. Unknown
 origin is treated as loop-originated; unknown continuity-bearing status is
 treated as continuity-bearing. Familiar coherence or an unvetoed window is not
-a substitute for that authorization. Admission evidence follows §5.1 below;
-these requirements do not make protected targets proposal-eligible.
+a substitute for that authorization. Its scope was settled on 2026-09-16: each
+promoted entry carries its own authorization, so the ceremony chosen here never
+converts promotion into an unattended process (§5.1). Admission evidence follows
+§5.1 below; these requirements do not make protected targets proposal-eligible.
 
 This default remains proposed pending Cody's language review and later Nova
 ratification. It is a floor, not a ceiling. Highest ceremony still wins for the
@@ -227,6 +229,39 @@ This preserves PHASE-0-DESIGN §2.2's predicate-vs-descriptor discipline:
 caller assertions are not enforcing predicates. These are future admission
 requirements, not a claim that the current audit-row constructor validates
 provenance or supplies the required human-authorization evidence.
+
+**Attestation anchor — decided by Val, 2026-09-16 (`threads-vd8`).** Both
+RFC-0001 §5.6 referents stay valid. A promotion admission resolves its
+`source_attestation` against **committed Ward state** — the most recent
+`(ward_version, ward_hash)` pair recorded by a `ward_updated` event — and that
+is the referent promotion actually uses. `principal_authorized_write` remains a
+valid referent in this contract but is **unreachable** while the separate
+authenticated protected-write authority stays disabled fail-closed
+(OpenCoven/coven#887). A promotion outcome that would require it therefore
+cannot occur yet. Nothing here re-enables that route as a side effect.
+
+This extends rather than replaces the 2026-08-10 ruling that
+`source_attestation` carries a *reference* to the authorizing record and never a
+content digest. That ruling settled the shape; this one names which referent
+promotion resolves against and which is merely still valid.
+
+**Prerequisite this creates.** The daemon records no `ward_updated` events
+today, so there is no committed Ward state in the log for any attestation to
+resolve against — the concept RFC-0001 §2 defines is currently not instantiated
+at runtime. Emitting committed Ward state, including the genesis write whose
+`principal_authorization` requires no prior committed state, is a **prerequisite
+for any conforming promotion admission**, not a later refinement.
+
+**Authorization scope — decided by Val, 2026-09-16 (`threads-vd8`).** Promotion
+is a self-improvement loop under RFC-0001 §3.4, and an entry whose origin cannot
+be determined is treated as loop-originated, so this governs promotion generally
+rather than an unusual subset. Each promoted entry carries its **own**
+`principal_authorization` on its `memory_entry_admitted` row. A standing,
+session-wide, or batch grant does not satisfy §3.4.
+
+The practical consequence is deliberate and worth stating plainly: **promotion
+is a review queue, not a background process.** No §3.1 ceremony substitutes for
+this authorization, as §3.1 already records.
 
 ### 5.2 Proposal lifecycle
 
