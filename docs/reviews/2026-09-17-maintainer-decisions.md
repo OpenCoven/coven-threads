@@ -6,7 +6,7 @@
 consolidation (`threads-9cr`). Nothing here touches the human coherence gate
 (`threads-uqx.9`, #13) or the scoped freeze (`threads-uqx.10`, #14).
 
-## Decision 1 — OpenCoven/coven#886 is closed on the deployed audit census
+## Decision 1 — OpenCoven/coven#886 is closed on the workstation-profile audit census
 
 The root's two closure requirements are met and it is closed without repair:
 
@@ -17,10 +17,13 @@ The root's two closure requirements are met and it is closed without repair:
   core trigger still rejects any terminal event without typed close detail
   after `proposal_window_opened`.
 - **Deployed history.** The read-only census of 2026-09-15
-  ([record](2026-09-15-deployed-audit-census.md)) found 0 opened windows,
-  0 unresolved, 0 unattributed artifacts, corroborated by independent SQL.
+  ([record](2026-09-15-deployed-audit-census.md)) is scoped to the maintainer
+  workstation profile, the only deployed profile inspected. It found 0 opened
+  windows, 0 unresolved, 0 unattributed artifacts, corroborated by independent
+  SQL. Val accepts that profile as the deployed inventory for this root; no
+  other deployed profile is known.
 
-There is no history to repair. A future profile that surfaces an opened window
+There is no history to repair in the inspected profile. A future profile that surfaces an opened window
 without a typed close is a new defect against the census tooling and triggers,
 not a reopening of this root. `threads-980` is closed with this disposition,
 which makes `threads-uqx.9` dependency-clear. Dependency-clear is not

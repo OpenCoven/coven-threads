@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-17 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** All four root engineering blockers are closed at accepted daemon `226bfcc8`; OpenCoven/coven#886 closed on the 2026-09-15 deployed audit census ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)). The four-target current-Threads compatibility lane is now required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
+> **As of 2026-09-17 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** All four root engineering blockers are closed at accepted daemon `226bfcc8`; Val closed OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)). The four-target current-Threads compatibility lane is now required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
 
 Read the [engineering acceptance handoff](reviews/2026-09-13-engineering-acceptance.md)
 for current sources, results, and operator work, the [delivery strategy](strategy.md)
@@ -39,7 +39,7 @@ reaffirm the historical #14 freeze for current revisions.
 | Composed daemon authority, recovery, startup, and corrected core pin | OpenCoven/coven#1029 merged as `abcf926500d5dcf2dbec2f8d3bfd15a7b393c619`, preserving accepted head `8305ce44` |
 | Advisory Cargo configuration provenance | #56 merged as `1a3a88e4b26ba069c5d498f1c260125ba03428ae`, with the same tree as tested candidate `500cf0022` |
 | Complete identity, protected-route, and retired-corpus engineering | OpenCoven/coven#1045, OpenCoven/coven#1044, and OpenCoven/coven#1046 normally merged; roots OpenCoven/coven#885, OpenCoven/coven#887, and OpenCoven/coven#888 closed after exact-source acceptance |
-| Read-only opened-history census | OpenCoven/coven#1049 merged as `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58`; classification is not repair; OpenCoven/coven#886 was later closed on the 2026-09-15 census with no repair warranted |
+| Read-only opened-history census | OpenCoven/coven#1049 merged as `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58`; classification is not repair; OpenCoven/coven#886 was closed by Val on 2026-09-17 on the 2026-09-15 census of the maintainer workstation profile, with no repair warranted |
 | Source guard and required four-target compatibility | #62 merged as `2a7c1779`; #65 as `7f98ae83eb556fd5f11b34474947fc27a4b36566`; sixth strict required context activated under #64 |
 
 The reviewed compatibility pin is Coven
@@ -82,7 +82,8 @@ authenticated artifact, native committed-core evidence, and original failures.
 
 OpenCoven/coven#885, OpenCoven/coven#887, and OpenCoven/coven#888 are closed for
 their enumerated engineering criteria. OpenCoven/coven#886 closed on 2026-09-17
-on the evidence-backed deployed census. Full #13 acceptance and both
+on Val's disposition of the 2026-09-15 census of the maintainer workstation
+profile, the only inspected deployed profile. Full #13 acceptance and both
 human decisions remain separate. Live Cave acceptance, physical startup/IPC
 attribution, and the 30-day reliability target are not inferred from these runs.
 
@@ -127,8 +128,8 @@ opened-window history after public coherence intake; it does not establish
 supported scheduled publication. The refreshed review records exact-head
 receipts and the then-remaining route/recovery coverage. Neither root issue
 was closed by those bounded component landings. The later accepted matrix
-closed OpenCoven/coven#887; OpenCoven/coven#886 closed on 2026-09-17 on the
-deployed-history census.
+closed OpenCoven/coven#887; OpenCoven/coven#886 closed on 2026-09-17 on
+Val's disposition of the workstation-profile census.
 
 ## Phase 0 — Design `[FROZEN]`
 
@@ -196,7 +197,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
 | `threads-okc` | identity predicates must run at intake and delayed/restart replay | **closed** with OpenCoven/coven#885 at accepted daemon `226bfcc8`, including ordinary final-write repair, all known intake/replay paths, and required current-Threads proof |
-| `threads-980` | every opened window needs exactly one typed terminal close | **closed** 2026-09-17 with OpenCoven/coven#886: five typed terminal families at accepted daemon `226bfcc8`, and the 2026-09-15 deployed census found zero opened windows, so no repair was warranted |
+| `threads-980` | every opened window needs exactly one typed terminal close | **closed** 2026-09-17 with OpenCoven/coven#886: five typed terminal families at accepted daemon `226bfcc8`, and the 2026-09-15 census of the maintainer workstation profile (the only inspected deployed profile) found zero opened windows, so Val closed OpenCoven/coven#886 on 2026-09-17 with no repair warranted |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | **closed** with OpenCoven/coven#887 after nine-route and client-boundary acceptance; separate protected writes remain disabled, and fixture client evidence is not live Cave acceptance |
 | `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | **closed** with OpenCoven/coven#888 after all seven actual corpus scenarios, original red/fix/green, and typed-close inspection; separate startup uncertainty remains in OpenCoven/coven#1047 |
 
