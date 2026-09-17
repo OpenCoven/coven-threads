@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-09-13 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** Three of four root engineering blockers are closed at accepted daemon `226bfcc8`. Global deployed-history closure remains open in OpenCoven/coven#886. The four-target current-Threads compatibility lane is now required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
+> **As of 2026-09-17 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** All four root engineering blockers are closed at accepted daemon `226bfcc8`; Val closed OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)). The four-target current-Threads compatibility lane is now required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
 
 Read the [engineering acceptance handoff](reviews/2026-09-13-engineering-acceptance.md)
 for current sources, results, and operator work, the [delivery strategy](strategy.md)
@@ -39,7 +39,7 @@ reaffirm the historical #14 freeze for current revisions.
 | Composed daemon authority, recovery, startup, and corrected core pin | OpenCoven/coven#1029 merged as `abcf926500d5dcf2dbec2f8d3bfd15a7b393c619`, preserving accepted head `8305ce44` |
 | Advisory Cargo configuration provenance | #56 merged as `1a3a88e4b26ba069c5d498f1c260125ba03428ae`, with the same tree as tested candidate `500cf0022` |
 | Complete identity, protected-route, and retired-corpus engineering | OpenCoven/coven#1045, OpenCoven/coven#1044, and OpenCoven/coven#1046 normally merged; roots OpenCoven/coven#885, OpenCoven/coven#887, and OpenCoven/coven#888 closed after exact-source acceptance |
-| Read-only opened-history census | OpenCoven/coven#1049 merged as `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58`; classification is not repair, so OpenCoven/coven#886 remains open |
+| Read-only opened-history census | OpenCoven/coven#1049 merged as `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58`; classification is not repair; OpenCoven/coven#886 was closed by Val on 2026-09-17 on the 2026-09-15 census of the maintainer workstation profile, with no repair warranted |
 | Source guard and required four-target compatibility | #62 merged as `2a7c1779`; #65 as `7f98ae83eb556fd5f11b34474947fc27a4b36566`; sixth strict required context activated under #64 |
 
 The reviewed compatibility pin is Coven
@@ -81,8 +81,9 @@ The [handoff](reviews/2026-09-13-engineering-acceptance.md) retains the
 authenticated artifact, native committed-core evidence, and original failures.
 
 OpenCoven/coven#885, OpenCoven/coven#887, and OpenCoven/coven#888 are closed for
-their enumerated engineering criteria. OpenCoven/coven#886 still needs an
-evidence-backed deployed inventory/disposition. Full #13 acceptance and both
+their enumerated engineering criteria. OpenCoven/coven#886 closed on 2026-09-17
+on Val's disposition of the 2026-09-15 census of the maintainer workstation
+profile, the only inspected deployed profile. Full #13 acceptance and both
 human decisions remain separate. Live Cave acceptance, physical startup/IPC
 attribution, and the 30-day reliability target are not inferred from these runs.
 
@@ -127,8 +128,8 @@ opened-window history after public coherence intake; it does not establish
 supported scheduled publication. The refreshed review records exact-head
 receipts and the then-remaining route/recovery coverage. Neither root issue
 was closed by those bounded component landings. The later accepted matrix
-closed OpenCoven/coven#887; OpenCoven/coven#886 still needs deployed-history
-resolution.
+closed OpenCoven/coven#887; OpenCoven/coven#886 closed on 2026-09-17 on
+Val's disposition of the workstation-profile census.
 
 ## Phase 0 — Design `[FROZEN]`
 
@@ -196,7 +197,7 @@ establish that every proposal, replay, or recovery route satisfies Phase 5.
 |---|---|---|
 | `threads-3jx` | `ward_audit` schema classification was substring-based | **closed** — PR #23, `8e2de93` |
 | `threads-okc` | identity predicates must run at intake and delayed/restart replay | **closed** with OpenCoven/coven#885 at accepted daemon `226bfcc8`, including ordinary final-write repair, all known intake/replay paths, and required current-Threads proof |
-| `threads-980` | every opened window needs exactly one typed terminal close | supported matrix and read-only census landed; actual deployed/unprovable-history disposition remains blocked in OpenCoven/coven#886 |
+| `threads-980` | every opened window needs exactly one typed terminal close | **closed** 2026-09-17 with OpenCoven/coven#886: five typed terminal families at accepted daemon `226bfcc8`, and the 2026-09-15 census of the maintainer workstation profile (the only inspected deployed profile) found zero opened windows, so Val closed OpenCoven/coven#886 on 2026-09-17 with no repair warranted |
 | `threads-dgg` | protected `SOUL.md` must not stage/approve through a proposal route | **closed** with OpenCoven/coven#887 after nine-route and client-boundary acceptance; separate protected writes remain disabled, and fixture client evidence is not live Cave acceptance |
 | `threads-zav` | retired-Ward corpus must prove live schedulability and recovery | **closed** with OpenCoven/coven#888 after all seven actual corpus scenarios, original red/fix/green, and typed-close inspection; separate startup uncertainty remains in OpenCoven/coven#1047 |
 
@@ -405,14 +406,17 @@ protected-route repairs on main. Preserve those repairs when reconciling the
 remaining overlapping integration commits; green individual branches are not
 interchangeable with the integrated result.
 
-**Related work outside the sign-off blocker set:** `threads-xpo` tracks the
-missing daemon promotion-channel path; `threads-55s` depends on it for auditable
-admission channels. `threads-ot6`'s contract language landed in #25 on 2026-09-16, which also
+**Related work outside the sign-off blocker set:** `threads-xpo` tracked the
+missing daemon promotion-channel path; it, `threads-19p`, `threads-vdv`, and
+`threads-lm4` closed on 2026-09-17 on the recorded decision that the
+authenticated operation-bound authority path stays fail-closed indefinitely
+([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)).
+`threads-55s` delivered the admission channel constructor. `threads-ot6`'s contract language landed in #25 on 2026-09-16, which also
 settled channel authority on the daemon; `threads-5mn` tracks its upstream work
 reference and `threads-lm4` tracking runtime conformance.
-`threads-76z` was reopened because its purported fix, #27, was closed **without
-merge** and superseded by stricter terminal-close work. Do not resurrect its
-null-close bypass. `threads-bnu` is closed via #28; `threads-t6t` records the
+`threads-76z` closed won't-fix on 2026-09-17: its purported fix, #27, was closed
+**without merge**, and Val ruled the strict SQL stays. Do not resurrect its
+null-close bypass (archived as tag `archive/fix-threads-76z-window-close-human-path`). `threads-bnu` is closed via #28; `threads-t6t` records the
 authorized privacy required-check activation after secret scanning landed in #41 and the
 separate privacy job and source-reference correction landed in #40.
 `threads-5rr` is an unratified design proposal, not
@@ -533,7 +537,7 @@ those owner-specific integrations separate from Phase-5 closure.
 | 2 | Daemon integration | `[FROZEN; IN RELEASE TAG]`; `.14`, `.20`, and `.19` closed | Phase-5 route and replay defects remain separate |
 | 3 | Portability format | `[ENGINEERING FROZEN]`; `.21`, `.16`, and exporter follow-up `threads-jq4` closed | No `.af` import or authority-preserving `.af` round-trip |
 | 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`; `threads-986.17`, adapter follow-up `threads-v3g`, and degraded-familiar follow-up `threads-k9s` closed | New Phase-5 live-daemon acceptance remains separate |
-| 5 | Approval semantics | `[ACTIVE]`; three root engineering blockers closed; historical audit closure remains in `threads-980` | Deployed-history disposition (accessible profile inventoried 2026-09-15, zero opened windows; global scope still open) and broader acceptance, then Val coherence acceptance (`.9`) and scoped freeze/reaffirmation (`.10`) |
+| 5 | Approval semantics | `[ACTIVE]`; all four root engineering blockers closed, `threads-980` last on 2026-09-17 | Broader acceptance (native reliability, live Cave), then Val coherence acceptance (`.9`, now dependency-clear) and scoped freeze/reaffirmation (`.10`) |
 
 ## Known housekeeping discrepancies
 
@@ -551,9 +555,10 @@ Tracked in `docs/STATUS-2026-07-15.md` and worth knowing when reading the repo:
   `specs/PHASE-3-PORTABILITY.md` Section 6, and Section 9.4 by the Phase-4
   contract and its recorded 2026-07-17 freeze. Section 9.1, whether federation
   needs a fourth `fabric` level, remains open and deferred.
-- **`Channel::Deliberate` runtime reachability remains open.** The channel is
-  specified in `PHASE-0-DESIGN.md` and implemented in the library, but
-  `threads-xpo` still tracks the supported daemon promotion path. The seam
+- **`Channel::Deliberate` runtime reachability is deferred indefinitely.** The channel is
+  specified in `PHASE-0-DESIGN.md` and implemented in the library, but the
+  daemon promotion path (`threads-xpo`) closed on 2026-09-17 on the recorded
+  fail-closed decision rather than on implementation. The seam
   contract merged in #25 labels `coven memory promote` as planned, not
   available, and places effective-channel determination on the daemon. Do not
   turn the earlier daemon-wide symbol snapshot into an undated claim about

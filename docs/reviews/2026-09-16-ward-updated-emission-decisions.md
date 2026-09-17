@@ -110,3 +110,8 @@ authenticated, operation-bound authority path that does not exist, so
 
 The `for_ward_updated` doc comment names the field shapes Decision 1 settles, so
 the call site is ready when the floor lifts.
+
+**Update 2026-09-17:** Val took the deferral branch. The authenticated path
+stays fail-closed indefinitely and `threads-19p`, `threads-vdv`, `threads-xpo`,
+and `threads-lm4` closed on that recorded decision; see
+[maintainer decisions](2026-09-17-maintainer-decisions.md), Decision 2.
