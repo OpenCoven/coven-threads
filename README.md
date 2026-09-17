@@ -1,8 +1,9 @@
 # coven-threads
 
-**Status (2026-09-13):** Engineering phases 0–4 remain **frozen**. Phase 5 is
-**active**. Three of the four root engineering blockers are closed;
-historical audit closure remains open in OpenCoven/coven#886. The
+**Status (2026-09-17):** Engineering phases 0–4 remain **frozen**. Phase 5 is
+**active**. All four root engineering blockers are closed; OpenCoven/coven#886
+closed on the 2026-09-15 deployed audit census
+([decision record](docs/reviews/2026-09-17-maintainer-decisions.md)). The
 [adopted solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) lets
 Val author and self-review; human coherence acceptance and a subsequent scoped
 freeze remain separate. Protection requires PRs and six strict checks on
@@ -113,7 +114,7 @@ Honest labels; the detailed ledger is [docs/phases.md](docs/phases.md).
 - **Phase 2: daemon integration.** `[FROZEN; IN RELEASE TAG]`. Contracts in `audit.rs` and `staging.rs` are consumed by the integration from OpenCoven/coven#382. Beads `.14`, `.20`, and `.19` are closed; later Phase-5 acceptance is tracked separately.
 - **Phase 3 — portability contract.** C7 round-trip semantics implemented and tested (`portability` module + 17-test round-trip suite); the interchange envelope is **decided** (`threads-986.16` closed): **Shape B (`.weave`) canonical, plus a lossy one-way `.af` exporter** — see the §6 decision record in `specs/PHASE-3-PORTABILITY.md`.
 - **Phase 4: cockpit integration.** `[COMPLETE; FROZEN 2026-07-17]`. The weave rail, thread pane, strand inspector, and proposal flow landed in OpenCoven/coven-cave#3223 with the recorded human gates. The daemon-adapter follow-up (`threads-v3g`) and degraded-familiar follow-up (`threads-k9s`) are also closed. New Phase-5 live-daemon acceptance remains separate.
-- **Phase 5: approval semantics.** `[ACTIVE]`, not frozen. `ApprovalPath` and `Channel` remain independent; delayed apply requires live evidence replay and exactly one typed terminal close. The finite identity, protected-route, and retired-corpus obligations (`threads-okc`, `threads-dgg`, and `threads-zav`) are closed. `threads-980` remains open for deployed/unprovable historical audit closure. The [engineering handoff](docs/reviews/2026-09-13-engineering-acceptance.md) records exact acceptance and remaining work. Val's coherence acceptance (`threads-uqx.9`) and subsequent freeze/reaffirmation (`threads-uqx.10`) remain separate human gates.
+- **Phase 5: approval semantics.** `[ACTIVE]`, not frozen. `ApprovalPath` and `Channel` remain independent; delayed apply requires live evidence replay and exactly one typed terminal close. The finite identity, protected-route, and retired-corpus obligations (`threads-okc`, `threads-dgg`, and `threads-zav`) are closed. `threads-980` closed on 2026-09-17 with OpenCoven/coven#886 (deployed census found no opened windows). The [engineering handoff](docs/reviews/2026-09-13-engineering-acceptance.md) records exact acceptance and remaining work. Val's coherence acceptance (`threads-uqx.9`) and subsequent freeze/reaffirmation (`threads-uqx.10`) remain separate human gates.
 
 ## Anti-goals
 
