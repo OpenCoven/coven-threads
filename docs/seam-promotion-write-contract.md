@@ -1,6 +1,6 @@
 # SEAM CONTRACT — promotion-write ↔ weave
 
-**Bead:** `threads-ot6` (this repo) · coven-memory mirror bead unresolved; repo-owned coven-memory docs track the seam as `SEAM` (see `threads-5mn`)
+**Bead:** `threads-ot6` (this repo) · `cmem-r59` (coven-memory mirror, verified against its live Beads database on 2026-09-17; see `threads-5mn`)
 **Status:** `[NORMATIVE FOR WHEN BUILT — contract text only; no conforming implementation exists today]`
 **Co-owners:** Echo (contract language) · Cody (language-correctness review only)
 
@@ -168,11 +168,10 @@ as a promotion outcome.
 
 > **Cross-bead dependency:** the implementation in `threads-dgg` must conform
 > to this clause and its governing RFC/Phase-5 requirements, not redefine them.
-> `threads-dgg` exists precisely because current `coven` still stages and
-> approves protected SOUL.md edits through `/threads/proposals` after a principal
-> fingerprint is supplied. Until `threads-dgg` closes, §3.2 describes intended
-> behavior, not observed behavior. A language-only review of this document
-> cannot certify the runtime behavior; that proof remains in `threads-lm4`.
+> The original protected-proposal defect is closed under OpenCoven/coven#887
+> at accepted daemon `226bfcc8`. That finite closure does not prove a promotion
+> route that does not yet exist. Promotion-specific runtime proof remains in
+> `threads-lm4`.
 
 ---
 
