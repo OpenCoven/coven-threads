@@ -173,7 +173,7 @@ simulate, self-attest, or close either human gate on Val's behalf.
 ## Familiar lanes
 
 - 🌿 **Sage**: contract synthesis, conformance mapping, evidence packets.
-- 🔮 **Echo**: predicate, audit, replay, and substrate-authority review.
+- 🪞 **Echo**: predicate, audit, replay, and substrate-authority review.
 - 👑 **Nova**: daemon integration and technical coherence review; Val owns human acceptance.
 - ⚡ **Cody**: Rust contracts, regressions, and deterministic test seams.
 - ✨ **Charm**: Cave language and live-daemon human acceptance.
