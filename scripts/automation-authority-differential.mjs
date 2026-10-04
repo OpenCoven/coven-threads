@@ -1,17 +1,35 @@
 #!/usr/bin/env node
 // Differential test of the Rust automation-authority port
 // (coven-threads-core::automation_authority) against the reference
-// profiles/automation-authority/v1/validator.mjs, over the operations the port
-// covers.
+// profiles/automation-authority/v1/validator.mjs, over every operation the
+// conformance manifest names.
 //
-// Each evaluation vector runs as written, then re-signed with fresh keys of
-// the same roles. The fresh keys come from fixed seeds and Ed25519 signing is
-// deterministic, so every run builds the same cases and a mismatch reproduces. Then every member of its request, decision and policy is
-// mutated, raw and re-signed, and for decision verification the mutated
-// request also gets a freshly computed, consistently signed decision. Signature
-// tampering is added explicitly. Both validators must report the same first
-// error code, or the same result: the full canonical decision for
-// evaluate_request, the outcome for verify_decision.
+// Each vector runs as written, then re-signed with fresh keys of the same
+// roles. The fresh keys come from fixed seeds and Ed25519 signing is
+// deterministic, so every run builds the same cases and a mismatch
+// reproduces. Then every member of each top-level body member (the request,
+// decision, policy, approval, lifecycle events, consumption snapshot,
+// dispatch snapshot, proposal, evidence-read token, evidence and trusted
+// time) is mutated, raw and, for a signed artifact, re-signed under its own
+// domain by the key it names, which may itself be mutated to another key of
+// the keyring. Each body member is also replaced whole and removed. For
+// decision verification the mutated request also gets a freshly computed,
+// consistently signed decision; for dispatch, a mutated request or policy
+// snapshot also gets one, with the consumption snapshot's adoption moved to
+// match. Signature tampering is added explicitly. A digest leaves out the
+// signature, so re-signing one artifact keeps every other artifact's binding
+// to it intact.
+//
+// Both validators must report the same first error code, or the same result:
+// the full canonical decision for evaluate_request, the outcome for
+// verify_decision, the canonical lifecycle state for lifecycle, the canonical
+// dispatch result for verify_dispatch, and "ok" otherwise.
+//
+// Dispatch bodies carry every artifact at once, so their mutants are many and
+// large. A mutated signed artifact in a dispatch body is sent re-signed only,
+// since raw it fails that artifact's own validation, which its own operation
+// already compares. The positive dispatch vectors are mutated in full, and
+// each negative one contributes a fixed, evenly spaced sample of its mutants.
 //
 // Where the reference throws something other than an AuthorityError (a
 // TypeError on a null member, say), it defines no code. Those cases are not
@@ -35,21 +53,26 @@ if (!batch) {
   console.error("usage: automation-authority-differential.mjs <batch binary>");
   process.exit(2);
 }
-const PORTED = new Set([
-  "strict_parse",
-  "validate_request",
-  "request_adoption",
-  "evaluate_request",
-  "verify_decision",
-  "decision_consumption",
-]);
-const DOMAIN = {
-  request: "opencoven:automation-request:v1",
-  decision: "opencoven:automation-decision:v1",
+const DOMAIN = V.profileConstants.domains;
+// The domain each signed body member is signed under; the rest are unsigned.
+const SIGNED = {
+  request: DOMAIN.request,
+  approval_authorization_request: DOMAIN.request,
+  decision: DOMAIN.decision,
+  approval_authorization_decision: DOMAIN.decision,
+  approval: DOMAIN.approval,
+  events: DOMAIN.event,
+  consumption_snapshot: DOMAIN.consumption,
+  proposal: DOMAIN.proposal,
+  read: DOMAIN.evidenceRead,
 };
+// Body members that steer the runner, or that it does not read.
+const FIXED = new Set(["keyring_mutation", "repetitions", "raw_json", "lifecycle_summary"]);
+// One in this many mutants of a negative dispatch vector is kept.
+const DISPATCH_SAMPLE = 9;
 const read = (path) => V.strictParseJson(readFileSync(path, "utf8"));
 
-// The reference's canonical form, to compare whole decisions.
+// The reference's canonical form, to compare whole results.
 function canonical(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -101,11 +124,57 @@ function resign(artifact, domain) {
   }
 }
 
+// A body member re-signed under its domain: each event of a lifecycle chain,
+// or the artifact itself.
+function resignMember(member, value) {
+  const domain = SIGNED[member];
+  if (!domain) return value;
+  if (member === "events") return Array.isArray(value) ? value.map((event) => resign(event, domain)) : value;
+  return resign(value, domain);
+}
+
 function resignBody(body) {
   const copy = structuredClone(body);
-  if (copy.request) copy.request = resign(copy.request, DOMAIN.request);
-  if (copy.decision) copy.decision = resign(copy.decision, DOMAIN.decision);
+  for (const member of Object.keys(copy)) copy[member] = resignMember(member, copy[member]);
   return copy;
+}
+
+// A dispatch body made consistent again around its request and policy
+// snapshot: the decision recomputed by the reference and signed by the
+// authority, and the consumption snapshot's adoption of `previous` moved to
+// the request as it now stands, re-signed. Approvals and lifecycle events
+// are left as they are. `null` when the request does not evaluate.
+function rebound(body, previous, keys) {
+  try {
+    const decision = V.signArtifact(
+      V.evaluateAuthorization(body.request, body.snapshot.policy_snapshot, {
+        keyring: new Map(Object.entries(keys)),
+        unsigned: true,
+      }),
+      DOMAIN.decision,
+      signers[authority],
+    );
+    const before = `sha256:${V.canonicalDigest(previous, DOMAIN.request)}`;
+    const consumption = structuredClone(body.consumption_snapshot);
+    for (const adoption of consumption.request_adoptions) {
+      if (adoption.request_digest !== before) continue;
+      adoption.request_digest = `sha256:${V.canonicalDigest(body.request, DOMAIN.request)}`;
+      adoption.nonce = body.request.replay.nonce;
+      adoption.adoption_key = body.request.replay.adoption_key;
+    }
+    return { ...body, decision, consumption_snapshot: resign(consumption, DOMAIN.consumption) };
+  } catch {
+    return null;
+  }
+}
+
+// `lifecycleState` in run-vectors.mjs.
+function lifecycleState(body, keyring) {
+  let state = null;
+  for (const event of body.events) {
+    state = V.applyLifecycleEvent(state, event, { approval: body.approval, keyring });
+  }
+  return state;
 }
 
 // The reference, run as run-vectors.mjs runs it.
@@ -143,6 +212,44 @@ function reference(operation, body, keys) {
         }
         return { code: null, result: "ok" };
       }
+      case "validate_approval":
+        V.validateApproval(body.approval, { keyring, now: body.now });
+        return { code: null, result: "ok" };
+      case "validate_consumption_snapshot":
+        V.validateConsumptionSnapshot(body.consumption_snapshot, { keyring, now: body.now });
+        return { code: null, result: "ok" };
+      case "lifecycle": {
+        const state = lifecycleState(body, keyring);
+        if (body.replay_last) {
+          V.applyLifecycleEvent(state, body.events.at(-1), { approval: body.approval, keyring });
+        }
+        return { code: null, result: canonical(state) };
+      }
+      case "verify_dispatch":
+        return {
+          code: null,
+          result: canonical(
+            V.verifyDispatch(
+              {
+                request: body.request,
+                decision: body.decision,
+                approval: body.approval ?? null,
+                approval_authorization_request: body.approval_authorization_request ?? null,
+                approval_authorization_decision: body.approval_authorization_decision ?? null,
+                lifecycle_events: body.events ?? [],
+                consumption_snapshot: body.consumption_snapshot,
+                snapshot: body.snapshot,
+              },
+              { keyring },
+            ),
+          ),
+        };
+      case "validate_proposal":
+        V.validateProposal(body.proposal, { keyring });
+        return { code: null, result: "ok" };
+      case "evidence_read":
+        V.authorizeEvidenceRead(body.read, body.evidence, { keyring, now: body.now });
+        return { code: null, result: "ok" };
       default:
         throw new Error(`unsupported operation ${operation}`);
     }
@@ -171,6 +278,14 @@ const ENUMS = [
   ["human_per_run", "protected_owner_per_run"],
   ["deterministic_validation", "rollback_plan", "automation_imported", "automation_new"],
   ["principal:alice", "principal:bob", "principal:owner"],
+  ["single_use", "recurring"],
+  ["required", "requested", "approved", "rejected", "expired", "revoked", "consumed"],
+  ["request", "approve", "reject", "expire", "revoke", "consume"],
+  ["not_applicable", "not_started", "queued", "dispatching", "running", "completed"],
+  ["not_applicable", "launch_authorized", "cancel_before_launch", "request_cooperative_cancel",
+    "external_effects_not_rolled_back", "no_launch_rejected", "no_launch_expired"],
+  ["rejected_no_launch", "expired_no_launch"],
+  ["threads_authority", "principal", "protected_owner", "auditor"],
 ];
 const TIMESTAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/;
 
@@ -178,7 +293,8 @@ const TIMESTAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/;
 // another: the comparisons' `<`, `<=` and `>=` boundaries sit there.
 let timestampPool = [];
 
-function alternatives(value) {
+// Alternatives for `value`, held under `key`.
+function alternatives(value, key) {
   if (typeof value === "string") {
     const out = ["", "x"];
     for (const list of ENUMS) if (list.includes(value)) out.push(...list.filter((item) => item !== value));
@@ -198,7 +314,15 @@ function alternatives(value) {
         "2000-01-01T00:00:00Z", "2999-12-31T23:59:59Z", ...timestampPool);
     }
     if (value.startsWith("project/") || value.includes("/")) out.push("*", "../x", "/abs", "a");
-    return out.filter((item) => item !== value);
+    // Another key of the keyring: re-signed under it, the artifact verifies
+    // and reaches the role and principal checks.
+    if (key === "key_id" || key === "key_ref") out.push(...Object.keys(fresh));
+    if (key === "occurrence_prefix" || key === "occurrence_id") {
+      // A recurring approval's prefix must be at least 8 long, without `*`,
+      // and lead the occurrence.
+      out.push(value.slice(0, 7), value.slice(0, 8), `${value}*`, `${value}x`, value.slice(1));
+    }
+    return [...new Set(out)].filter((item) => item !== value);
   }
   if (typeof value === "number") return [value + 1, value - 1, 0, 1.5, 65536, 9007199254740992];
   if (typeof value === "boolean") return [!value, String(value)];
@@ -228,8 +352,23 @@ function replaced(root, at, update) {
 function* documentMutants(document) {
   for (const [at, value, inArray] of nodes(document)) {
     if (!inArray) yield replaced(document, at, (parent, key) => { delete parent[key]; });
-    for (const alternative of alternatives(value)) {
+    for (const alternative of alternatives(value, at[at.length - 1])) {
       yield replaced(document, at, (parent, key) => { parent[key] = alternative; });
+    }
+  }
+}
+
+// Each body member replaced whole, removed, and mutated member by member.
+function* bodyMutants(base) {
+  for (const member of Object.keys(base)) {
+    if (FIXED.has(member)) continue;
+    const { [member]: _, ...without } = base;
+    yield [member, without];
+    for (const alternative of alternatives(base[member], member)) {
+      yield [member, { ...base, [member]: alternative }];
+    }
+    if (base[member] && typeof base[member] === "object") {
+      for (const mutant of documentMutants(base[member])) yield [member, { ...base, [member]: mutant }];
     }
   }
 }
@@ -254,6 +393,7 @@ const casesPath = join(scratch, "cases.jsonl");
 const casesFile = openSync(casesPath, "w");
 const expected = [];
 const labels = [];
+const operations = [];
 let undefinedReference = 0;
 let label = "";
 function add(operation, body, keys) {
@@ -262,12 +402,10 @@ function add(operation, body, keys) {
   writeSync(casesFile, `${JSON.stringify({ operation, body, keys })}\n`);
   expected.push(answer);
   labels.push(label);
+  operations.push(operation);
 }
 
-const vectors = manifest().filter((vector) => PORTED.has(vector.operation));
-function manifest() {
-  return read(join(PROFILE, "manifest.json")).vectors;
-}
+const vectors = read(join(PROFILE, "manifest.json")).vectors;
 for (const vector of vectors) {
   label = vector.id;
   const body = read(join(PROFILE, "vectors", vector.file));
@@ -284,31 +422,44 @@ for (const vector of vectors) {
     for (const text of textMutants(body.raw_json)) add(operation, { ...body, raw_json: text }, keysFresh);
     continue;
   }
-  for (const role of ["request", "decision", "policy", "now"]) {
-    if (base[role] === undefined) continue;
-    const mutants = role === "now" ? alternatives(base.now).map((now) => now) : [...documentMutants(base[role])];
-    for (const mutant of mutants) {
-      add(operation, { ...base, [role]: mutant }, keysFresh);
-      if (role === "request" || role === "decision") {
-        const signed = resign(mutant, DOMAIN[role]);
-        if (signed !== mutant) add(operation, { ...base, [role]: signed }, keysFresh);
-        if (operation === "verify_decision" && role === "request") {
-          // A decision the reference computes and signs for the mutated
-          // request, so the evaluator itself is compared.
-          try {
-            const decision = V.signArtifact(
-              V.evaluateAuthorization(signed, base.policy, {
-                keyring: new Map(Object.entries(keysFresh)),
-                unsigned: true,
-              }),
-              DOMAIN.decision,
-              signers[authority],
-            );
-            add(operation, { ...base, request: signed, decision }, keysFresh);
-          } catch {
-            // The mutated request does not evaluate; the raw cases cover it.
-          }
-        }
+  const dispatch = operation === "verify_dispatch";
+  const sample = dispatch && vector.kind === "negative" ? DISPATCH_SAMPLE : 1;
+  let index = 0;
+  for (const [member, mutant] of bodyMutants(base)) {
+    index += 1;
+    if (index % sample !== 0) continue;
+    const signed = member in mutant && SIGNED[member]
+      ? { ...mutant, [member]: resignMember(member, mutant[member]) }
+      : mutant;
+    const resigned = JSON.stringify(signed[member]) !== JSON.stringify(mutant[member]);
+    // A raw mutant of a signed dispatch artifact fails that artifact's own
+    // validation, which its own operation already compares.
+    if (!(dispatch && resigned)) add(operation, mutant, keysFresh);
+    if (dispatch && (member === "request" || member === "snapshot")) {
+      // The decision and adoption follow the mutated request or policy, so
+      // the checks after decision verification are compared too.
+      const consistent = rebound(signed, base.request, keysFresh);
+      if (consistent && JSON.stringify(consistent.decision) !== JSON.stringify(signed.decision)) {
+        add(operation, consistent, keysFresh);
+      }
+    }
+    if (!resigned) continue;
+    add(operation, signed, keysFresh);
+    if (operation === "verify_decision" && member === "request") {
+      // A decision the reference computes and signs for the mutated
+      // request, so the evaluator itself is compared.
+      try {
+        const decision = V.signArtifact(
+          V.evaluateAuthorization(signed.request, base.policy, {
+            keyring: new Map(Object.entries(keysFresh)),
+            unsigned: true,
+          }),
+          DOMAIN.decision,
+          signers[authority],
+        );
+        add(operation, { ...signed, decision }, keysFresh);
+      } catch {
+        // The mutated request does not evaluate; the raw cases cover it.
       }
     }
   }
@@ -330,9 +481,11 @@ if (actual.length !== expected.length) {
 let mismatched = 0;
 const failOpen = [];
 const codes = new Set();
+const perOperation = {};
 for (let index = 0; index < expected.length; index += 1) {
   const want = expected[index];
   const got = actual[index];
+  perOperation[operations[index]] = (perOperation[operations[index]] ?? 0) + 1;
   if (want.code?.startsWith("THROW:")) {
     // No reference answer to match; the port must still refuse.
     if (got.code === null) failOpen.push(index);
@@ -355,6 +508,12 @@ console.log(
   `Differential: ${expected.length - undefinedReference} cases compared from ${vectors.length} vectors, ` +
     `${mismatched} mismatched; ${undefinedReference} more where the reference throws a non-profile error, ` +
     `${failOpen.length} of them accepted by the port`,
+);
+console.log(
+  `Cases by operation: ${Object.entries(perOperation)
+    .sort(([left], [right]) => (left < right ? -1 : 1))
+    .map(([operation, count]) => `${operation} ${count}`)
+    .join(", ")}`,
 );
 console.log(`Codes exercised (${codes.size}): ${[...codes].sort().join(" ")}`);
 process.exit(mismatched === 0 && failOpen.length === 0 ? 0 : 1);

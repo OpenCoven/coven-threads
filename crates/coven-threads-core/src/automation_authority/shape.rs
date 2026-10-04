@@ -175,6 +175,173 @@ pub(crate) fn strict_equal(left: Option<&Value>, right: Option<&Value>) -> bool 
     }
 }
 
+/// `exact` against a non-string constant, such as `null` or `false`: the
+/// member must be `===` to `expected`.
+pub(crate) fn exact_value(
+    value: Option<&Value>,
+    expected: &Value,
+    code: ErrorCode,
+    path: &str,
+) -> AuthorityResult<()> {
+    if strict_equal(value, Some(expected)) {
+        Ok(())
+    } else {
+        fail(code, format!("expected {expected}"), path)
+    }
+}
+
+/// JavaScript truthiness of a member: `undefined`, `null`, `false`, `0`, and
+/// `""` are falsy; every object and array is truthy.
+pub(crate) fn truthy(value: Option<&Value>) -> bool {
+    match value {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(flag)) => *flag,
+        Some(Value::Number(number)) => number.as_f64().is_some_and(|number| number != 0.0),
+        Some(Value::String(text)) => !text.is_empty(),
+        Some(Value::Array(_) | Value::Object(_)) => true,
+    }
+}
+
+/// JavaScript `String(value)` for a member: `undefined` is `"undefined"`, an
+/// array joins its items with commas (a `null` item as nothing), and an
+/// object is `"[object Object]"`.
+pub(crate) fn js_string(value: Option<&Value>) -> String {
+    match value {
+        None => "undefined".to_owned(),
+        Some(Value::Null) => "null".to_owned(),
+        Some(Value::Bool(flag)) => flag.to_string(),
+        Some(Value::Number(number)) => {
+            super::canonical::ecmascript_number(number.as_f64().unwrap_or(f64::NAN))
+        }
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| match item {
+                Value::Null => String::new(),
+                item => js_string(Some(item)),
+            })
+            .collect::<Vec<_>>()
+            .join(","),
+        Some(Value::Object(_)) => "[object Object]".to_owned(),
+    }
+}
+
+/// JavaScript `Number(value)` for a member, as a relational comparison
+/// coerces it: `undefined` and objects are `NaN`, `null` is `0`, and strings
+/// and arrays go through `StringToNumber`.
+///
+/// Radix literals accumulate in a double, so a value beyond 2^53 may round
+/// differently from JavaScript; the profile only compares the result with
+/// small counts.
+pub(crate) fn js_number(value: Option<&Value>) -> f64 {
+    match value {
+        None | Some(Value::Object(_)) => f64::NAN,
+        Some(Value::Null) => 0.0,
+        Some(Value::Bool(flag)) => f64::from(u8::from(*flag)),
+        Some(Value::Number(number)) => number.as_f64().unwrap_or(f64::NAN),
+        Some(Value::String(text)) => string_to_number(text),
+        Some(array @ Value::Array(_)) => string_to_number(&js_string(Some(array))),
+    }
+}
+
+/// ECMAScript `StringToNumber`.
+fn string_to_number(text: &str) -> f64 {
+    let is_space = |ch: char| {
+        matches!(
+            ch,
+            '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+                ..='\u{200a}'
+                    | '\u{2028}'
+                    | '\u{2029}'
+                    | '\u{202f}'
+                    | '\u{205f}'
+                    | '\u{3000}'
+                    | '\u{feff}'
+        )
+    };
+    let text = text.trim_matches(is_space);
+    if text.is_empty() {
+        return 0.0;
+    }
+    let radix = match text.get(..2) {
+        Some("0x" | "0X") => 16,
+        Some("0o" | "0O") => 8,
+        Some("0b" | "0B") => 2,
+        _ => 10,
+    };
+    if radix != 10 {
+        let digits = &text[2..];
+        if digits.is_empty() {
+            return f64::NAN;
+        }
+        return digits
+            .chars()
+            .try_fold(0.0, |sum, ch| {
+                ch.to_digit(radix)
+                    .map(|digit| sum * f64::from(radix) + f64::from(digit))
+            })
+            .unwrap_or(f64::NAN);
+    }
+    let (negative, unsigned) = match text.as_bytes()[0] {
+        b'-' => (true, &text[1..]),
+        b'+' => (false, &text[1..]),
+        _ => (false, text),
+    };
+    let magnitude = if unsigned == "Infinity" {
+        f64::INFINITY
+    } else if is_decimal_literal(unsigned) {
+        unsigned.parse().unwrap_or(f64::NAN)
+    } else {
+        f64::NAN
+    };
+    if negative {
+        -magnitude
+    } else {
+        magnitude
+    }
+}
+
+/// `StrUnsignedDecimalLiteral` without `Infinity`: digits with an optional
+/// fraction, or a fraction alone, then an optional exponent.
+fn is_decimal_literal(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let digits = |from: usize| {
+        bytes
+            .get(from..)
+            .unwrap_or_default()
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count()
+    };
+    let integer = digits(0);
+    let mut at = integer;
+    let mut fraction = 0;
+    if bytes.get(at) == Some(&b'.') {
+        fraction = digits(at + 1);
+        at += 1 + fraction;
+    }
+    if integer == 0 && fraction == 0 {
+        return false;
+    }
+    if matches!(bytes.get(at), Some(b'e' | b'E')) {
+        at += 1;
+        if matches!(bytes.get(at), Some(b'+' | b'-')) {
+            at += 1;
+        }
+        let exponent = digits(at);
+        if exponent == 0 {
+            return false;
+        }
+        at += exponent;
+    }
+    at == bytes.len()
+}
+
+/// The length JavaScript reports for a string: its UTF-16 code units.
+pub(crate) fn utf16_len(text: &str) -> usize {
+    text.encode_utf16().count()
+}
+
 /// `requireDigestHex`: lowercase SHA-256 hex, with a `sha256:` prefix when
 /// `prefixed`.
 pub(crate) fn digest_hex<'a>(
@@ -333,6 +500,78 @@ mod tests {
         }
         assert!(timestamp(None, "$").is_err());
         assert!(timestamp(Some(&json!(1)), "$").is_err());
+    }
+
+    #[test]
+    fn coercions_match_javascript() {
+        // Expected values are `Boolean(v)`, `String(v)` and `Number(v)` in
+        // Node 24.
+        for (value, truth) in [
+            (None, false),
+            (Some(json!(null)), false),
+            (Some(json!(false)), false),
+            (Some(json!(0)), false),
+            (Some(json!(-0.0)), false),
+            (Some(json!("")), false),
+            (Some(json!("0")), true),
+            (Some(json!(0.5)), true),
+            (Some(json!([])), true),
+            (Some(json!({})), true),
+        ] {
+            assert_eq!(truthy(value.as_ref()), truth, "{value:?}");
+        }
+        for (value, text) in [
+            (None, "undefined"),
+            (Some(json!(null)), "null"),
+            (Some(json!(true)), "true"),
+            (Some(json!(1.5)), "1.5"),
+            (Some(json!(100)), "100"),
+            (Some(json!("ab")), "ab"),
+            (Some(json!(["a", null, 1, ["b", "c"]])), "a,,1,b,c"),
+            (Some(json!([])), ""),
+            (Some(json!({"a": 1})), "[object Object]"),
+        ] {
+            assert_eq!(js_string(value.as_ref()), text, "{value:?}");
+        }
+        for (value, number) in [
+            (Some(json!(null)), 0.0),
+            (Some(json!(true)), 1.0),
+            (Some(json!(7)), 7.0),
+            (Some(json!("")), 0.0),
+            (Some(json!(" 12 ")), 12.0),
+            (Some(json!("\u{a0}12\u{feff}")), 12.0),
+            (Some(json!("1.")), 1.0),
+            (Some(json!(".5")), 0.5),
+            (Some(json!("-1e3")), -1000.0),
+            (Some(json!("0x10")), 16.0),
+            (Some(json!("0o17")), 15.0),
+            (Some(json!("0b11")), 3.0),
+            (Some(json!("-Infinity")), f64::NEG_INFINITY),
+            (Some(json!([])), 0.0),
+            (Some(json!([3])), 3.0),
+            (Some(json!(["4"])), 4.0),
+        ] {
+            assert_eq!(js_number(value.as_ref()), number, "{value:?}");
+        }
+        for value in [
+            None,
+            Some(json!({})),
+            Some(json!("x")),
+            Some(json!("-0x10")),
+            Some(json!("1_0")),
+            Some(json!("infinity")),
+            Some(json!("\u{85}1")),
+            Some(json!("1e")),
+            Some(json!(".")),
+            Some(json!("0x")),
+            Some(json!([1, 2])),
+        ] {
+            assert!(js_number(value.as_ref()).is_nan(), "{value:?}");
+        }
+        assert_eq!(utf16_len("ab\u{1f600}"), 4);
+        assert!(exact_value(Some(&json!(null)), &json!(null), ErrorCode::SchemaType, "$").is_ok());
+        assert!(exact_value(None, &json!(null), ErrorCode::SchemaType, "$").is_err());
+        assert!(exact_value(Some(&json!(0)), &json!(false), ErrorCode::SchemaType, "$").is_err());
     }
 
     #[test]

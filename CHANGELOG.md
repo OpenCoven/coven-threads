@@ -11,8 +11,8 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
 
 ### Added
 
-- `automation_authority`: a Rust port of the profile's evaluation path for the
-  trusted daemon. It covers:
+- `automation_authority`: a Rust port of the profile's reference validator for
+  the trusted daemon. It covers:
   - strict I-JSON parsing;
   - canonical digests;
   - keyring validation;
@@ -20,11 +20,16 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
     `SignatureVerifier`, and signing through `ArtifactSigner`;
   - request validation and adoption;
   - `evaluate_authorization`;
-  - decision validation, bundle verification and consumption.
+  - decision validation, bundle verification and consumption;
+  - consumption-snapshot and approval validation;
+  - the approval lifecycle (`apply_lifecycle_event`, `verify_lifecycle_chain`);
+  - final dispatch verification (`verify_dispatch`);
+  - proposal validation and evidence-read authorization.
 
-  It matches `validator.mjs` on the 44 vectors those operations cover and on
-  about 39,000 differential mutants, which run in the agent gate. `ring` is a
-  dev-dependency only.
+  It matches `validator.mjs` on all 130 conformance vectors and on about
+  78,000 differential mutants, which run in the agent gate. `ring` is a
+  dev-dependency only; dev builds optimize it and `sha2` so the differential
+  stays near a minute.
 - Automation Authority Profile v1 (`coven-threads#29`):
   - closed schemas and a Node-core validator for request, decision, approval,
     append-only lifecycle, proposal-only, evidence-read, R0–R4,
