@@ -25,3 +25,13 @@ ring = "0.17"
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+
+# The automation-authority differential runs a debug build of its batch
+# example over tens of thousands of signed bundles. Unoptimized, ring's C
+# Ed25519 and sha2's portable SHA-256 dominate it threefold; optimizing just
+# these two leaves the code under test unoptimized.
+[profile.dev.package.ring]
+opt-level = 3
+
+[profile.dev.package.sha2]
+opt-level = 3

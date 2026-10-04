@@ -25,26 +25,35 @@ node profiles/automation-authority/v1/run-vectors.mjs
 
 ## Rust port
 
-`coven_threads_core::automation_authority` ports the evaluation half of
-`validator.mjs` for the trusted daemon to call in process:
+`coven_threads_core::automation_authority` ports all of `validator.mjs` for
+the trusted daemon to call in process:
 - the strict parser and canonical digests;
 - request validation and adoption;
 - `evaluateAuthorization`;
-- decision validation, bundle verification and consumption.
+- decision validation, bundle verification and consumption;
+- consumption-snapshot and approval validation;
+- the approval lifecycle: `applyLifecycleEvent` and `verifyLifecycleChain`;
+- `verifyDispatch`;
+- proposal validation and `authorizeEvidenceRead`.
 
 For the same inputs it reaches the same result and the same first error code.
 Signatures go through a caller-supplied `SignatureVerifier`, so the core keeps
 no crypto backend.
 
 - `cargo test -p coven-threads-core --test automation_authority_vectors` runs
-  the 44 vectors those operations cover: `strict_parse`, `validate_request`,
-  `request_adoption`, `evaluate_request`, `verify_decision` and
-  `decision_consumption`. The approval, lifecycle, consumption-snapshot,
-  proposal, evidence-read and dispatch operations are not ported yet.
+  all 130 vectors, every operation the manifest names, as `run-vectors.mjs`
+  runs them.
 - `scripts/automation-authority-differential.mjs` runs both validators on
-  about 39,000 mutants of those vectors and requires the same first code, or
-  the same canonical decision. Mutants are re-signed with fresh keys, and
-  signature tampering is included. It needs the batch example:
+  about 78,000 mutants of those vectors and requires the same first code, or
+  the same result: the canonical decision, outcome, lifecycle state or
+  dispatch result. Every body member is mutated, and each signed artifact is
+  also re-signed with fresh keys under its own domain, so a mutant reaches the
+  checks past its signature; signature tampering and key substitution are
+  included. A dispatch mutant of the request or policy also gets a
+  recomputed decision and adoption, so the checks after decision verification
+  are compared too. Negative dispatch vectors contribute a fixed sample of
+  their mutants. Where the reference throws a non-profile error, such as a
+  `TypeError`, the port must refuse. It needs the batch example:
 
   ```sh
   cargo build -p coven-threads-core --example automation_authority_batch
