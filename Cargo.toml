@@ -19,6 +19,8 @@ blake3 = "1"
 sha2 = "0.10"
 time = { version = "0.3", features = ["serde", "serde-well-known", "macros"] }
 rusqlite = { version = "0.31", features = ["bundled", "hooks"] }
+# Ed25519 for the automation-authority vectors only; the core takes a verifier.
+ring = "0.17"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

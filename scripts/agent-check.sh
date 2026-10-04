@@ -103,5 +103,10 @@ else
   cargo test --locked --workspace
 fi
 
+# The Rust automation-authority port must agree with validator.mjs on mutants
+# of every evaluation vector, not only on the vectors themselves.
+cargo build --locked --quiet -p coven-threads-core --example automation_authority_batch
+node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
+
 # Verification must not rewrite dependency resolution.
 git diff --exit-code -- Cargo.lock

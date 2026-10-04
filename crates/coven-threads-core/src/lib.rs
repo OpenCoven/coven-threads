@@ -55,6 +55,7 @@
 
 pub mod approval;
 pub mod audit;
+pub mod automation_authority;
 pub mod channel;
 pub mod fray;
 pub mod identity_invariants;
