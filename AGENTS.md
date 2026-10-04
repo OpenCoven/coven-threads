@@ -109,6 +109,10 @@ cargo build --locked -p coven-threads-core --example automation_authority_batch
 node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
 ```
 
+Coven builds `serde_json` with `arbitrary_precision`, which Cargo unifies into
+this crate. The gate therefore runs the vectors and the differential a second
+time with `--features serde_json/arbitrary_precision`.
+
 ## R4 change rules
 
 Treat changes to identity predicates, validation, approvals, audit SQL,
