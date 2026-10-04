@@ -14,8 +14,8 @@
 // evaluate_request, the outcome for verify_decision.
 //
 // Where the reference throws something other than an AuthorityError (a
-// TypeError on a null member, say), it defines no code, and the case is
-// counted but not compared.
+// TypeError on a null member, say), it defines no code. Those cases are not
+// compared, but the port must still refuse them with some error code.
 //
 // Usage: node scripts/automation-authority-differential.mjs <batch binary>
 
@@ -258,10 +258,7 @@ let undefinedReference = 0;
 let label = "";
 function add(operation, body, keys) {
   const answer = reference(operation, body, keys);
-  if (answer.code?.startsWith("THROW:")) {
-    undefinedReference += 1;
-    return;
-  }
+  if (answer.code?.startsWith("THROW:")) undefinedReference += 1;
   writeSync(casesFile, `${JSON.stringify({ operation, body, keys })}\n`);
   expected.push(answer);
   labels.push(label);
@@ -331,10 +328,16 @@ if (actual.length !== expected.length) {
   process.exit(1);
 }
 let mismatched = 0;
+const failOpen = [];
 const codes = new Set();
 for (let index = 0; index < expected.length; index += 1) {
   const want = expected[index];
   const got = actual[index];
+  if (want.code?.startsWith("THROW:")) {
+    // No reference answer to match; the port must still refuse.
+    if (got.code === null) failOpen.push(index);
+    continue;
+  }
   if (want.code) codes.add(want.code);
   if (want.code !== got.code || want.result !== got.result) {
     mismatched += 1;
@@ -345,9 +348,13 @@ for (let index = 0; index < expected.length; index += 1) {
     }
   }
 }
+for (const index of failOpen.slice(0, 15)) {
+  console.log(`FAIL-OPEN case ${index} (from ${labels[index]}): the reference throws ${expected[index].code}, the port accepts`);
+}
 console.log(
-  `Differential: ${expected.length} cases from ${vectors.length} vectors, ${mismatched} mismatched; ` +
-    `${undefinedReference} cases skipped where the reference throws a non-profile error`,
+  `Differential: ${expected.length - undefinedReference} cases compared from ${vectors.length} vectors, ` +
+    `${mismatched} mismatched; ${undefinedReference} more where the reference throws a non-profile error, ` +
+    `${failOpen.length} of them accepted by the port`,
 );
 console.log(`Codes exercised (${codes.size}): ${[...codes].sort().join(" ")}`);
-process.exit(mismatched === 0 ? 0 : 1);
+process.exit(mismatched === 0 && failOpen.length === 0 ? 0 : 1);
