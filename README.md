@@ -15,9 +15,9 @@ The [September 14 reliability handoff](docs/reviews/2026-09-14-native-reliabilit
 records subsequent fixture corrections and diagnostic contributions without
 claiming a native timing repair or changing that acceptance scope.
 Coven later closed those native follow-ups, OpenCoven/coven#1047, #1050, and
-#1051, by 2026-09-20. #1050 has a merged fix; the other two closed on
-no-recurrence evidence, not on a measured repair
-([status reconciliation](docs/reviews/2026-10-01-status-reconciliation.md)).
+#1051, by 2026-09-20. #1050 and #1051 have merged fixes (#1051's with
+measured latency improvement); #1047 closed on no-recurrence evidence with
+no measured repair ([status reconciliation](docs/reviews/2026-10-01-status-reconciliation.md)).
 Live Cave acceptance continues in OpenCoven/coven-cave#5256. What remains
 is Val's coherence decision (#13) and then the scoped freeze (#14).
 The latest published Coven release, `v0.4.4`, pins Threads `0021fd2` and

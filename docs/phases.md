@@ -2,7 +2,7 @@
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
-> **As of 2026-10-01 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** All four root engineering blockers are closed at accepted daemon `226bfcc8`; Val closed OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)). The native follow-ups OpenCoven/coven#1047, #1050, and #1051 closed by 2026-09-20: #1050 on a merged fix, the other two on no-recurrence evidence rather than a measured repair. Live Cave acceptance (OpenCoven/coven-cave#5256) has nine verified scheduled days of its 30-day window ([status reconciliation](reviews/2026-10-01-status-reconciliation.md)). The four-target current-Threads compatibility lane is required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
+> **As of 2026-10-01 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** All four root engineering blockers are closed at accepted daemon `226bfcc8`; Val closed OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)). The native follow-ups OpenCoven/coven#1047, #1050, and #1051 closed by 2026-09-20: #1050 on a merged fix, #1051 on a measured bounded repair (OpenCoven/coven#1132) followed by three green `main` runs, and #1047 on no-recurrence evidence with no measured repair. Live Cave acceptance (OpenCoven/coven-cave#5256) has nine verified scheduled days of its 30-day window ([status reconciliation](reviews/2026-10-01-status-reconciliation.md)). The four-target current-Threads compatibility lane is required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
 
 Read the [engineering acceptance handoff](reviews/2026-09-13-engineering-acceptance.md)
 for current sources, results, and operator work, the [delivery strategy](strategy.md)
@@ -417,8 +417,8 @@ missing daemon promotion-channel path; it, `threads-19p`, `threads-vdv`, and
 authenticated operation-bound authority path stays fail-closed indefinitely
 ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)).
 `threads-55s` delivered the admission channel constructor. `threads-ot6`'s contract language landed in #25 on 2026-09-16, which also
-settled channel authority on the daemon; `threads-5mn` tracks its upstream work
-reference and `threads-lm4` tracking runtime conformance.
+settled channel authority on the daemon; `threads-5mn` resolved its upstream work
+reference, and `threads-lm4` (runtime conformance) closed under the same 2026-09-17 decision.
 `threads-76z` closed won't-fix on 2026-09-17: its purported fix, #27, was closed
 **without merge**, and Val ruled the strict SQL stays. Do not resurrect its
 null-close bypass (archived as tag `archive/fix-threads-76z-window-close-human-path`). `threads-bnu` is closed via #28; `threads-t6t` records the
