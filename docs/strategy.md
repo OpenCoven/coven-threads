@@ -26,6 +26,9 @@ The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
 records subsequent fixture corrections and accepted operation-level
 diagnostics. Use those observations for further native cause discrimination;
 do not mistake diagnostic acceptance for a runtime repair or a new pin.
+The [2026-10-01 status reconciliation](reviews/2026-10-01-status-reconciliation.md)
+records Coven's later closure of those native issues, the latest published
+release pin, and live Cave acceptance progress. It accepts nothing.
 
 ## Starting position
 
@@ -35,7 +38,7 @@ do not mistake diagnostic acceptance for a runtime repair or a new pin.
 | Automation Authority Profile v1 | Schemas, reference validator, signed evidence contracts, and exact vectors | Production scheduler, credential issuance, runtime-adapter adoption, or Rust API integration |
 | Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret/privacy guards, and four-target daemon compatibility | Immutable checker authority, installed-binary conformance, or a coverage ratchet |
 | Governance | Adopted solo-maintainer policy, required PRs, resolved conversations, and six strict required checks | GitHub-enforced independent review or either Phase-5 human decision |
-| Downstream integration | Accepted current-route identity, protected proposal, and seven-case corpus engineering at `226bfcc8` | Deployed historical-audit closure, live Cave acceptance, long-run reliability, or human approval |
+| Downstream integration | Accepted current-route identity, protected proposal, and seven-case corpus engineering at `226bfcc8` | Deployed-history closure beyond the inspected workstation profile, completed live Cave acceptance, long-run reliability, or human approval |
 
 The core's three verdicts and the automation profile's four outcomes answer
 different questions. Do not add an automation approval outcome to the Rust
@@ -252,10 +255,16 @@ changes.
 
 ## Keep adjacent work separate
 
-The promotion-seam contract merged in #25 is language-only. `threads-xpo` owns deliberate
-channel reachability, `threads-55s` owns admission-channel audit follow-through,
-and `threads-lm4` owns runtime conformance. `threads-5mn` retains the unresolved
-upstream mirror reference; do not invent an ID or a promotion command.
+The promotion-seam contract merged in #25 is language-only, and its adjacent
+beads are closed. `threads-55s` landed the admission-channel audit record in
+#72, and `threads-5mn` resolved the upstream mirror reference. `threads-xpo`
+and `threads-lm4` closed on 2026-09-17 under Decision 2 of the
+[maintainer decisions](reviews/2026-09-17-maintainer-decisions.md), which keeps
+the authenticated operation-bound authority path fail-closed indefinitely.
+`Channel::Deliberate` therefore stays unreachable from the daemon, and
+`coven memory promote` stays planned, not available. Reopening that path
+requires a new daemon-owned scope decision. Do not invent an ID or a promotion
+command.
 
 Automation-profile consumers need their own owner-specific adoption evidence.
 The trusted runtime adapter remains Coven-owned. Neither this work nor
