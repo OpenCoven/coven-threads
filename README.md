@@ -4,7 +4,7 @@
 **active**. All four root engineering blockers are closed; Val closed
 OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows
 ([decision record](docs/reviews/2026-09-17-maintainer-decisions.md)). The
-[adopted solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) lets
+[adopted solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) allows
 Val author and self-review; human coherence acceptance and a subsequent scoped
 freeze remain separate. Protection requires PRs and six strict checks on
 `main`, including the four-target pinned-daemon compatibility lane, not an
