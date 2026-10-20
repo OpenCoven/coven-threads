@@ -7,7 +7,7 @@ Portable artifacts for `OpenCoven/coven-threads#29`.
   verifier, reference policy, lifecycle, replay, proposal, dispatch, and
   evidence-read validator.
 - `manifest.json` — exact positive/negative vector inventory and expectations.
-- `vectors/` — 130 signed conformance vectors across all 18 issue categories.
+- `vectors/` — 132 signed conformance vectors across all 18 issue categories.
 - `keyring.json` — synthetic principal, protected-owner, auditor, and Threads
   authority public keys used only by the vectors.
 - `schemas/keyring.schema.json` — closed role/identity contract for the
@@ -22,6 +22,28 @@ Run:
 node --test profiles/automation-authority/v1/tests/*.test.mjs
 node profiles/automation-authority/v1/run-vectors.mjs
 ```
+
+## Errata
+
+The wire version stays `1.0.0`. Each erratum brings `validator.mjs` in line
+with the specification, which ranks above it (§1).
+
+1. **A consume is valid only from `approved`** (2026-10-20, §7).
+   `applyLifecycleEvent` checked only a consume's target state, so a consume
+   from `revoked`, `expired`, `rejected` or `requested` was accepted, and a
+   recurring approval returned to `approved`. It is now
+   `lifecycle_transition_invalid`. Vector:
+   `16-revoked-approval-cannot-be-consumed`.
+2. **An evidence sensitivity is one of the names** (2026-10-20, §10).
+   `authorizeEvidenceRead` looked the sensitivity up with `Object.hasOwn`,
+   which converts its argument to a property name, so `["internal"]` was read
+   as `internal`. Anything but one of the four strings is now
+   `evidence_sensitivity_unknown`. Vector:
+   `18-evidence-sensitivity-must-be-a-string`.
+
+The consume vector carries its own Threads authority key in
+`keyring_mutation`, because the committed vectors' private keys are not kept.
+No other vector changed.
 
 ## Rust port
 
@@ -41,10 +63,10 @@ Signatures go through a caller-supplied `SignatureVerifier`, so the core keeps
 no crypto backend.
 
 - `cargo test -p coven-threads-core --test automation_authority_vectors` runs
-  all 130 vectors, every operation the manifest names, as `run-vectors.mjs`
+  all 132 vectors, every operation the manifest names, as `run-vectors.mjs`
   runs them.
 - `scripts/automation-authority-differential.mjs` runs both validators on
-  about 124,000 mutants of those vectors and requires the same first code, or
+  about 126,000 mutants of those vectors and requires the same first code, or
   the same result: the canonical decision, outcome, final replay state,
   lifecycle state or dispatch result. Every body member is mutated (a member
   deleted, replaced or added), and each signed artifact is also re-signed with

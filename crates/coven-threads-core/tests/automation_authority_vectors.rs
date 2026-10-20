@@ -1,4 +1,4 @@
-//! Runs all 130 automation-authority conformance vectors against the Rust
+//! Runs all 132 automation-authority conformance vectors against the Rust
 //! port, invoked and judged as `profiles/automation-authority/v1/
 //! run-vectors.mjs` invokes and judges them: a positive vector must succeed
 //! with its expected outcome, and a negative one must fail with exactly its
@@ -196,7 +196,7 @@ fn every_vector_matches_the_reference() {
     let manifest = read(&profile().join("manifest.json"));
     let keyring = keyring();
     let vectors = manifest["vectors"].as_array().unwrap();
-    assert_eq!(vectors.len(), 130);
+    assert_eq!(vectors.len(), 132);
     assert!(
         vectors
             .iter()
@@ -241,7 +241,7 @@ fn every_vector_matches_the_reference() {
     }
     assert!(
         failures.is_empty(),
-        "{} of 130 vectors failed:\n{}",
+        "{} of 132 vectors failed:\n{}",
         failures.len(),
         failures.join("\n")
     );

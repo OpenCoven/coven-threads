@@ -1,0 +1,185 @@
+{
+  "approval": {
+    "schema_version": "opencoven.automation-approval/v1",
+    "approval_id": "approval:request:recurring-approval-grant",
+    "approving_principal": {
+      "id": "principal:alice",
+      "key_ref": "key:principal:alice"
+    },
+    "request_digest": "sha256:03361556b5ab29e86558400ea83651651653d4e0cf5ff9fd91683f385295fb3b",
+    "decision_digest": "sha256:bd05497975b6b66d9be62f55e7979cab8d47e9d196ee4d09107cf3064882821c",
+    "familiar_id": "familiar:sage",
+    "familiar_embodiment_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "automation": {
+      "id": "automation:daily-report",
+      "definition_revision": 7,
+      "definition_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "authorized_principal_id": "principal:alice",
+    "occurrence_id": null,
+    "run_id": null,
+    "attempt": null,
+    "fence_generation": null,
+    "action_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "capabilities": [
+      "state.mutate"
+    ],
+    "scopes": [
+      {
+        "kind": "filesystem",
+        "root": "workspace",
+        "path": "state/schema-v2.sqlite",
+        "access": "write",
+        "recursive": false
+      }
+    ],
+    "project_id": "project:coven",
+    "workspace_id": "workspace:main",
+    "runtime_id": "runtime:node",
+    "runtime_descriptor_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "runtime_capabilities": [
+      "state.mutate"
+    ],
+    "versions": {
+      "profile": "1.0.0",
+      "policy": "policy:2026-09-03",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "manifest": "manifest:1",
+      "manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "use": {
+      "kind": "recurring",
+      "grant_id": "recurring-approval:daily-state",
+      "max_uses": 2,
+      "occurrence_prefix": "occ:daily:"
+    },
+    "issued_at": "2026-09-03T13:05:00Z",
+    "expires_at": "2026-09-03T14:00:00Z",
+    "nonce": "approval-nonce:request:recurring-approval-grant",
+    "rationale": {
+      "text": "Approve this exact operation.",
+      "privacy": "internal"
+    },
+    "integrity": {
+      "alg": "ed25519",
+      "key_id": "key:principal:alice",
+      "signed_digest": "32b49e5713b11db8cd698f233f7e6aea8e7093d979f0e388c212a176eb39cdbe",
+      "signature_b64": "4QkQ3VCIwKEsGbsGQuCbTmYAfoQgmeBzPCS4IN79KsnecjMJH24OtL3qo7Z9ha86+EOI1cIBMbLcD4haKJlOAg=="
+    }
+  },
+  "events": [
+    {
+      "schema_version": "opencoven.automation-approval-event/v1",
+      "event_id": "event:approval:request:recurring-approval-grant:1:request",
+      "approval_id": "approval:request:recurring-approval-grant",
+      "request_digest": "sha256:03361556b5ab29e86558400ea83651651653d4e0cf5ff9fd91683f385295fb3b",
+      "decision_digest": "sha256:bd05497975b6b66d9be62f55e7979cab8d47e9d196ee4d09107cf3064882821c",
+      "approval_digest": null,
+      "sequence": 1,
+      "previous_event_digest": null,
+      "from_state": "required",
+      "to_state": "requested",
+      "event": "request",
+      "occurred_at": "2026-09-03T13:01:00Z",
+      "actor": "threads_authority",
+      "execution_phase": "not_applicable",
+      "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
+      "integrity": {
+        "alg": "ed25519",
+        "key_id": "key:threads:test-authority",
+        "signed_digest": "61683923ad781d85c9947c29c6b1b60dcd19dd5ad8de868597e575f13ad82191",
+        "signature_b64": "qjE9ytv9bE3D1tIqi31YUqnpNPmejFCqx6BSDt+LGCv9Nq1dfwRwYZNEh21clH1+BQ3RCLpCzzVgBwP55000AA=="
+      }
+    },
+    {
+      "schema_version": "opencoven.automation-approval-event/v1",
+      "event_id": "event:approval:request:recurring-approval-grant:2:approve",
+      "approval_id": "approval:request:recurring-approval-grant",
+      "request_digest": "sha256:03361556b5ab29e86558400ea83651651653d4e0cf5ff9fd91683f385295fb3b",
+      "decision_digest": "sha256:bd05497975b6b66d9be62f55e7979cab8d47e9d196ee4d09107cf3064882821c",
+      "approval_digest": "sha256:32b49e5713b11db8cd698f233f7e6aea8e7093d979f0e388c212a176eb39cdbe",
+      "sequence": 2,
+      "previous_event_digest": "sha256:61683923ad781d85c9947c29c6b1b60dcd19dd5ad8de868597e575f13ad82191",
+      "from_state": "requested",
+      "to_state": "approved",
+      "event": "approve",
+      "occurred_at": "2026-09-03T13:02:00Z",
+      "actor": "threads_authority",
+      "execution_phase": "not_applicable",
+      "dispatch_disposition": "not_applicable",
+      "consumption": null,
+      "occurrence_disposition": null,
+      "integrity": {
+        "alg": "ed25519",
+        "key_id": "key:threads:test-authority",
+        "signed_digest": "f9b2e374b7aa49acb902a1345879ae0138e83ccaec46234948bc270255fd4436",
+        "signature_b64": "4P//Uhh7W4vG98jHOfGUUXZ1MOGmorzfuJXL44MBCpTNKaNPQCKpUe3ir+6lYGwNOy1d8UCQj95cWWyTCkBmCQ=="
+      }
+    },
+    {
+      "schema_version": "opencoven.automation-approval-event/v1",
+      "event_id": "event:approval:request:recurring-approval-grant:3:revoke",
+      "approval_id": "approval:request:recurring-approval-grant",
+      "request_digest": "sha256:03361556b5ab29e86558400ea83651651653d4e0cf5ff9fd91683f385295fb3b",
+      "decision_digest": "sha256:bd05497975b6b66d9be62f55e7979cab8d47e9d196ee4d09107cf3064882821c",
+      "approval_digest": "sha256:32b49e5713b11db8cd698f233f7e6aea8e7093d979f0e388c212a176eb39cdbe",
+      "sequence": 3,
+      "previous_event_digest": "sha256:f9b2e374b7aa49acb902a1345879ae0138e83ccaec46234948bc270255fd4436",
+      "from_state": "approved",
+      "to_state": "revoked",
+      "event": "revoke",
+      "occurred_at": "2026-09-03T13:03:00Z",
+      "actor": "threads_authority",
+      "execution_phase": "queued",
+      "dispatch_disposition": "cancel_before_launch",
+      "consumption": null,
+      "occurrence_disposition": null,
+      "integrity": {
+        "alg": "ed25519",
+        "key_id": "key:threads:test-authority",
+        "signed_digest": "6de22ddf89a151d1bf4b692a766a878d5d3d0e6153eaabef6a74d8166a7820e1",
+        "signature_b64": "KK8v2Mv3uqh6u85wDVAS6VprCgUm6PIuJ1G0tOfdfNP1IiB1sFjqYCqsXOuzK82PhAEMj+/iJOg1UhC9ioORBw=="
+      }
+    },
+    {
+      "schema_version": "opencoven.automation-approval-event/v1",
+      "event_id": "event:approval:request:recurring-approval-grant:4:consume",
+      "approval_id": "approval:request:recurring-approval-grant",
+      "request_digest": "sha256:03361556b5ab29e86558400ea83651651653d4e0cf5ff9fd91683f385295fb3b",
+      "decision_digest": "sha256:bd05497975b6b66d9be62f55e7979cab8d47e9d196ee4d09107cf3064882821c",
+      "approval_digest": null,
+      "sequence": 4,
+      "previous_event_digest": "sha256:6de22ddf89a151d1bf4b692a766a878d5d3d0e6153eaabef6a74d8166a7820e1",
+      "from_state": "revoked",
+      "to_state": "approved",
+      "event": "consume",
+      "occurred_at": "2026-09-03T13:04:00Z",
+      "actor": "threads_authority",
+      "execution_phase": "dispatching",
+      "dispatch_disposition": "launch_authorized",
+      "consumption": {
+        "request_digest": "sha256:03361556b5ab29e86558400ea83651651653d4e0cf5ff9fd91683f385295fb3b",
+        "decision_digest": "sha256:bd05497975b6b66d9be62f55e7979cab8d47e9d196ee4d09107cf3064882821c",
+        "occurrence_id": "occ:daily:0001",
+        "run_id": "run:daily:0001",
+        "attempt": 1,
+        "fence_generation": 4
+      },
+      "occurrence_disposition": null,
+      "integrity": {
+        "alg": "ed25519",
+        "key_id": "key:threads:test-authority",
+        "signed_digest": "40f60dd02688f093b4ad3c730f3bacebfa07305f40174edefc4b8d99bb8f8162",
+        "signature_b64": "j8Hj9LJJmynC7+Kz5WDQumEgG2ogtBi7A/4L82KSz4TEAnMltiLRIZRBhqb4DEVuSXrE3nfvDRIWRwb9U7JeAQ=="
+      }
+    }
+  ],
+  "keyring_mutation": {
+    "key_id": "key:threads:test-authority",
+    "set": {
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA0YhVMPfUOEZggeBZawW40uroJNlZDIR36X/vxD4PfNM=\n-----END PUBLIC KEY-----\n"
+    }
+  }
+}

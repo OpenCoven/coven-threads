@@ -473,12 +473,17 @@ pub fn apply_lifecycle_event(
     }
     let to_state = event["to_state"].as_str().unwrap_or_default();
     let allowed = if kind == "consume" {
-        let target = if use_kind(present)?.and_then(Value::as_str) == Some("recurring") {
-            "approved"
-        } else {
-            "consumed"
-        };
-        to_state == target
+        // Consumption is valid only from `approved` (erratum 1). Only then was
+        // the approval validated above, so only then may its use pick the
+        // target.
+        from_state == "approved" && {
+            let target = if use_kind(present)?.and_then(Value::as_str) == Some("recurring") {
+                "approved"
+            } else {
+                "consumed"
+            };
+            to_state == target
+        }
     } else {
         TRANSITIONS
             .iter()

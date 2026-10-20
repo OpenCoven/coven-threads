@@ -145,12 +145,12 @@ pub fn authorize_evidence_read(
     }
 
     let evidence = shape::object(Some(evidence), "$.evidence")?;
-    // `Object.hasOwn(SENSITIVITY, evidence.sensitivity)` converts the value to
-    // a property key, so `["internal"]` names `internal` too.
+    // A sensitivity is one of the names, not a value that converts to one,
+    // such as `["internal"]` (erratum 2).
     let sensitivity = evidence
         .get("sensitivity")
-        .map(|sensitivity| shape::js_string(Some(sensitivity)))
-        .and_then(|name| sensitivity_rank(&name));
+        .and_then(Value::as_str)
+        .and_then(sensitivity_rank);
     let Some(sensitivity) = sensitivity else {
         return fail(
             ErrorCode::EvidenceSensitivityUnknown,

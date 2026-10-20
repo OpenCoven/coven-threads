@@ -100,7 +100,7 @@ Nextest adds JUnit and flake telemetry; it does not redefine test semantics.
 
 `crates/coven-threads-core/src/automation_authority` ports
 `profiles/automation-authority/v1/validator.mjs`: every operation the
-conformance manifest names, checked against all 130 vectors. A change to any
+conformance manifest names, checked against all 132 vectors. A change to any
 function there, or to the vectors, updates the Rust port in the same pull
 request. Run:
 

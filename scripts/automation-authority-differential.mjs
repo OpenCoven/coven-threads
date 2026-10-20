@@ -131,6 +131,12 @@ function mutateKeyring(keys, mutation) {
   return copy;
 }
 
+function withoutKeyMaterial(mutation) {
+  if (!mutation?.set) return mutation;
+  const { public_key: _key, public_key_pem: _pem, ...set } = mutation.set;
+  return { ...mutation, set };
+}
+
 function resign(artifact, domain) {
   const keyId = artifact?.integrity?.key_id;
   if (!artifact || typeof artifact !== "object" || Array.isArray(artifact) || !signers[keyId]) {
@@ -451,7 +457,10 @@ for (const vector of vectors) {
   const body = read(join(PROFILE, "vectors", vector.file));
   const operation = vector.operation;
   const keysOriginal = mutateKeyring(original, body.keyring_mutation);
-  const keysFresh = mutateKeyring(fresh, body.keyring_mutation);
+  // A vector may bring its own key for artifacts it signs itself. The fresh
+  // keyring keeps its own key material, because every artifact here is
+  // re-signed with it.
+  const keysFresh = mutateKeyring(fresh, withoutKeyMaterial(body.keyring_mutation));
   add(operation, body, keysOriginal);
   const base = resignBody(body);
   poolTimestamps(base);
