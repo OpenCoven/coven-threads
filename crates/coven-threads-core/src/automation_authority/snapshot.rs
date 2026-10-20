@@ -2,6 +2,8 @@
 //! the Threads authority's signed record of adopted requests, consumed
 //! decisions and approval lifecycle heads.
 
+use std::collections::HashSet;
+
 use serde_json::Value;
 
 use super::canonical::canonicalize;
@@ -71,7 +73,7 @@ pub fn validate_consumption_snapshot(
         false,
         false,
     )?;
-    let mut adoption_keys = Vec::with_capacity(adoptions.len());
+    let mut adoption_keys = HashSet::with_capacity(adoptions.len());
     for (index, adoption) in adoptions.iter().enumerate() {
         let path = format!("$.consumption_snapshot.request_adoptions[{index}]");
         exact_fields(
@@ -89,15 +91,13 @@ pub fn validate_consumption_snapshot(
             adoption.get("adoption_key"),
             &format!("{path}.adoption_key"),
         )?;
-        let key = canonicalize(adoption)?;
-        if adoption_keys.contains(&key) {
+        if !adoption_keys.insert(canonicalize(adoption)?) {
             return fail(
                 ErrorCode::ConsumptionSnapshotDuplicate,
                 "duplicate request adoption",
                 "$",
             );
         }
-        adoption_keys.push(key);
     }
 
     let consumptions = shape::array(
@@ -120,7 +120,7 @@ pub fn validate_consumption_snapshot(
         false,
         false,
     )?;
-    let mut approval_ids: Vec<&str> = Vec::with_capacity(heads.len());
+    let mut approval_ids = HashSet::with_capacity(heads.len());
     for (index, head) in heads.iter().enumerate() {
         let path = format!("$.consumption_snapshot.approval_heads[{index}]");
         exact_fields(
@@ -135,14 +135,13 @@ pub fn validate_consumption_snapshot(
             true,
         )?;
         shape::integer(head.get("usage_count"), &format!("{path}.usage_count"), 0)?;
-        if approval_ids.contains(&approval_id) {
+        if !approval_ids.insert(approval_id) {
             return fail(
                 ErrorCode::ConsumptionSnapshotDuplicate,
                 "duplicate approval head",
                 "$",
             );
         }
-        approval_ids.push(approval_id);
     }
     validate_integrity_shape(field("integrity"), "$.consumption_snapshot.integrity")?;
     verify_signed_artifact(

@@ -30,8 +30,9 @@
 // Dispatch bodies carry every artifact at once, so their mutants are many and
 // large. A mutated signed artifact in a dispatch body is sent re-signed only,
 // since raw it fails that artifact's own validation, which its own operation
-// already compares. The positive dispatch vectors are mutated in full, and
-// each negative one contributes a fixed, evenly spaced sample of its mutants.
+// already compares. The positive dispatch vectors and the negative permit
+// (no approval) ones are mutated in full, and each other negative one
+// contributes a fixed, evenly spaced sample of its mutants.
 //
 // Where the reference throws something other than an AuthorityError (a
 // TypeError on a null member, say), it defines no code. Those cases are not
@@ -434,9 +435,17 @@ function add(operation, body, keys) {
   expected.push(answer);
   labels.push(label);
   operations.push(operation);
+  return answer;
+}
+
+function poolTimestamps(base) {
+  timestampPool = [...new Set(
+    [...nodes(base)].map(([, item]) => item).filter((item) => typeof item === "string" && TIMESTAMP.test(item)),
+  )];
 }
 
 const vectors = read(join(PROFILE, "manifest.json")).vectors;
+const repairedPermits = new Map();
 for (const vector of vectors) {
   label = vector.id;
   const body = read(join(PROFILE, "vectors", vector.file));
@@ -445,16 +454,45 @@ for (const vector of vectors) {
   const keysFresh = mutateKeyring(fresh, body.keyring_mutation);
   add(operation, body, keysOriginal);
   const base = resignBody(body);
-  timestampPool = [...new Set(
-    [...nodes(base)].map(([, item]) => item).filter((item) => typeof item === "string" && TIMESTAMP.test(item)),
-  )];
+  poolTimestamps(base);
   add(operation, base, keysFresh);
   if (operation === "strict_parse") {
     for (const text of textMutants(body.raw_json)) add(operation, { ...body, raw_json: text }, keysFresh);
     continue;
   }
+  // A permit dispatch, with no approval, is the launch path R0 and R1 runs
+  // take, and no positive vector covers it, so its negatives go in full, and
+  // the first mutant of each that both validators accept is kept to be
+  // mutated in full itself below.
+  const permit = operation === "verify_dispatch" && base.decision?.outcome === "permit";
+  const sample = operation === "verify_dispatch" && vector.kind === "negative" && !permit ? DISPATCH_SAMPLE : 1;
+  let repaired = null;
+  mutateAll(operation, base, keysFresh, sample, permit && vector.kind === "negative"
+    ? (accepted) => { if (accepted.decision?.outcome === "permit") repaired ??= accepted; }
+    : null);
+  if (repaired && !repairedPermits.has(JSON.stringify(repaired))) {
+    repairedPermits.set(JSON.stringify(repaired), { id: vector.id, body: repaired, keys: keysFresh });
+  }
+}
+
+// Every accepted permit dispatch above is a mutant that happens to repair a
+// negative vector. Mutating each first repair in full compares the checks
+// around an authorized permit launch from an accepted starting point, as the
+// positive vectors do for the approval path.
+for (const { id, body, keys } of repairedPermits.values()) {
+  label = `${id} (repaired)`;
+  poolTimestamps(body);
+  mutateAll("verify_dispatch", body, keys, 1, null);
+}
+
+// Every single-member mutant of `base`, raw and re-signed, keeping one in
+// `sample`. `onAccepted` sees each body the reference accepts.
+function mutateAll(operation, base, keysFresh, sample, onAccepted) {
   const dispatch = operation === "verify_dispatch";
-  const sample = dispatch && vector.kind === "negative" ? DISPATCH_SAMPLE : 1;
+  const check = (body) => {
+    const answer = add(operation, body, keysFresh);
+    if (onAccepted && answer.code === null) onAccepted(body);
+  };
   let index = 0;
   for (const [member, mutant] of bodyMutants(base)) {
     index += 1;
@@ -465,17 +503,17 @@ for (const vector of vectors) {
     const resigned = JSON.stringify(signed[member]) !== JSON.stringify(mutant[member]);
     // A raw mutant of a signed dispatch artifact fails that artifact's own
     // validation, which its own operation already compares.
-    if (!(dispatch && resigned)) add(operation, mutant, keysFresh);
+    if (!(dispatch && resigned)) check(mutant);
     if (dispatch && (member === "request" || member === "snapshot")) {
       // The decision and adoption follow the mutated request or policy, so
       // the checks after decision verification are compared too.
       const consistent = rebound(signed, base.request, keysFresh);
       if (consistent && JSON.stringify(consistent.decision) !== JSON.stringify(signed.decision)) {
-        add(operation, consistent, keysFresh);
+        check(consistent);
       }
     }
     if (!resigned) continue;
-    add(operation, signed, keysFresh);
+    check(signed);
     if (operation === "verify_decision" && member === "request") {
       // A decision the reference computes and signs for the mutated
       // request, so the evaluator itself is compared.
@@ -488,7 +526,7 @@ for (const vector of vectors) {
           DOMAIN.decision,
           signers[authority],
         );
-        add(operation, { ...signed, decision }, keysFresh);
+        check({ ...signed, decision });
       } catch {
         // The mutated request does not evaluate; the raw cases cover it.
       }
