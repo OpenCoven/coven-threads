@@ -196,10 +196,12 @@ recursive grants fail closed.
 > - **A `write` scope** permits no read, listing or search.
 >
 > The consumer decides a resource's type from the object it actually opened,
-> never from the path's spelling. It bounds recursion itself. A listing or
-> search never discloses an entry that a read of it would refuse. This note
-> records how consumers apply scopes. It changes no artifact, no validator
-> behavior and no profile version.
+> never from the path's spelling. It bounds recursion itself. It may refuse
+> more than a scope permits, never less. Examples are its own state, harness
+> credentials, and secret-bearing names such as `.git` folders and `.env` files
+> beneath a recursive scope. A listing or search never discloses an entry that
+> a read of it would refuse. This note records how consumers apply scopes. It
+> changes no artifact, no validator behavior and no profile version.
 
 Network scopes require HTTPS, an exact non-local DNS host, a port, a path prefix
 narrower than `/`, and explicit methods. Credential scopes bind an exact
