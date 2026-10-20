@@ -27,9 +27,9 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   - proposal validation and evidence-read authorization.
 
   It matches `validator.mjs` on all 130 conformance vectors and on about
-  78,000 differential mutants, which run in the agent gate. `ring` is a
+  124,000 differential mutants, which run in the agent gate. `ring` is a
   dev-dependency only; dev builds optimize it and `sha2` so the differential
-  stays near a minute.
+  stays near two minutes.
 - Automation Authority Profile v1 (`coven-threads#29`):
   - closed schemas and a Node-core validator for request, decision, approval,
     append-only lifecycle, proposal-only, evidence-read, R0–R4,

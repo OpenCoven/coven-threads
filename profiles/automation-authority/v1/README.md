@@ -44,16 +44,20 @@ no crypto backend.
   all 130 vectors, every operation the manifest names, as `run-vectors.mjs`
   runs them.
 - `scripts/automation-authority-differential.mjs` runs both validators on
-  about 78,000 mutants of those vectors and requires the same first code, or
-  the same result: the canonical decision, outcome, lifecycle state or
-  dispatch result. Every body member is mutated, and each signed artifact is
-  also re-signed with fresh keys under its own domain, so a mutant reaches the
-  checks past its signature; signature tampering and key substitution are
-  included. A dispatch mutant of the request or policy also gets a
-  recomputed decision and adoption, so the checks after decision verification
-  are compared too. Negative dispatch vectors contribute a fixed sample of
-  their mutants. Where the reference throws a non-profile error, such as a
-  `TypeError`, the port must refuse. It needs the batch example:
+  about 124,000 mutants of those vectors and requires the same first code, or
+  the same result: the canonical decision, outcome, final replay state,
+  lifecycle state or dispatch result. Every body member is mutated (a member
+  deleted, replaced or added), and each signed artifact is also re-signed with
+  fresh keys under its own domain, so a mutant reaches the checks past its
+  signature; signature tampering and key substitution are included. A
+  dispatch mutant of the request or policy also gets a recomputed decision
+  and adoption, so the checks after decision verification are compared too.
+  Negative dispatch vectors that need an approval contribute a fixed sample
+  of their mutants. The negative permit ones, the launch path no positive
+  vector covers, are mutated in full, and so is the first mutant of each that
+  both validators accept. Where the reference throws a non-profile error,
+  such as a `TypeError`, the port must refuse with a profile code. It needs
+  the batch example:
 
   ```sh
   cargo build -p coven-threads-core --example automation_authority_batch
