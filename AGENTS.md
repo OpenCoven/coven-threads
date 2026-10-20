@@ -96,6 +96,23 @@ cargo nextest run --locked --workspace --profile ci
 `cargo test --locked --workspace` remains the compatibility source of truth.
 Nextest adds JUnit and flake telemetry; it does not redefine test semantics.
 
+## Automation-authority port
+
+`crates/coven-threads-core/src/automation_authority` ports the evaluation
+operations of `profiles/automation-authority/v1/validator.mjs`. A change to any
+ported function there, or to the vectors those operations cover, updates the
+Rust port in the same pull request. Run:
+
+```bash
+cargo test --locked -p coven-threads-core --test automation_authority_vectors
+cargo build --locked -p coven-threads-core --example automation_authority_batch
+node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
+```
+
+Coven builds `serde_json` with `arbitrary_precision`, which Cargo unifies into
+this crate. The gate therefore runs the vectors and the differential a second
+time with `--features serde_json/arbitrary_precision`.
+
 ## R4 change rules
 
 Treat changes to identity predicates, validation, approvals, audit SQL,
