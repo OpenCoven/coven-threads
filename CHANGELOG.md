@@ -11,18 +11,42 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
 
 ### Added
 
+- `automation_authority`: a Rust port of the profile's reference validator for
+  the trusted daemon. It covers:
+  - strict I-JSON parsing;
+  - canonical digests;
+  - keyring validation;
+  - Ed25519 artifact verification through a caller-supplied
+    `SignatureVerifier`, and signing through `ArtifactSigner`;
+  - request validation and adoption;
+  - `evaluate_authorization`;
+  - decision validation, bundle verification and consumption;
+  - consumption-snapshot and approval validation;
+  - the approval lifecycle (`apply_lifecycle_event`, `verify_lifecycle_chain`);
+  - final dispatch verification (`verify_dispatch`);
+  - proposal validation and evidence-read authorization.
+
+  It matches `validator.mjs` on all 132 conformance vectors and on about
+  126,000 differential mutants, which run in the agent gate. `ring` is a
+  dev-dependency only; dev builds optimize it and `sha2` so the differential
+  stays near two minutes.
 - Automation Authority Profile v1 (`coven-threads#29`):
   - closed schemas and a Node-core validator for request, decision, approval,
     append-only lifecycle, proposal-only, evidence-read, R0–R4,
     capability/scope, replay, privacy, and final-dispatch contracts;
   - domain-separated SHA-256 canonical digests and Ed25519 authentication;
-  - an exact manifest with 130 vectors covering all 18 issue categories plus
+  - an exact manifest with 132 vectors covering all 18 issue categories plus
     duplicate-key, non-I-JSON, broad-scope, risk-lowering, replay,
     protected-owner/auditor roles, authenticated lifecycle heads, recurring
     approval usage, runtime binding, evidence-read validity, and
     semantic-forgery, pinned-policy, runtime-exactness, evidence-metadata, and
     impossible-calendar timestamp, identity-keyring, and self-only generic
-    evidence-scope and evidence-role-substitution mutations.
+    evidence-scope and evidence-role-substitution mutations;
+  - errata 1 and 2 to `validator.mjs`, with the wire version still `1.0.0`:
+    a consume is accepted only from `approved`, so a revoked, expired or
+    rejected recurring approval can no longer return to `approved`; and an
+    evidence sensitivity must be one of the four names, so `["internal"]` is
+    no longer read as `internal`. The Rust port follows both.
 - `AuditEventType::ApplyAudit` variant + `"apply_audit"` tag in `WARD_AUDIT_SCHEMA_SQL`'s CHECK constraint (coven-threads#5).
   - Enables the coven daemon to persist Gate-4 Tier-2 applied-write records into `ward.audit` (downstream: coven#414).
 - `WardAuditRecord::detail` field — nullable JSON column for event-type-specific payload.
