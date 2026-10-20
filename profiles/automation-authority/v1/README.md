@@ -42,9 +42,12 @@ no crypto backend.
   `decision_consumption`. The approval, lifecycle, consumption-snapshot,
   proposal, evidence-read and dispatch operations are not ported yet.
 - `scripts/automation-authority-differential.mjs` runs both validators on
-  about 39,000 mutants of those vectors and requires the same first code, or
-  the same canonical decision. Mutants are re-signed with fresh keys, and
-  signature tampering is included. It needs the batch example:
+  about 43,000 mutants of those vectors and requires the same first code, or
+  the same result: the canonical decision, outcome or final replay state.
+  Mutants delete, replace or add a member, and are re-signed with fresh keys;
+  signature tampering is included. Where the reference throws a non-profile
+  error, such as a `TypeError`, the port must refuse with a profile code. It
+  needs the batch example:
 
   ```sh
   cargo build -p coven-threads-core --example automation_authority_batch
