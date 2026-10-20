@@ -1,8 +1,8 @@
-//! Runs the automation-authority conformance vectors that exercise evaluation
-//! against the Rust port, judged as `profiles/automation-authority/v1/
-//! run-vectors.mjs` judges them: a positive vector must succeed with its
-//! expected outcome, and a negative one must fail with exactly its expected
-//! first error code.
+//! Runs all 130 automation-authority conformance vectors against the Rust
+//! port, invoked and judged as `profiles/automation-authority/v1/
+//! run-vectors.mjs` invokes and judges them: a positive vector must succeed
+//! with its expected outcome, and a negative one must fail with exactly its
+//! expected first error code.
 //!
 //! The vectors are read from this repository through `CARGO_MANIFEST_DIR`.
 
@@ -10,23 +10,28 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use coven_threads_core::automation_authority::{
-    adopt_authorization_request, consume_decision, evaluate_authorization, strict_parse_json,
-    validate_authorization_request, verify_decision_bundle, AdoptionState, AuthorityResult,
-    ConsumptionState, Keyring, SignatureVerifier,
+    adopt_authorization_request, apply_lifecycle_event, authorize_evidence_read, consume_decision,
+    evaluate_authorization, strict_parse_json, validate_approval, validate_authorization_request,
+    validate_consumption_snapshot, validate_proposal, verify_decision_bundle, verify_dispatch,
+    AdoptionState, AuthorityResult, ConsumptionState, Keyring, LifecycleState, SignatureVerifier,
 };
 use ring::signature::{UnparsedPublicKey, ED25519};
-use serde_json::Value;
+use serde_json::{json, Value};
 
-/// The operations this port covers. The other categories' operations
-/// (approvals, lifecycle, consumption snapshots, proposals, evidence reads and
-/// dispatch) are not ported yet.
-const PORTED: [&str; 6] = [
+/// Every operation the manifest names.
+const OPERATIONS: [&str; 12] = [
     "strict_parse",
     "validate_request",
     "request_adoption",
     "evaluate_request",
     "verify_decision",
     "decision_consumption",
+    "validate_consumption_snapshot",
+    "validate_approval",
+    "lifecycle",
+    "verify_dispatch",
+    "validate_proposal",
+    "evidence_read",
 ];
 
 struct Ring;
@@ -124,24 +129,83 @@ fn execute(operation: &str, body: &Value, keyring: &Keyring) -> AuthorityResult<
             }
             Ok(None)
         }
-        other => unreachable!("{other} is not ported"),
+        "validate_approval" => {
+            validate_approval(&body["approval"], keyring, &Ring, body.get("now")).map(|()| None)
+        }
+        "validate_consumption_snapshot" => validate_consumption_snapshot(
+            &body["consumption_snapshot"],
+            keyring,
+            &Ring,
+            body.get("now"),
+        )
+        .map(|()| None),
+        "lifecycle" => {
+            // `lifecycleState`, then the last event once more when
+            // `replay_last` asks for it.
+            let events = body["events"].as_array().unwrap();
+            let mut state: Option<LifecycleState> = None;
+            for event in events {
+                state = Some(apply_lifecycle_event(
+                    state.as_ref(),
+                    event,
+                    body.get("approval"),
+                    keyring,
+                    &Ring,
+                )?);
+            }
+            if body["replay_last"] == true {
+                apply_lifecycle_event(
+                    state.as_ref(),
+                    events.last().unwrap_or(&Value::Null),
+                    body.get("approval"),
+                    keyring,
+                    &Ring,
+                )?;
+            }
+            Ok(None)
+        }
+        "verify_dispatch" => {
+            let or_null = |name: &str| body.get(name).cloned().unwrap_or(Value::Null);
+            let bundle = json!({
+                "request": or_null("request"),
+                "decision": or_null("decision"),
+                "approval": or_null("approval"),
+                "approval_authorization_request": or_null("approval_authorization_request"),
+                "approval_authorization_decision": or_null("approval_authorization_decision"),
+                "lifecycle_events": body.get("events").filter(|events| !events.is_null()).cloned().unwrap_or(json!([])),
+                "consumption_snapshot": or_null("consumption_snapshot"),
+                "snapshot": or_null("snapshot"),
+            });
+            verify_dispatch(&bundle, keyring, &Ring).map(|_| None)
+        }
+        "validate_proposal" => validate_proposal(&body["proposal"], keyring, &Ring).map(|()| None),
+        "evidence_read" => authorize_evidence_read(
+            &body["read"],
+            &body["evidence"],
+            keyring,
+            &Ring,
+            body.get("now"),
+        )
+        .map(|()| None),
+        other => unreachable!("unknown manifest operation {other}"),
     }
 }
 
 #[test]
-fn every_evaluation_vector_matches_the_reference() {
+fn every_vector_matches_the_reference() {
     let manifest = read(&profile().join("manifest.json"));
     let keyring = keyring();
     let vectors = manifest["vectors"].as_array().unwrap();
     assert_eq!(vectors.len(), 130);
-    let ported: Vec<&Value> = vectors
-        .iter()
-        .filter(|vector| PORTED.contains(&vector["operation"].as_str().unwrap()))
-        .collect();
-    assert_eq!(ported.len(), 44, "the evaluation vectors");
+    assert!(
+        vectors
+            .iter()
+            .all(|vector| OPERATIONS.contains(&vector["operation"].as_str().unwrap())),
+        "every manifest operation is ported"
+    );
 
     let mut failures = Vec::new();
-    for vector in &ported {
+    for vector in vectors {
         let id = vector["id"].as_str().unwrap();
         let body = read(
             &profile()
@@ -177,7 +241,7 @@ fn every_evaluation_vector_matches_the_reference() {
     }
     assert!(
         failures.is_empty(),
-        "{} of 44 vectors failed:\n{}",
+        "{} of 130 vectors failed:\n{}",
         failures.len(),
         failures.join("\n")
     );
