@@ -5,7 +5,9 @@
 //! "keys"}`, where `keys` is a keyring's records by key id. Writes one line
 //! per case: `{"code": <first error code or null>, "result": <string or
 //! null>}`. `evaluate_request` returns the canonical decision text,
-//! `verify_decision` the outcome, and every other operation `"ok"`.
+//! `verify_decision` the outcome, `request_adoption` and
+//! `decision_consumption` the canonical final replay state (`"null"` when no
+//! repetition ran), and every other operation `"ok"`.
 
 use std::io::{self, BufRead, Write};
 
@@ -52,7 +54,13 @@ fn run(operation: &str, body: &Value, keyring: &Keyring) -> AuthorityResult<Stri
                     body.get("now"),
                 )?);
             }
-            Ok("ok".into())
+            replay_state(state.map(|state| {
+                json!({
+                    "nonces": state.nonces,
+                    "adoption_keys": state.adoption_keys,
+                    "request_digests": state.request_digests,
+                })
+            }))
         }
         "evaluate_request" => {
             let decision =
@@ -76,10 +84,20 @@ fn run(operation: &str, body: &Value, keyring: &Keyring) -> AuthorityResult<Stri
                     &Ring,
                 )?);
             }
-            Ok("ok".into())
+            replay_state(state.map(|state| {
+                json!({
+                    "decision_ids": state.decision_ids,
+                    "decision_digests": state.decision_digests,
+                })
+            }))
         }
         other => panic!("unsupported operation {other}"),
     }
+}
+
+/// The final replay state as the differential's `canonical` prints it.
+fn replay_state(state: Option<Value>) -> AuthorityResult<String> {
+    state.map_or_else(|| Ok("null".to_owned()), |state| canonicalize(&state))
 }
 
 fn main() -> io::Result<()> {

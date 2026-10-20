@@ -7,15 +7,18 @@
 // Each evaluation vector runs as written, then re-signed with fresh keys of
 // the same roles. The fresh keys come from fixed seeds and Ed25519 signing is
 // deterministic, so every run builds the same cases and a mismatch reproduces. Then every member of its request, decision and policy is
-// mutated, raw and re-signed, and for decision verification the mutated
-// request also gets a freshly computed, consistently signed decision. Signature
-// tampering is added explicitly. Both validators must report the same first
-// error code, or the same result: the full canonical decision for
-// evaluate_request, the outcome for verify_decision.
+// mutated (deleted, replaced, or joined by an unknown member), raw and
+// re-signed, and for decision verification the mutated request also gets a
+// freshly computed, consistently signed decision. Signature tampering is added
+// explicitly. Both validators must report the same first error code, or the
+// same result: the full canonical decision for evaluate_request, the outcome
+// for verify_decision, and the final canonical replay state for
+// request_adoption and decision_consumption.
 //
 // Where the reference throws something other than an AuthorityError (a
 // TypeError on a null member, say), it defines no code. Those cases are not
-// compared, but the port must still refuse them with some error code.
+// compared, but the port must still refuse them: a code the reference can
+// raise, and no result.
 //
 // Usage: node scripts/automation-authority-differential.mjs <batch binary>
 
@@ -48,6 +51,21 @@ const DOMAIN = {
   decision: "opencoven:automation-decision:v1",
 };
 const read = (path) => V.strictParseJson(readFileSync(path, "utf8"));
+
+// Every code the reference can raise: the first argument of `fail`, the code
+// argument of `exact` and `assertBinding`.
+const referenceSource = readFileSync(join(PROFILE, "validator.mjs"), "utf8");
+const REFERENCE_CODES = new Set(
+  [
+    /\bfail\(\s*"([a-z0-9_]+)"/g,
+    /\bexact\(\s*[^,]+,\s*[^,]+,\s*"([a-z0-9_]+)"/g,
+    /\bassertBinding\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*"([a-z0-9_]+)"/g,
+  ].flatMap((pattern) => [...referenceSource.matchAll(pattern)].map((match) => match[1])),
+);
+if (REFERENCE_CODES.size < 100) {
+  console.error(`found only ${REFERENCE_CODES.size} reference codes; the extraction is broken`);
+  process.exit(2);
+}
 
 // The reference's canonical form, to compare whole decisions.
 function canonical(value) {
@@ -124,7 +142,7 @@ function reference(operation, body, keys) {
         for (let index = 0; index < (body.repetitions ?? 1); index += 1) {
           state = V.adoptAuthorizationRequest(body.request, state, { keyring, now: body.now });
         }
-        return { code: null, result: "ok" };
+        return { code: null, result: canonical(state) };
       }
       case "evaluate_request":
         return {
@@ -141,7 +159,7 @@ function reference(operation, body, keys) {
         for (let index = 0; index < (body.repetitions ?? 1); index += 1) {
           state = V.consumeDecision(body.decision, state, { keyring });
         }
-        return { code: null, result: "ok" };
+        return { code: null, result: canonical(state) };
       }
       default:
         throw new Error(`unsupported operation ${operation}`);
@@ -225,11 +243,24 @@ function replaced(root, at, update) {
   return copy;
 }
 
+// Unknown members, sorting first and last. A computed `__proto__` key is an
+// own member, as a parsed document's would be.
+const UNKNOWN_MEMBERS = ["AAA", "zz_unknown", "__proto__"];
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
 function* documentMutants(document) {
+  if (isPlainObject(document)) {
+    for (const member of UNKNOWN_MEMBERS) yield { ...structuredClone(document), [member]: 1 };
+  }
   for (const [at, value, inArray] of nodes(document)) {
     if (!inArray) yield replaced(document, at, (parent, key) => { delete parent[key]; });
     for (const alternative of alternatives(value)) {
       yield replaced(document, at, (parent, key) => { parent[key] = alternative; });
+    }
+    if (isPlainObject(value)) {
+      for (const member of UNKNOWN_MEMBERS) {
+        yield replaced(document, at, (parent, key) => { parent[key] = { ...structuredClone(value), [member]: 1 }; });
+      }
     }
   }
 }
@@ -334,8 +365,9 @@ for (let index = 0; index < expected.length; index += 1) {
   const want = expected[index];
   const got = actual[index];
   if (want.code?.startsWith("THROW:")) {
-    // No reference answer to match; the port must still refuse.
-    if (got.code === null) failOpen.push(index);
+    // No reference answer to match; the port must still refuse, with a code
+    // the reference can raise and no result.
+    if (!REFERENCE_CODES.has(got.code) || got.result !== null) failOpen.push(index);
     continue;
   }
   if (want.code) codes.add(want.code);
@@ -349,12 +381,15 @@ for (let index = 0; index < expected.length; index += 1) {
   }
 }
 for (const index of failOpen.slice(0, 15)) {
-  console.log(`FAIL-OPEN case ${index} (from ${labels[index]}): the reference throws ${expected[index].code}, the port accepts`);
+  console.log(
+    `FAIL-OPEN case ${index} (from ${labels[index]}): the reference throws ${expected[index].code}, ` +
+      `the port answers ${JSON.stringify(actual[index]).slice(0, 200)}`,
+  );
 }
 console.log(
   `Differential: ${expected.length - undefinedReference} cases compared from ${vectors.length} vectors, ` +
     `${mismatched} mismatched; ${undefinedReference} more where the reference throws a non-profile error, ` +
-    `${failOpen.length} of them accepted by the port`,
+    `${failOpen.length} of them not refused by the port`,
 );
 console.log(`Codes exercised (${codes.size}): ${[...codes].sort().join(" ")}`);
 process.exit(mismatched === 0 && failOpen.length === 0 ? 0 : 1);
