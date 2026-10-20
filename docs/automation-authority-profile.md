@@ -46,7 +46,7 @@ new adoption decision before execution.
 ## Portable artifacts
 
 The versioned schemas, validator, public conformance keyring, exact manifest,
-and 130 vectors are under
+and 132 vectors are under
 [`profiles/automation-authority/v1/`](../profiles/automation-authority/v1/).
 The normative contract is
 [`specs/AUTOMATION-AUTHORITY-PROFILE-v1.md`](../specs/AUTOMATION-AUTHORITY-PROFILE-v1.md).

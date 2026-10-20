@@ -2013,14 +2013,16 @@ export function applyLifecycleEvent(state, event, { approval, keyring } = {}) {
     fail("lifecycle_chain_mismatch", "event previous digest does not match append-only head");
   }
   const expectedTo = TRANSITIONS.get(`${event.from_state}:${event.event}`);
+  // Consumption is valid only from `approved` (erratum 1). Only then was the
+  // approval validated above, so only then may its use pick the target.
   const consumptionTarget =
-    event.event === "consume"
+    event.event === "consume" && event.from_state === "approved"
       ? approval.use.kind === "recurring"
         ? "approved"
         : "consumed"
       : null;
   if (
-    (event.event === "consume" && event.to_state !== consumptionTarget) ||
+    (event.event === "consume" && (consumptionTarget === null || event.to_state !== consumptionTarget)) ||
     (event.event !== "consume" && (!expectedTo || expectedTo !== event.to_state))
   ) {
     fail("lifecycle_transition_invalid", "approval lifecycle transition is not allowed");
@@ -2838,8 +2840,10 @@ export function authorizeEvidenceRead(value, evidence, { keyring, now } = {}) {
     fail("evidence_read_unauthorized", "cross-principal evidence read requires auditor authority");
   }
   requireObject(evidence, "$.evidence");
+  // A sensitivity is one of SENSITIVITY's names, not a value that converts
+  // to one, such as ["internal"] (erratum 2).
   if (
-    !Object.hasOwn(evidence, "sensitivity") ||
+    typeof evidence.sensitivity !== "string" ||
     !Object.hasOwn(SENSITIVITY, evidence.sensitivity)
   ) {
     fail(

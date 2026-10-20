@@ -326,6 +326,7 @@ function event(app, sequence, previous, from, to, type, {
   consumption = null,
   occurrenceDisposition = null,
   actor = "threads_authority",
+  approvalDigest = undefined,
 } = {}) {
   return signArtifact(
     {
@@ -335,9 +336,11 @@ function event(app, sequence, previous, from, to, type, {
       request_digest: app.request_digest,
       decision_digest: app.decision_digest,
       approval_digest:
-        type === "request" || (from === "requested" && type !== "approve")
-          ? null
-          : `sha256:${canonicalDigest(app, "opencoven:automation-approval:v1")}`,
+        approvalDigest !== undefined
+          ? approvalDigest
+          : type === "request" || (from === "requested" && type !== "approve")
+            ? null
+            : `sha256:${canonicalDigest(app, "opencoven:automation-approval:v1")}`,
       sequence,
       previous_event_digest: previous,
       from_state: from,
@@ -923,6 +926,34 @@ const firstRecurringConsumption = event(
   },
 );
 const recurringEventsAfterOne = [...recurringApprovalEvents, firstRecurringConsumption];
+// Erratum 1: consumption is valid only from `approved`. A revoked recurring
+// approval must not return to `approved` through a consume, which carries no
+// approval evidence since the approval is no longer approved.
+const recurringRevoke = event(recurringApproval, 3, recurringApproveHead, "approved", "revoked", "revoke", {
+  phase: "queued",
+  disposition: "cancel_before_launch",
+});
+add("16-revoked-approval-cannot-be-consumed", 16, "negative", "lifecycle", {
+  approval: recurringApproval,
+  events: [
+    ...recurringApprovalEvents,
+    recurringRevoke,
+    event(
+      recurringApproval,
+      4,
+      `sha256:${canonicalDigest(recurringRevoke, "opencoven:automation-approval-event:v1")}`,
+      "revoked",
+      "approved",
+      "consume",
+      {
+        phase: "dispatching",
+        disposition: "launch_authorized",
+        consumption: runConsumption(recurringGrantRequest, recurringGrantDecision),
+        approvalDigest: null,
+      },
+    ),
+  ],
+}, { error: "lifecycle_transition_invalid" });
 const recurringSecondRequest = request({
   id: "recurring-approval-second",
   occurrence: "occ:daily:0002",
@@ -1621,6 +1652,8 @@ add("18-evidence-read-expired", 18, "negative", "evidence_read", {
 for (const [name, field, value, error] of [
   ["unknown-sensitivity", "sensitivity", "secretish", "evidence_sensitivity_unknown"],
   ["missing-sensitivity", "sensitivity", undefined, "evidence_sensitivity_unknown"],
+  // Erratum 2: a value that converts to a name is not a name.
+  ["sensitivity-must-be-a-string", "sensitivity", ["internal"], "evidence_sensitivity_unknown"],
   ["unknown-retention", "retention", "forever", "evidence_retention_unknown"],
   ["missing-retention", "retention", undefined, "evidence_retention_unknown"],
 ]) {

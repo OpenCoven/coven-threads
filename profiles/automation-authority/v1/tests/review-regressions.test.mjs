@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
@@ -373,5 +374,83 @@ test("evidence-read tokens enforce principal-self and auditor-cross role separat
         error instanceof profile.AuthorityError &&
         error.code === code,
     );
+  }
+});
+
+const throwsCode = (code) => (error) => error instanceof profile.AuthorityError && error.code === code;
+
+test("consumption is valid only from approved (erratum 1)", () => {
+  // Vector 16-revoked-approval-cannot-be-consumed covers `revoked`; this
+  // covers the other states. The events are re-signed with an authority key
+  // made here, swapped into a copy of the keyring as that vector swaps its own.
+  const vector = read("vectors/10-recurring-approval-reuses-bounded-authority.json");
+  const [request, approve, consume] = vector.events;
+  const authority = generateKeyPairSync("ed25519");
+  const signer = { key_id: "key:threads:test-authority", private_key: authority.privateKey };
+  const keys = new Map([...keyring].map(([id, record]) => [id, structuredClone(record)]));
+  keys.get(signer.key_id).public_key_pem = authority.publicKey.export({ type: "spki", format: "pem" });
+  const domain = "opencoven:automation-approval-event:v1";
+  const chain = (drafts) => {
+    const events = [];
+    for (const { integrity: _integrity, ...draft } of drafts) {
+      const previous = events.length ? `sha256:${profile.canonicalDigest(events.at(-1), domain)}` : null;
+      events.push(
+        profile.signArtifact({ ...draft, sequence: events.length + 1, previous_event_digest: previous }, domain, signer),
+      );
+    }
+    return events;
+  };
+  const apply = (events) => {
+    let state = null;
+    for (const event of events) {
+      state = profile.applyLifecycleEvent(state, event, { approval: vector.approval, keyring: keys });
+    }
+    return state;
+  };
+  const consumeFrom = (from) => ({
+    ...consume,
+    event_id: `event:consume-from-${from}`,
+    from_state: from,
+    to_state: "approved",
+    approval_digest: null,
+  });
+  const expire = {
+    ...approve,
+    event_id: "event:expire",
+    from_state: "approved",
+    to_state: "expired",
+    event: "expire",
+    execution_phase: "not_started",
+    dispatch_disposition: "no_launch_expired",
+    occurrence_disposition: { occurrence_id: "occ:daily:0001", run_id: "run:daily:0001", disposition: "expired_no_launch" },
+  };
+  const reject = {
+    ...request,
+    event_id: "event:reject",
+    from_state: "requested",
+    to_state: "rejected",
+    event: "reject",
+    execution_phase: "not_started",
+    dispatch_disposition: "no_launch_rejected",
+    occurrence_disposition: { occurrence_id: "occ:daily:0001", run_id: "run:daily:0001", disposition: "rejected_no_launch" },
+  };
+  assert.equal(apply(chain([request, approve, consume])).state, "approved");
+  for (const [before, from] of [
+    [[request, approve, expire], "expired"],
+    [[request, reject], "rejected"],
+    [[request], "requested"],
+  ]) {
+    assert.equal(apply(chain(before)).state, from);
+    assert.throws(() => apply(chain([...before, consumeFrom(from)])), throwsCode("lifecycle_transition_invalid"), from);
+  }
+});
+
+test("evidence sensitivity must be one of the names (erratum 2)", () => {
+  const vector = read("vectors/18-authorized-evidence-read.json");
+  const authorize = (sensitivity) =>
+    profile.authorizeEvidenceRead(vector.read, { ...vector.evidence, sensitivity }, { keyring, now: vector.now });
+  assert.equal(authorize("internal").ok, true);
+  for (const sensitivity of [["internal"], [["internal"]], ["internal", null], 1, true, {}, null]) {
+    assert.throws(() => authorize(sensitivity), throwsCode("evidence_sensitivity_unknown"), JSON.stringify(sensitivity));
   }
 });
