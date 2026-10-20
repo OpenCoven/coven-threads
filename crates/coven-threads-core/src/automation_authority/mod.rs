@@ -9,7 +9,7 @@
 //! a refusal by its first code alone. The JavaScript validator stays the
 //! reference: where the two disagree, this port is wrong.
 //!
-//! Ported here, and checked against all 130 conformance vectors:
+//! Ported here, and checked against all 132 conformance vectors:
 //!
 //! - [`strict_parse_json`]: the profile's strict I-JSON parser;
 //! - [`validate_authorization_request`] and [`adopt_authorization_request`];

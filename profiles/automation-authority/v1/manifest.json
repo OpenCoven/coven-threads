@@ -1248,6 +1248,18 @@
       }
     },
     {
+      "id": "16-revoked-approval-cannot-be-consumed",
+      "category": 16,
+      "kind": "negative",
+      "file": "16-revoked-approval-cannot-be-consumed.json",
+      "operation": "lifecycle",
+      "expected": {
+        "ok": false,
+        "error_code": "lifecycle_transition_invalid",
+        "outcome": null
+      }
+    },
+    {
       "id": "16-running-revocation-cannot-claim-rollback",
       "category": 16,
       "kind": "negative",
@@ -1496,6 +1508,18 @@
       "expected": {
         "ok": false,
         "error_code": "evidence_read_not_yet_valid",
+        "outcome": null
+      }
+    },
+    {
+      "id": "18-evidence-sensitivity-must-be-a-string",
+      "category": 18,
+      "kind": "negative",
+      "file": "18-evidence-sensitivity-must-be-a-string.json",
+      "operation": "evidence_read",
+      "expected": {
+        "ok": false,
+        "error_code": "evidence_sensitivity_unknown",
         "outcome": null
       }
     },
