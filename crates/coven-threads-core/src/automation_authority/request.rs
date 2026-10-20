@@ -2,6 +2,8 @@
 //! `adoptAuthorizationRequest` in the reference), with the shared capability
 //! and scope rules.
 
+use std::collections::HashSet;
+
 use serde_json::Value;
 
 use super::canonical::{canonical_digest, canonicalize};
@@ -93,9 +95,11 @@ pub(crate) fn validate_scope(scope: &Value, path: &str) -> AuthorityResult<()> {
             let candidate = shape::string(object.get("path"), &at("path"))?.replace('\\', "/");
             shape::enumeration(object.get("access"), &["read", "write"], &at("access"))?;
             let recursive = shape::boolean(object.get("recursive"), &at("recursive"))?;
-            let drive = candidate.len() >= 3
-                && candidate.as_bytes()[0].is_ascii_alphabetic()
-                && &candidate[1..3] == ":/";
+            // `/^[A-Za-z]:\//`, on bytes: slicing the text at byte 3 panics
+            // when a multi-byte character spans it.
+            let bytes = candidate.as_bytes();
+            let drive = bytes.first().is_some_and(u8::is_ascii_alphabetic)
+                && bytes.get(1..3) == Some(b":/");
             if candidate == "."
                 || candidate == "/"
                 || candidate.contains('*')
@@ -215,18 +219,16 @@ pub(crate) fn validate_scope(scope: &Value, path: &str) -> AuthorityResult<()> {
 /// `validateScopes`: a non-empty list of valid, distinct scopes.
 pub(crate) fn validate_scopes(value: Option<&Value>, path: &str) -> AuthorityResult<()> {
     let scopes = shape::array(value, path, true, false)?;
-    let mut seen = Vec::with_capacity(scopes.len());
+    let mut seen = HashSet::with_capacity(scopes.len());
     for (index, scope) in scopes.iter().enumerate() {
         validate_scope(scope, &format!("{path}[{index}]"))?;
-        let encoded = canonicalize(scope)?;
-        if seen.contains(&encoded) {
+        if !seen.insert(canonicalize(scope)?) {
             return fail(
                 ErrorCode::ScopeDuplicate,
                 "duplicate scope",
                 format!("{path}[{index}]"),
             );
         }
-        seen.push(encoded);
     }
     Ok(())
 }
@@ -658,4 +660,26 @@ pub fn adopt_authorization_request(
     state.adoption_keys.push(adoption_key);
     state.request_digests.push(digest);
     Ok(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn multibyte_paths_are_judged_without_panicking() {
+        // The drive check once sliced the path at byte 3, inside `€`.
+        let scope = |path: &str| json!({"kind": "filesystem", "root": "project", "path": path, "access": "read", "recursive": false});
+        for path in ["a€x", "ab€", "a😀/b/c", "Z€/y/z", "a"] {
+            assert_eq!(validate_scope(&scope(path), "$"), Ok(()), "{path}");
+        }
+        for path in ["C:/x", "c:\\x"] {
+            assert_eq!(
+                validate_scope(&scope(path), "$").map_err(|error| error.code),
+                Err(ErrorCode::ScopeTooBroad),
+                "{path}"
+            );
+        }
+    }
 }

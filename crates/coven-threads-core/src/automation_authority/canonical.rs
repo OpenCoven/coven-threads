@@ -196,20 +196,21 @@ fn write_string(text: &str, out: &mut String) {
     out.push('"');
 }
 
-/// ECMAScript `Number::toString` for a finite double, from the shortest
-/// round-trip digits Rust's formatter produces.
+/// ECMAScript `Number::toString`, from the shortest round-trip digits Rust's
+/// formatter produces.
 pub(crate) fn ecmascript_number(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_owned();
+    }
+    if value.is_infinite() {
+        return if value > 0.0 { "Infinity" } else { "-Infinity" }.to_owned();
+    }
     if value == 0.0 {
         return "0".to_owned();
     }
-    let scientific = format!("{:e}", value.abs());
-    let (mantissa, exponent) = scientific
-        .split_once('e')
-        .expect("Rust formats an exponent");
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-    let digits = digits.trim_end_matches('0');
-    let digits = if digits.is_empty() { "0" } else { digits };
-    let exponent: i64 = exponent.parse().expect("an integer exponent");
+    let (digits, exponent) = scientific_digits(&format!("{:e}", value.abs()));
+    let digits = even_on_a_tie(value.abs(), digits, exponent);
+    let digits = digits.as_str();
     // ECMAScript names the decimal point position `n`: value = 0.digits * 10^n.
     let k = digits.len() as i64;
     let n = exponent + 1;
@@ -232,6 +233,46 @@ pub(crate) fn ecmascript_number(value: f64) -> String {
         format!("-{body}")
     } else {
         body
+    }
+}
+
+/// The significant digits, without trailing zeros, and the exponent of a
+/// finite double that Rust formatted with `{:e}`.
+fn scientific_digits(scientific: &str) -> (String, i64) {
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .expect("a finite double formats an exponent");
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let digits = digits.trim_end_matches('0');
+    let digits = if digits.is_empty() { "0" } else { digits };
+    (
+        digits.to_owned(),
+        exponent.parse().expect("an integer exponent"),
+    )
+}
+
+/// ECMAScript picks the even digit string when a double lies exactly halfway
+/// between two shortest candidates (`Number::toString`, note 2), and Rust's
+/// formatter may pick the other. The exact expansion shows the tie: the
+/// shorter candidate's digits, then one 5.
+fn even_on_a_tie(value: f64, digits: String, exponent: i64) -> String {
+    if value.fract() == 0.0 && value <= MAX_SAFE_INTEGER {
+        // An integer's shortest digits are its exact digits.
+        return digits;
+    }
+    // A double's exact decimal expansion has at most 767 significant digits.
+    let (exact, exact_exponent) = scientific_digits(&format!("{value:.800e}"));
+    let k = digits.len();
+    if exact_exponent != exponent || exact.len() != k + 1 || !exact.ends_with('5') {
+        return digits;
+    }
+    let (lower, last) = (&exact[..k - 1], exact.as_bytes()[k - 1]);
+    match last {
+        b'0' | b'2' | b'4' | b'6' | b'8' => exact[..k].to_owned(),
+        // Rounding up a 9 would carry, and the shorter string it leaves would
+        // have been the shortest candidate.
+        b'9' => digits,
+        _ => format!("{lower}{}", char::from(last + 1)),
     }
 }
 
@@ -261,6 +302,12 @@ mod tests {
             (-42.0, "-42"),
             (1.5e-10, "1.5e-10"),
             (-2.5e30, "-2.5e+30"),
+            // 245010723912258.125 exactly, halfway between two shortest
+            // candidates: the even one.
+            (1_960_085_791_298_065.0 / 8.0, "245010723912258.12"),
+            (f64::NAN, "NaN"),
+            (f64::INFINITY, "Infinity"),
+            (f64::NEG_INFINITY, "-Infinity"),
         ] {
             assert_eq!(ecmascript_number(value), expected, "{value:e}");
         }

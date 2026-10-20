@@ -1,6 +1,8 @@
 //! Authorization evaluation (`evaluateAuthorization` and `decisionBase` in the
 //! reference).
 
+use std::collections::HashSet;
+
 use serde_json::{json, Value};
 
 use super::canonical::{canonical_digest, canonicalize};
@@ -218,8 +220,8 @@ pub fn evaluate_authorization(
         Some(scopes) => scopes
             .iter()
             .map(canonicalize)
-            .collect::<AuthorityResult<Vec<_>>>()?,
-        None => Vec::new(),
+            .collect::<AuthorityResult<HashSet<_>>>()?,
+        None => HashSet::new(),
     };
     let mut scopes = Vec::new();
     for scope in request["scopes"].as_array().expect("validated") {

@@ -3,6 +3,8 @@
 //!
 //! A missing member is `None`, as `undefined` is in JavaScript.
 
+use std::collections::HashSet;
+
 use serde_json::{Map, Value};
 
 use super::{fail, AuthorityResult, ErrorCode};
@@ -139,11 +141,9 @@ pub(crate) fn array<'a>(
         return fail(ErrorCode::SchemaMinItems, "array must not be empty", path);
     }
     if unique {
-        for (index, item) in items.iter().enumerate() {
-            if items[..index]
-                .iter()
-                .any(|earlier| same_primitive(earlier, item))
-            {
+        let mut seen = HashSet::with_capacity(items.len());
+        for item in items {
+            if primitive_key(item).is_some_and(|key| !seen.insert(key)) {
                 return fail(
                     ErrorCode::SchemaDuplicateItem,
                     "array items must be unique",
@@ -153,6 +153,30 @@ pub(crate) fn array<'a>(
         }
     }
     Ok(items)
+}
+
+/// What a `Set` compares a primitive by, so the duplicate check is one pass;
+/// `None` for an object or array, which never equals another item. Numbers
+/// compare as `same_primitive` compares them, by `f64` value with `-0` equal
+/// to `0`.
+#[derive(PartialEq, Eq, Hash)]
+enum PrimitiveKey<'a> {
+    Null,
+    Bool(bool),
+    String(&'a str),
+    Number(Option<u64>),
+}
+
+fn primitive_key(value: &Value) -> Option<PrimitiveKey<'_>> {
+    match value {
+        Value::Null => Some(PrimitiveKey::Null),
+        Value::Bool(flag) => Some(PrimitiveKey::Bool(*flag)),
+        Value::String(text) => Some(PrimitiveKey::String(text)),
+        Value::Number(number) => Some(PrimitiveKey::Number(
+            number.as_f64().map(|float| (float + 0.0).to_bits()),
+        )),
+        Value::Array(_) | Value::Object(_) => None,
+    }
 }
 
 fn same_primitive(left: &Value, right: &Value) -> bool {

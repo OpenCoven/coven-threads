@@ -209,13 +209,7 @@ pub(crate) fn verify_signed_artifact(
             "$",
         );
     }
-    let Some(pem) = record.get("public_key_pem").and_then(Value::as_str) else {
-        return fail(
-            ErrorCode::IntegrityKeyUnknown,
-            "key record does not contain a public key",
-            "$",
-        );
-    };
+    let pem = public_key_text(record)?;
     let verified = match (
         ed25519_from_pem(pem),
         <[u8; 64]>::try_from(signature.as_slice()),
@@ -266,6 +260,33 @@ pub fn sign_artifact(
         }),
     );
     Ok(Value::Object(signed))
+}
+
+/// The reference's `keyObject`: a truthy `public_key` wins over a truthy
+/// `public_key_pem`. A JSON record can't hold a `KeyObject`, so `public_key`
+/// is text that Node reads as PEM, and anything else makes Node throw, which
+/// the port refuses.
+fn public_key_text(record: &Value) -> AuthorityResult<&str> {
+    for member in ["public_key", "public_key_pem"] {
+        match record.get(member) {
+            None | Some(Value::Null | Value::Bool(false)) => {}
+            Some(Value::String(text)) if text.is_empty() => {}
+            Some(Value::Number(number)) if number.as_f64() == Some(0.0) => {}
+            Some(Value::String(text)) => return Ok(text),
+            Some(_) => {
+                return fail(
+                    ErrorCode::IntegrityKeyUnknown,
+                    format!("key record's {member} is not PEM text"),
+                    "$",
+                )
+            }
+        }
+    }
+    fail(
+        ErrorCode::IntegrityKeyUnknown,
+        "key record does not contain a public key",
+        "$",
+    )
 }
 
 /// The raw Ed25519 key in a `PUBLIC KEY` PEM, or `None` for anything else.
@@ -467,6 +488,51 @@ mod tests {
                 )])
             ),
             Err(ErrorCode::IntegrityRoleMismatch)
+        );
+    }
+
+    #[test]
+    fn a_truthy_public_key_wins_over_public_key_pem() {
+        // Expected codes are the reference's; where Node throws, the port
+        // must refuse.
+        let signer = TestSigner::new("key:test");
+        let other = TestSigner::new("key:other");
+        let signed = sign_artifact(&json!({"kind": "test"}), Domain::Decision, &signer).unwrap();
+        let verify = |record: Value| {
+            verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &Keyring::new(vec![("key:test".into(), record)]),
+                Some("threads_authority"),
+                &Ring,
+            )
+            .map(|_| ())
+            .map_err(|error| error.code)
+        };
+        let with_pem = |public_key: Value| json!({"role": "threads_authority", "public_key_pem": signer.pem(), "public_key": public_key});
+        assert_eq!(
+            verify(with_pem(json!(other.pem()))),
+            Err(ErrorCode::IntegritySignatureInvalid)
+        );
+        assert_eq!(
+            verify(json!({"role": "threads_authority", "public_key": signer.pem()})),
+            Ok(())
+        );
+        for falsy in [json!(null), json!(false), json!(0), json!("")] {
+            assert_eq!(verify(with_pem(falsy.clone())), Ok(()), "{falsy}");
+        }
+        for thrown in [
+            json!({}),
+            json!([]),
+            json!(1),
+            json!(true),
+            json!("not pem"),
+        ] {
+            assert!(verify(with_pem(thrown.clone())).is_err(), "{thrown}");
+        }
+        assert_eq!(
+            verify(json!({"role": "threads_authority", "public_key_pem": ""})),
+            Err(ErrorCode::IntegrityKeyUnknown)
         );
     }
 

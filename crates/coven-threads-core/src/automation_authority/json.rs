@@ -16,10 +16,13 @@
 //!
 //! Nesting is limited to [`MAX_DEPTH`] levels, refused beyond that as
 //! `json_invalid`. The reference states no limit, but its recursive parser
-//! throws a non-profile `RangeError` at an engine-dependent depth, near 1,750
-//! levels on Node 24. The limit sits above that, so everything the reference
-//! parses parses here, and it keeps dropping the parsed value, which recurses,
-//! well within any thread's stack. Profile documents nest under ten levels.
+//! throws a non-profile `RangeError` at a depth that depends on the engine
+//! and its JIT state: on Node 24, arrays fail somewhere from about 1,750
+//! levels in a fresh process, while objects, and arrays once the parser is
+//! warm, parse beyond 2,048. No fixed limit matches that, so the two disagree
+//! only on documents nested hundreds of levels deep. The limit keeps dropping
+//! the parsed value, which recurses, well within any thread's stack. Profile
+//! documents nest under ten levels.
 
 use serde_json::{Map, Number, Value};
 
