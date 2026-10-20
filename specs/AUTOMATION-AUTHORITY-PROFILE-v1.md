@@ -185,6 +185,22 @@ Filesystem scopes use `project` or `workspace` roots and a relative path.
 Absolute paths, `..`, wildcards, root-wide paths, drive paths, and shallow
 recursive grants fail closed.
 
+> **Additive consumer note (2026-10-20, OpenCoven/coven#857):** A consumer
+> that enforces filesystem scopes maps them to operations as follows.
+>
+> - **A recursive `read` scope on directory D** permits reading any file at or
+>   beneath D, and listing or searching D or any directory beneath it.
+> - **A non-recursive `read` scope on path P** permits reading P if it is a
+>   file, or listing P's entries if it is a directory. It never permits
+>   reading those entries, and never permits a search.
+> - **A `write` scope** permits no read, listing or search.
+>
+> The consumer decides a resource's type from the object it actually opened,
+> never from the path's spelling. It bounds recursion itself. A listing or
+> search never discloses an entry that a read of it would refuse. This note
+> records how consumers apply scopes. It changes no artifact, no validator
+> behavior and no profile version.
+
 Network scopes require HTTPS, an exact non-local DNS host, a port, a path prefix
 narrower than `/`, and explicit methods. Credential scopes bind an exact
 credential reference, audience, and operations. Evidence scopes bind principal,
