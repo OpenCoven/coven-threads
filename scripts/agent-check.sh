@@ -107,6 +107,8 @@ fi
 # of every evaluation vector, not only on the vectors themselves.
 cargo build --locked --quiet -p coven-threads-core --example automation_authority_batch
 node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
+cargo build --locked --quiet -p coven-threads-core --example automation_authority_keyring_batch
+node scripts/automation-authority-keyring-differential.mjs target/debug/examples/automation_authority_keyring_batch --ordered
 
 # Coven builds serde_json with arbitrary_precision, and Cargo unifies features,
 # so the port must also agree with the reference in that configuration.
@@ -114,6 +116,8 @@ ap=(--features serde_json/arbitrary_precision)
 cargo test --locked -p coven-threads-core "${ap[@]}" --test automation_authority_vectors
 cargo build --locked --quiet -p coven-threads-core "${ap[@]}" --example automation_authority_batch
 node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
+cargo build --locked --quiet -p coven-threads-core "${ap[@]}" --example automation_authority_keyring_batch
+node scripts/automation-authority-keyring-differential.mjs target/debug/examples/automation_authority_keyring_batch --ordered
 
 # Verification must not rewrite dependency resolution.
 git diff --exit-code -- Cargo.lock

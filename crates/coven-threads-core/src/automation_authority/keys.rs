@@ -47,14 +47,18 @@ pub struct Keyring {
 
 impl Keyring {
     /// A keyring from `(key_id, record)` pairs, validated when first used, as
-    /// the reference validates on every verification.
+    /// the reference validates on every verification. Record validation follows
+    /// supplied order (as a JavaScript Map does). Duplicate ids are refused at
+    /// validation before any record can supply authority.
     #[must_use]
     pub fn new(records: Vec<(String, Value)>) -> Self {
         Self { records }
     }
 
     /// A keyring from a JSON object of records, such as `keyring.json`'s
-    /// `keys`.
+    /// `keys`. Validation follows this map's iteration order. To retain an
+    /// external object's original order, pass its ordered pairs to [`Self::new`]
+    /// before converting to a map that may sort keys.
     #[must_use]
     pub fn from_object(keys: &Map<String, Value>) -> Self {
         Self::new(
@@ -64,8 +68,12 @@ impl Keyring {
         )
     }
 
-    /// The record for `key_id`, to adjust in place.
+    /// The unique record for `key_id`, to adjust in place. An ambiguous id
+    /// returns `None`; duplicate ids must be removed explicitly by the caller.
     pub fn record_mut(&mut self, key_id: &str) -> Option<&mut Value> {
+        if self.records.iter().filter(|(id, _)| id == key_id).count() != 1 {
+            return None;
+        }
         self.records
             .iter_mut()
             .find(|(id, _)| id == key_id)
@@ -76,8 +84,19 @@ impl Keyring {
     ///
     /// # Errors
     ///
-    /// The first malformed record's `integrity_*` or `schema_*` code.
+    /// `json_duplicate_key` for duplicate ids, otherwise the first malformed
+    /// record's `integrity_*` or `schema_*` code in supplied iteration order.
     pub fn validate(&self) -> AuthorityResult<()> {
+        let mut ids = std::collections::BTreeSet::new();
+        for (id, _) in &self.records {
+            if !ids.insert(id) {
+                return fail(
+                    ErrorCode::JsonDuplicateKey,
+                    "duplicate keyring id",
+                    "$.keyring",
+                );
+            }
+        }
         for (key_id, record) in &self.records {
             if key_id.is_empty() {
                 return fail(
@@ -300,7 +319,14 @@ fn ed25519_from_pem(pem: &str) -> Option<[u8; 32]> {
         .filter(|ch| !ch.is_ascii_whitespace())
         .collect();
     let der = decode_base64(&base64)?;
-    der.strip_prefix(&ED25519_SPKI_PREFIX)?.try_into().ok()
+    // OpenSSL (the reference's Node backend) reads the first DER object and
+    // ignores trailing bytes. The fixed prefix commits its length, algorithm,
+    // absent parameters, bit-string length and unused-bit count. Only those
+    // exact 32 key bytes supply authority; a signature must still verify.
+    der.strip_prefix(&ED25519_SPKI_PREFIX)?
+        .get(..32)?
+        .try_into()
+        .ok()
 }
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -534,6 +560,100 @@ mod tests {
             verify(json!({"role": "threads_authority", "public_key_pem": ""})),
             Err(ErrorCode::IntegrityKeyUnknown)
         );
+    }
+
+    #[test]
+    fn duplicate_constructor_ids_are_refused_before_record_validation() {
+        for second in [
+            json!({"role": "threads_authority"}),
+            json!({"role": "principal"}),
+        ] {
+            let mut keys = Keyring::new(vec![
+                ("same".into(), json!({"role": "threads_authority"})),
+                ("same".into(), second),
+            ]);
+            assert_eq!(
+                keys.validate().unwrap_err().code,
+                ErrorCode::JsonDuplicateKey
+            );
+            assert!(keys.record_mut("same").is_none());
+        }
+        let keys = Keyring::new(vec![
+            ("same".into(), json!(null)),
+            ("same".into(), json!({"role": "unknown"})),
+        ]);
+        assert_eq!(
+            keys.validate().unwrap_err().code,
+            ErrorCode::JsonDuplicateKey
+        );
+        let signer = TestSigner::new("key:test");
+        let signed = sign_artifact(&json!({"kind": "test"}), Domain::Decision, &signer).unwrap();
+        let record = json!({"role": "threads_authority", "public_key_pem": signer.pem()});
+        let keys = Keyring::new(vec![
+            ("key:test".into(), record.clone()),
+            ("key:test".into(), record),
+        ]);
+        assert_eq!(
+            verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &keys,
+                Some("threads_authority"),
+                &Ring
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::JsonDuplicateKey
+        );
+    }
+
+    #[test]
+    fn malformed_records_follow_supplied_order_without_sorting_ids() {
+        let role = ("z".into(), json!({"role": "unknown"}));
+        let principal = ("a".into(), json!({"role": "principal"}));
+        for (records, expected) in [
+            (
+                vec![role.clone(), principal.clone()],
+                ErrorCode::IntegrityRoleUnknown,
+            ),
+            (
+                vec![principal, role],
+                ErrorCode::IntegrityPrincipalIdMissing,
+            ),
+        ] {
+            assert_eq!(Keyring::new(records).validate().unwrap_err().code, expected);
+        }
+    }
+
+    #[test]
+    fn pem_uses_the_first_complete_spki_like_the_reference_crypto_backend() {
+        let signer = TestSigner::new("key:test");
+        let signed = sign_artifact(&json!({"kind": "test"}), Domain::Decision, &signer).unwrap();
+        let pem = signer.pem();
+        let body = pem
+            .trim()
+            .strip_prefix("-----BEGIN PUBLIC KEY-----")
+            .unwrap()
+            .strip_suffix("-----END PUBLIC KEY-----")
+            .unwrap();
+        let mut der = decode_base64(&body.split_whitespace().collect::<String>()).unwrap();
+        der.push(0);
+        let pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            encode_base64(&der)
+        );
+        let keys = Keyring::new(vec![(
+            "key:test".into(),
+            json!({"role": "threads_authority", "public_key_pem": pem}),
+        )]);
+        assert!(verify_signed_artifact(
+            &signed,
+            Domain::Decision,
+            &keys,
+            Some("threads_authority"),
+            &Ring
+        )
+        .is_ok());
     }
 
     #[test]
