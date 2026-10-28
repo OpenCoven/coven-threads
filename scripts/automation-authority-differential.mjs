@@ -81,6 +81,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import * as V from "../profiles/automation-authority/v1/validator.mjs";
+import { compareAnswer } from "./lib/authority-differential-answer.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROFILE = join(ROOT, "profiles/automation-authority/v1");
@@ -829,7 +830,6 @@ if (actual.length !== expected.length) {
   console.error(`batch binary answered ${actual.length} of ${expected.length} cases`);
   process.exit(1);
 }
-const same = (left, right) => left.code === right.code && left.result === right.result;
 const failures = [];
 const failOpen = [];
 const codes = new Set();
@@ -843,26 +843,16 @@ for (let index = 0; index < expected.length; index += 1) {
   const rewrite = rewrites[index];
   perOperation[operations[index]] = (perOperation[operations[index]] ?? 0) + 1;
   if (rewrite?.variant && rewrite.code !== undefined) rewritten += 1;
-  if (want.code?.startsWith("THROW:")) {
-    // No reference answer to match; the port must still refuse, with a code
-    // the reference can raise and no result.
-    if (!REFERENCE_CODES.has(got.code) || got.result !== null) failOpen.push(index);
-    continue;
-  }
-  if (want.code) codes.add(want.code);
-  if (!same(want, got)) failures.push({ index, reason: "answers differ" });
+  if (want.code && !want.code.startsWith("THROW:")) codes.add(want.code);
   if (rewrite?.equals !== null && rewrite?.equals !== undefined) {
-    // The same document, spelled differently: the same answer, from both.
     equivalent += 1;
-    if (!same(expected[rewrite.equals], want)) failures.push({ index, reason: `reference answer differs from case ${rewrite.equals}` });
-    if (!same(actual[rewrite.equals], got)) failures.push({ index, reason: `port answer differs from case ${rewrite.equals}` });
   }
-  if (rewrite?.code) {
-    // A broken document: the code the profile specifies, from both.
-    refusing += 1;
-    if (want.code !== rewrite.code) failures.push({ index, reason: `reference did not refuse with ${rewrite.code}` });
-    if (got.code !== rewrite.code || got.result !== null) failures.push({ index, reason: `port did not refuse with ${rewrite.code}` });
-  }
+  if (rewrite?.code) refusing += 1;
+  // Normative rewrite assertions run even if the reference throws a non-profile
+  // exception. Only unconstrained outcomes may use generic fail-closed fallback.
+  const comparison = compareAnswer(want, got, rewrite, expected[rewrite?.equals], actual[rewrite?.equals], REFERENCE_CODES);
+  for (const reason of comparison.failures) failures.push({ index, reason });
+  if (comparison.failOpen) failOpen.push(index);
 }
 const mismatched = new Set(failures.map(({ index }) => index)).size;
 for (const { index, reason } of failures.slice(0, 15)) {
