@@ -82,6 +82,8 @@ import { fileURLToPath } from "node:url";
 
 import * as V from "../profiles/automation-authority/v1/validator.mjs";
 import { compareAnswer } from "./lib/authority-differential-answer.mjs";
+import { minimizeFaults, sampleMultifaults } from "./lib/authority-multifault.mjs";
+import { parseBatchAnswers } from "./lib/authority-batch-output.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROFILE = join(ROOT, "profiles/automation-authority/v1");
@@ -91,6 +93,14 @@ if (!batch) {
   process.exit(2);
 }
 const DOMAIN = V.profileConstants.domains;
+const parseBound = (text, name, min, max) => {
+  if (!/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(text)) throw new Error(`${name} must be an integer`);
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value < min || value > max) throw new Error(`${name} must be ${min}..${max}`);
+  return value;
+};
+const MULTI_SEED = parseBound(process.env.AUTHORITY_DIFFERENTIAL_SEED ?? "88", "seed", 0, 0xffffffff);
+const MULTI_BUDGET = parseBound(process.env.AUTHORITY_DIFFERENTIAL_BUDGET ?? "24", "budget", 2, 256);
 // The domain each signed body member is signed under; the rest are unsigned.
 const SIGNED = {
   request: DOMAIN.request,
@@ -119,6 +129,17 @@ const REFERENCE_CODES = new Set(
     /\bassertBinding\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*"([a-z0-9_]+)"/g,
   ].flatMap((pattern) => [...referenceSource.matchAll(pattern)].map((match) => match[1])),
 );
+const CODE_DISPOSITIONS = {
+  decision_request_mismatch: "shadowed by verified full decision semantic equality; direct private binding guard tests",
+  decision_binding_mismatch: "shadowed by verified full decision semantic equality; direct private binding guard tests",
+  decision_expired: "evaluated expiry equals request expiry, whose earlier guard wins; direct private decision-time guard tests",
+  dispatch_runtime_downgrade: "shadowed by granted-subset validation and exact runtime set equality; direct private runtime guard tests",
+  dispatch_runtime_capability_missing: "shadowed by approval evaluation and exact runtime set equality; direct private approval-runtime guard tests",
+  runtime_capability_unknown: "request validation emits capability_unknown first; direct private vocabulary guard tests",
+  integrity_role_unknown: "exercised by the required keyring companion, not this fixed-role corpus",
+  integrity_domain_invalid: "public digest utility tested directly in Rust and Node; batch uses fixed domains",
+  integrity_signer_required: "Node dynamic producer utility; typed missing-signer boundary differs and representable empty-id parity is tracked in #99",
+};
 if (REFERENCE_CODES.size < 100) {
   console.error(`found only ${REFERENCE_CODES.size} reference codes; the extraction is broken`);
   process.exit(2);
@@ -636,6 +657,9 @@ const rewrites = [];
 const bodyOffsets = [];
 const bodyLengths = [];
 const caseKeys = [];
+const inputHash = createHash("sha256");
+const multifaultCounts = { pairs: 0, triples: 0, raw: 0, resigned: 0 };
+const multifaultCases = new Map();
 let lastKeys = null;
 let undefinedReference = 0;
 let protoCases = 0;
@@ -658,6 +682,7 @@ function record(operation, text, keys, answer, rewrite = null) {
   fileBytes += bytes.length;
   bodyBytes += body.length;
   writeSync(casesFile, bytes);
+  inputHash.update(bytes);
   expected.push(answer);
   labels.push(label);
   operations.push(operation);
@@ -719,8 +744,32 @@ for (const vector of vectors) {
   add(operation, body, keysOriginal);
   const base = resignBody(body);
   poolTimestamps(base);
-  add(operation, base, keysFresh);
+  const baseAnswer = add(operation, base, keysFresh);
   const baseIndex = expected.length - 1;
+  if ((operation === "request_adoption" && baseAnswer.code === "request_replayed") ||
+      (operation === "decision_consumption" && baseAnswer.code === "decision_replayed")) {
+    label = `${vector.id} (single-use state control)`;
+    const once = add(operation, { ...base, repetitions: 1 }, keysFresh);
+    if (once.code !== null || once.result === "null") throw new Error(`${vector.id}: replay fixture lacks a successful first state`);
+    label = vector.id;
+  }
+  // Every vector gets its own stable sub-seed. This is a bounded sample of
+  // simultaneous semantic field changes, not an exhaustive pairwise proof.
+  const seed = createHash("sha256").update(`${MULTI_SEED}:${vector.id}`).digest().readUInt32BE(0);
+  for (const mutant of sampleMultifaults(base, { seed, budget: MULTI_BUDGET, structural: true, alternativesFor: alternatives })) {
+    const variant = `multifault seed=${seed} paths=${JSON.stringify(mutant.paths)}`;
+    const text = JSON.stringify(mutant.body);
+    const rawIndex = record(operation, text, keysFresh, referenceText(operation, text, keysFresh), { variant: `${variant} raw` });
+    multifaultCases.set(rawIndex, { base, paths: mutant.paths, resigned: false });
+    multifaultCounts[mutant.arity === 2 ? "pairs" : "triples"]++;
+    multifaultCounts.raw++;
+    const resigned = JSON.stringify(resignBody(mutant.body));
+    if (resigned !== text) {
+      const signedIndex = record(operation, resigned, keysFresh, referenceText(operation, resigned, keysFresh), { variant: `${variant} resigned` });
+      multifaultCases.set(signedIndex, { base, paths: mutant.paths, resigned: true });
+      multifaultCounts.resigned++;
+    }
+  }
   // A permit dispatch, with no approval, is the launch path R0 and R1 runs
   // take, and no positive vector covers it, so its negatives go in full, and
   // the first mutant of each that both validators accept is kept to be
@@ -821,19 +870,45 @@ const input = openSync(casesPath, "r");
 const run = spawnSync(batch, [], { stdio: [input, "pipe", "inherit"], maxBuffer: 1 << 30 });
 closeSync(input);
 const answered = performance.now();
-if (run.status !== 0) {
-  console.error(`batch binary exited with ${run.status}`);
+function retainBatchFailure(error) {
+  const kept = mkdtempSync(join(tmpdir(), "automation-authority-differential-failures-"));
+  const index = Math.max(0, Math.min(expected.length - 1, error.caseIndex ?? 0));
+  if (expected.length) {
+    const descriptor = openSync(casesPath, "r");
+    const body = Buffer.alloc(bodyLengths[index]);
+    readSync(descriptor, body, 0, body.length, bodyOffsets[index]);
+    closeSync(descriptor);
+    writeFileSync(join(kept, "cases.stream"), frame(operations[index], body, caseKeys[index]));
+  }
+  writeFileSync(join(kept, "report.json"), JSON.stringify({
+    kind: "batch transport/execution failure", error: error.message, status: run.status, signal: run.signal,
+    case: index, label: labels[index], operation: operations[index],
+    inference: "first missing/invalid answer; a process failing after all answers is attributed to the last case",
+    seed: MULTI_SEED, budgetPerVector: MULTI_BUDGET, build, batch, node: process.version,
+    v8: process.versions.v8, openssl: process.versions.openssl, platform: `${process.platform}/${process.arch}`,
+    inputSha256: inputHash.copy().digest("hex"), binarySha256: createHash("sha256").update(readFileSync(batch)).digest("hex"),
+  }, null, 2) + "\n");
+  console.error(`Batch failure retained in ${kept}; reproduce: ${batch} < ${join(kept, "cases.stream")}`);
+}
+let actual;
+try {
+  actual = parseBatchAnswers(run.stdout?.toString() ?? "", expected.length);
+} catch (error) {
+  retainBatchFailure(error);
+  console.error(error.message);
   process.exit(1);
 }
-const actual = run.stdout.toString().trimEnd().split("\n").map((line) => JSON.parse(line));
-if (actual.length !== expected.length) {
-  console.error(`batch binary answered ${actual.length} of ${expected.length} cases`);
+if (run.status !== 0) {
+  retainBatchFailure(Object.assign(new Error(`batch binary exited with ${run.status}`), { caseIndex: expected.length - 1 }));
+  console.error(`batch binary exited with ${run.status}`);
   process.exit(1);
 }
 const failures = [];
 const failOpen = [];
 const codes = new Set();
 const perOperation = {};
+const byOperationOutcome = {};
+const replayResults = {};
 let rewritten = 0;
 let equivalent = 0;
 let refusing = 0;
@@ -842,6 +917,14 @@ for (let index = 0; index < expected.length; index += 1) {
   const got = actual[index];
   const rewrite = rewrites[index];
   perOperation[operations[index]] = (perOperation[operations[index]] ?? 0) + 1;
+  const outcome = want.code === null ? "success" : want.code.startsWith("THROW:") ? "unspecified" : "refusal";
+  const counts = byOperationOutcome[operations[index]] ??= { success: 0, refusal: 0, unspecified: 0 };
+  counts[outcome]++;
+  if (outcome === "success" && ["request_adoption", "decision_consumption", "lifecycle"].includes(operations[index])) {
+    const replay = replayResults[operations[index]] ??= { compared: 0, nonNullState: 0 };
+    replay.compared++;
+    if (want.result !== "null") replay.nonNullState++;
+  }
   if (rewrite?.variant && rewrite.code !== undefined) rewritten += 1;
   if (want.code && !want.code.startsWith("THROW:")) codes.add(want.code);
   if (rewrite?.equals !== null && rewrite?.equals !== undefined) {
@@ -876,10 +959,40 @@ if (failures.length > 0 || failOpen.length > 0) {
   const cases = openSync(casesPath, "r");
   const casesOut = [];
   const report = [];
+  let reduced = 0;
   for (const index of [...keep].sort((left, right) => left - right)) {
     const body = Buffer.alloc(bodyLengths[index]);
     readSync(cases, body, 0, bodyLengths[index], bodyOffsets[index]);
     casesOut.push(frame(operations[index], body, caseKeys[index]));
+    let minimal = null;
+    const sampled = multifaultCases.get(index);
+    if (sampled && reduced < 8) {
+      reduced++;
+      try {
+        const prepare = (candidate) => sampled.resigned ? resignBody(candidate) : candidate;
+        const stillFails = (candidate) => {
+          const text = JSON.stringify(prepare(candidate));
+          const want = referenceText(operations[index], text, caseKeys[index]);
+          const run = spawnSync(batch, [], { input: frame(operations[index], Buffer.from(text), caseKeys[index]), encoding: "utf8", maxBuffer: 1 << 20 });
+          if (run.status !== 0) throw new Error(`counterexample batch exited ${run.status}`);
+          const got = parseBatchAnswers(run.stdout, 1)[0];
+          const checked = compareAnswer(want, got, null, null, null, REFERENCE_CODES);
+          return checked.failOpen || checked.failures.length > 0;
+        };
+        // Only JSON.stringify-generated multifaults enter this reducer. Using
+        // JSON.parse here retains their intentionally unsafe numeric values;
+        // each candidate still crosses both real strict parsers below.
+        const result = minimizeFaults(sampled.base, JSON.parse(body.toString("utf8")), sampled.paths, stillFails);
+        if (result) {
+          const minimalPath = join(kept, `minimal-${index}.stream`);
+          writeFileSync(minimalPath, frame(operations[index], Buffer.from(JSON.stringify(prepare(result.body))), caseKeys[index]));
+          minimal = { paths: result.paths, file: minimalPath, scope: "minimum failing subset of sampled fields; full signed artifact retained" };
+        }
+      } catch (error) {
+        // A diagnostic failure never converts the original mismatch to success.
+        minimal = { error: error.message };
+      }
+    }
     report.push({
       case: index,
       label: labels[index],
@@ -888,11 +1001,12 @@ if (failures.length > 0 || failOpen.length > 0) {
       reasons: failures.filter((failure) => failure.index === index).map(({ reason }) => reason),
       reference: expected[index],
       rust: actual[index],
+      minimal,
     });
   }
   closeSync(cases);
   writeFileSync(join(kept, "cases.stream"), Buffer.concat(casesOut));
-  writeFileSync(join(kept, "report.json"), `${JSON.stringify({ build, batch, failures: report }, null, 2)}\n`);
+  writeFileSync(join(kept, "report.json"), `${JSON.stringify({ build, batch, node: process.version, v8: process.versions.v8, openssl: process.versions.openssl, platform: `${process.platform}/${process.arch}`, seed: MULTI_SEED, budgetPerVector: MULTI_BUDGET, inputSha256: inputHash.copy().digest("hex"), binarySha256: createHash("sha256").update(readFileSync(batch)).digest("hex"), failures: report }, null, 2)}\n`);
   console.log(`Failing cases kept in ${kept}: cases.stream (one frame per case, in report order) and report.json`);
   console.log(`Reproduce: ${batch} < ${join(kept, "cases.stream")}`);
 }
@@ -913,7 +1027,23 @@ console.log(
     .join(", ")}`,
 );
 console.log(`Codes exercised (${codes.size}): ${[...codes].sort().join(" ")}`);
+console.log(`Code accounting: ${JSON.stringify([...REFERENCE_CODES].filter((code) => !codes.has(code)).sort().map((code) => ({ code, disposition: CODE_DISPOSITIONS[code] ?? "not observed in this bounded corpus; no reachability claim" })))}`);
 console.log(`Build: serde_json arbitrary_precision ${build.serde_json_arbitrary_precision ? "on" : "off"} (${batch})`);
+const evidence = {
+  node: process.version, v8: process.versions.v8, openssl: process.versions.openssl,
+  platform: `${process.platform}/${process.arch}`, build,
+  seed: MULTI_SEED, budgetPerVector: MULTI_BUDGET, multifaults: multifaultCounts,
+  cases: expected.length, vectors: vectors.length, mismatched, failOpen: failOpen.length,
+  textRewrites: { total: rewritten, equivalent, refusing },
+  inputSha256: inputHash.digest("hex"),
+  binarySha256: createHash("sha256").update(readFileSync(batch)).digest("hex"),
+  referenceSha256: createHash("sha256").update(referenceSource).digest("hex"),
+  byOperation: perOperation, byOperationOutcome, replayResults,
+  success: expected.filter((answer) => answer.code === null).length,
+  refusal: expected.filter((answer) => answer.code && !answer.code.startsWith("THROW:")).length,
+  unspecified: undefinedReference,
+};
+console.log(`Evidence: ${JSON.stringify(evidence)}`);
 console.log(
   `Timing: cases built and answered by the reference in ${((built - started) / 1000).toFixed(0)}s, ` +
     `answered by the port in ${((answered - built) / 1000).toFixed(0)}s`,

@@ -256,7 +256,7 @@ fn describe() -> Value {
     let arbitrary_precision = serde_json::from_str::<Value>("1.00")
         .map(|number| number.to_string())
         .is_ok_and(|text| text == "1.00");
-    json!({ "serde_json_arbitrary_precision": arbitrary_precision })
+    json!({ "serde_json_arbitrary_precision": arbitrary_precision, "debug_assertions": cfg!(debug_assertions) })
 }
 
 /// The artifact body, from its serialized text, through the production

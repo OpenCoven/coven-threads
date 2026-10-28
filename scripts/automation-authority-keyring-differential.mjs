@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Standalone diagnostic while #97 owns the main differential. Intentionally
-// reports discrepancies; it never normalizes away ordering or PEM differences.
+// Production companion differential over ordered keyring pairs. Artifact
+// bodies cross the strict parser; transport never sorts or collapses ids.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,14 +9,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as V from "../profiles/automation-authority/v1/validator.mjs";
 import { keyringCases } from "./lib/authority-keyring-corpus.mjs";
+import { parseBatchAnswers } from "./lib/authority-batch-output.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const profile = join(root, "profiles/automation-authority/v1");
 const read = (name) => V.strictParseJson(readFileSync(join(profile, name), "utf8"));
 const binary = process.argv[2];
-const framed = process.argv.includes("--framed");
-const ordered = process.argv.includes("--ordered");
-if (!binary) throw new Error("usage: automation-authority-keyring-differential.mjs <batch> [--ordered|--framed]");
+if (!binary || process.argv.slice(3).some((argument) => argument !== "--ordered")) {
+  throw new Error("usage: automation-authority-keyring-differential.mjs <ordered-keyring-batch> [--ordered]");
+}
 const keys = read("keyring.json").keys;
 const cases = [];
 const expected = [];
@@ -86,39 +87,51 @@ for (const vector of sources) {
 }
 // A JavaScript Map cannot contain duplicates. Compare the strict JSON
 // keyring boundary to Rust's pair constructor without collapsing either.
-if (ordered) {
-  for (const role of ["principal", "threads_authority", "unknown"]) {
-    const records = [["duplicate", { role: "threads_authority" }], ["duplicate", { role }]];
-    const rawKeys = `{${records.map(([id, record]) => `${JSON.stringify(id)}:${JSON.stringify(record)}`).join(",")}}`;
-    cases.push({ operation: "validate_keyring", body: {}, keys: {}, key_records: records, label: `duplicate-constructor:${role}`, raw_keyring: rawKeys });
-    try {
-      V.validateKeyring(V.strictParseJson(rawKeys));
-      expected.push({ code: null, result: "ok" });
-    } catch (error) {
-      expected.push({ code: error instanceof V.AuthorityError ? error.code : `THROW:${error.name}`, result: null });
-    }
+for (const role of ["principal", "threads_authority", "unknown"]) {
+  const records = [["duplicate", { role: "threads_authority" }], ["duplicate", { role }]];
+  const rawKeys = `{${records.map(([id, record]) => `${JSON.stringify(id)}:${JSON.stringify(record)}`).join(",")}}`;
+  cases.push({ operation: "validate_keyring", body: {}, keys: {}, key_records: records, label: `duplicate-constructor:${role}`, raw_keyring: rawKeys });
+  try {
+    V.validateKeyring(V.strictParseJson(rawKeys));
+    expected.push({ code: null, result: "ok" });
+  } catch (error) {
+    expected.push({ code: error instanceof V.AuthorityError ? error.code : `THROW:${error.name}`, result: null });
   }
 }
 const serialize = (item) => {
   const body = JSON.stringify(item.body);
-  if (ordered) return `${JSON.stringify({ operation: item.operation, body_text: body, key_records: item.key_records ?? Object.entries(item.keys) })}\n`;
-  return framed
-    ? `${JSON.stringify({ operation: item.operation, keys: item.keys, bytes: Buffer.byteLength(body) })}\n${body}\n`
-    : `${JSON.stringify(item)}\n`;
+  return `${JSON.stringify({ operation: item.operation, body_text: body, key_records: item.key_records ?? Object.entries(item.keys) })}\n`;
 };
 const input = cases.map(serialize).join("");
-let build = null;
-if (ordered) {
-  const probe = spawnSync(binary, ["--describe"], { encoding: "utf8" });
-  if (probe.status !== 0) throw new Error(`build probe failed: ${probe.stderr}`);
-  build = JSON.parse(probe.stdout);
-}
+const probe = spawnSync(binary, ["--describe"], { encoding: "utf8" });
+if (probe.status !== 0) throw new Error(`build probe failed: ${probe.stderr}`);
+const build = JSON.parse(probe.stdout);
 const run = spawnSync(binary, [], { input, encoding: "utf8", maxBuffer: 64 << 20 });
-if (run.status !== 0) throw new Error(`batch failed (${run.status}): ${run.stderr}`);
-const actual = run.stdout.trimEnd().split("\n").map((line) => JSON.parse(line));
-if (actual.length !== cases.length) throw new Error(`answered ${actual.length}/${cases.length}`);
+let actual;
+try {
+  actual = parseBatchAnswers(run.stdout ?? "", cases.length);
+  if (run.status !== 0) throw Object.assign(new Error(`batch failed (${run.status}): ${run.stderr}`), { caseIndex: cases.length - 1 });
+} catch (error) {
+  const directory = mkdtempSync(join(tmpdir(), "authority-keyring-failures-"));
+  const index = error.caseIndex ?? 0;
+  writeFileSync(join(directory, "cases.txt"), serialize(cases[index]));
+  writeFileSync(join(directory, "reference-cases.json"), JSON.stringify([cases[index]], null, 2));
+  writeFileSync(join(directory, "report.json"), JSON.stringify({
+    kind: "batch transport/execution failure", error: error.message, status: run.status, signal: run.signal,
+    index, label: cases[index].label, node: process.version, v8: process.versions.v8,
+    openssl: process.versions.openssl, platform: `${process.platform}/${process.arch}`, build,
+    inputSha256: createHash("sha256").update(input).digest("hex"),
+    binarySha256: createHash("sha256").update(readFileSync(binary)).digest("hex"),
+  }, null, 2));
+  console.error(`Batch failure retained in ${directory}; reproduce: ${binary} < ${join(directory, "cases.txt")}`);
+  process.exit(1);
+}
 const source = readFileSync(join(profile, "validator.mjs"), "utf8");
-const codes = new Set([...source.matchAll(/\bfail\(\s*"([a-z0-9_]+)"/g)].map((match) => match[1]));
+const codes = new Set([
+  /\bfail\(\s*"([a-z0-9_]+)"/g,
+  /\bexact\(\s*[^,]+,\s*[^,]+,\s*"([a-z0-9_]+)"/g,
+  /\bassertBinding\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*"([a-z0-9_]+)"/g,
+].flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1])));
 const mismatches = [];
 const byOperation = {};
 const byCode = {};

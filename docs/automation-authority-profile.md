@@ -57,3 +57,5 @@ Run the dependency-free reference checks:
 node --test profiles/automation-authority/v1/tests/*.test.mjs
 node profiles/automation-authority/v1/run-vectors.mjs
 ```
+
+The [differential evidence guide](testing/automation-authority-differential.md) describes pinned tools, seeded multifaults, ordered keyring comparisons, exact replay/output checks, retained failures, error-code reachability, and the required debug/release feature matrix.
