@@ -11,6 +11,7 @@ use super::canonical::canonical_digest;
 use super::{fail, shape, AuthorityResult, Domain, ErrorCode};
 
 /// The DER prefix of an Ed25519 SubjectPublicKeyInfo.
+#[cfg(test)]
 const ED25519_SPKI_PREFIX: [u8; 12] = [
     0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
 ];
@@ -310,23 +311,131 @@ fn public_key_text(record: &Value) -> AuthorityResult<&str> {
 
 /// The raw Ed25519 key in a `PUBLIC KEY` PEM, or `None` for anything else.
 fn ed25519_from_pem(pem: &str) -> Option<[u8; 32]> {
-    let body = pem
-        .trim()
-        .strip_prefix("-----BEGIN PUBLIC KEY-----")?
-        .strip_suffix("-----END PUBLIC KEY-----")?;
-    let base64: String = body
-        .chars()
-        .filter(|ch| !ch.is_ascii_whitespace())
-        .collect();
+    // PEM markers occupy their own lines. Search preamble lines, preserve the
+    // first matching public block, and never merge adjacent containers.
+    let mut lines = pem.strip_prefix('\u{feff}').unwrap_or(pem).split('\n');
+    fn clean(line: &str) -> &str {
+        line.trim_end_matches(|ch: char| ch.is_ascii() && ch <= ' ')
+    }
+    lines.find(|line| clean(line) == "-----BEGIN PUBLIC KEY-----")?;
+    let mut base64 = String::new();
+    let mut separator = false;
+    let mut short_line = false;
+    let mut closed = false;
+    for line in lines {
+        let line = clean(line);
+        if line == "-----END PUBLIC KEY-----" {
+            closed = true;
+            break;
+        }
+        if line.is_empty() {
+            if separator || !base64.is_empty() {
+                return None;
+            }
+            separator = true;
+            continue;
+        }
+        if line
+            .bytes()
+            .any(|byte| !byte.is_ascii_alphanumeric() && !b"+/= \t\r".contains(&byte))
+        {
+            return None;
+        }
+        if separator {
+            if short_line || line.len() > 64 {
+                return None;
+            }
+            short_line = line.len() < 64;
+        }
+        base64.extend(line.chars().filter(|ch| !matches!(ch, ' ' | '\t' | '\r')));
+    }
+    if !closed || base64.is_empty() {
+        return None;
+    }
     let der = decode_base64(&base64)?;
-    // OpenSSL (the reference's Node backend) reads the first DER object and
-    // ignores trailing bytes. The fixed prefix commits its length, algorithm,
-    // absent parameters, bit-string length and unused-bit count. Only those
-    // exact 32 key bytes supply authority; a signature must still verify.
-    der.strip_prefix(&ED25519_SPKI_PREFIX)?
-        .get(..32)?
-        .try_into()
-        .ok()
+    // OpenSSL accepts BER lengths and constructed BIT STRINGs in public SPKI.
+    // Decode only this public Ed25519 structure; private containers never enter.
+    let mut input = der.as_slice();
+    let (0x30, mut spki) = public_ber_element(&mut input, 0)? else {
+        return None;
+    };
+    let (0x30, mut algorithm) = public_ber_element(&mut spki, 0)? else {
+        return None;
+    };
+    let (0x06, oid) = public_ber_element(&mut algorithm, 0)? else {
+        return None;
+    };
+    if oid != [0x2b, 0x65, 0x70] || !algorithm.is_empty() {
+        return None;
+    }
+    let mut key = Vec::new();
+    public_ber_bits(&mut spki, &mut key, 0)?;
+    if !spki.is_empty() {
+        return None;
+    }
+    key.try_into().ok()
+}
+
+/// Read one bounded BER element, retaining exact container boundaries.
+fn public_ber_element<'a>(input: &mut &'a [u8], depth: usize) -> Option<(u8, &'a [u8])> {
+    if depth > 30 {
+        return None;
+    }
+    let (&tag, rest) = input.split_first()?;
+    let (&length, rest) = rest.split_first()?;
+    if length == 0x80 {
+        if tag & 0x20 == 0 {
+            return None;
+        }
+        let mut cursor = rest;
+        while !cursor.starts_with(&[0, 0]) {
+            public_ber_element(&mut cursor, depth + 1)?;
+        }
+        let content = &rest[..rest.len().checked_sub(cursor.len())?];
+        *input = &cursor[2..];
+        return Some((tag, content));
+    }
+    let (length, rest) = if length & 0x80 == 0 {
+        (usize::from(length), rest)
+    } else {
+        let count = usize::from(length & 0x7f);
+        if count > std::mem::size_of::<usize>() {
+            return None;
+        }
+        let bytes = rest.get(..count)?;
+        let length = bytes.iter().try_fold(0_usize, |length, byte| {
+            length.checked_mul(256)?.checked_add(usize::from(*byte))
+        })?;
+        (length, &rest[count..])
+    };
+    let content = rest.get(..length)?;
+    *input = &rest[length..];
+    Some((tag, content))
+}
+
+fn public_ber_bits(input: &mut &[u8], output: &mut Vec<u8>, depth: usize) -> Option<()> {
+    if depth > 6 {
+        return None;
+    }
+    let (tag, mut content) = public_ber_element(input, depth)?;
+    match tag {
+        0x03 => {
+            let (&unused, bytes) = content.split_first()?;
+            if unused > 7 || bytes.is_empty() || output.len().checked_add(bytes.len())? > 32 {
+                return None;
+            }
+            output.extend_from_slice(bytes);
+            *output.last_mut()? &= 0xff_u8 << unused;
+        }
+        0x23 => {
+            public_ber_bits(&mut content, output, depth + 1)?;
+            if !content.is_empty() {
+                return None;
+            }
+        }
+        _ => return None,
+    }
+    Some(())
 }
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -560,6 +669,111 @@ mod tests {
             verify(json!({"role": "threads_authority", "public_key_pem": ""})),
             Err(ErrorCode::IntegrityKeyUnknown)
         );
+    }
+
+    #[test]
+    fn public_pem_boundaries_require_marker_lines_and_preserve_first_key() {
+        let signer = TestSigner::new("key:test");
+        let other = TestSigner::new("key:other");
+        let signed =
+            sign_artifact(&json!({"kind": "pem-boundary"}), Domain::Decision, &signer).unwrap();
+        let pem = signer.pem();
+        let verify = |pem: String| {
+            let keys = Keyring::new(vec![(
+                "key:test".into(),
+                json!({"role": "threads_authority", "public_key_pem": pem}),
+            )]);
+            verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &keys,
+                Some("threads_authority"),
+                &Ring,
+            )
+            .map(|_| ())
+            .map_err(|error| error.code)
+        };
+        for accepted in [
+            format!("preamble\n{pem}postamble\n"),
+            format!("{pem}{}", other.pem()),
+            format!("\u{feff}{pem}"),
+            pem.replace("-----\n", "----- \n"),
+        ] {
+            assert_eq!(verify(accepted), Ok(()));
+        }
+        assert_eq!(
+            verify(format!("{}{pem}", other.pem())),
+            Err(ErrorCode::IntegritySignatureInvalid)
+        );
+        for refused in [
+            pem.replace("KEY-----\n", "KEY-----"),
+            pem.replace("\n-----END", "-----END"),
+            format!(" {pem}"),
+            format!("\t{pem}"),
+            pem.replace('\n', "\r"),
+            pem.replace("MCow", "M\u{c}Cow"),
+        ] {
+            assert_eq!(verify(refused), Err(ErrorCode::IntegritySignatureInvalid));
+        }
+    }
+
+    #[test]
+    fn public_spki_accepts_long_form_lengths() {
+        let signer = TestSigner::new("key:test");
+        let pem = signer.pem();
+        let base64 = pem.lines().nth(1).unwrap();
+        let der = decode_base64(base64).unwrap();
+        let mut encoded = vec![0x30, 0x81, der[1]];
+        encoded.extend_from_slice(&der[2..]);
+        let long_pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            encode_base64(&encoded)
+        );
+        assert_eq!(ed25519_from_pem(&long_pem), ed25519_from_pem(&pem));
+    }
+
+    #[test]
+    fn private_pem_is_outside_the_public_key_contract() {
+        // Synthetic seed and private encoding exist only in this test's memory.
+        let mut der = vec![
+            0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22,
+            0x04, 0x20,
+        ];
+        der.extend_from_slice(&[88; 32]);
+        let signer = TestSigner {
+            id: "key:boundary",
+            pair: ring::signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(&der).unwrap(),
+        };
+        let signed = sign_artifact(
+            &json!({"kind": "synthetic-public-key-boundary"}),
+            Domain::Decision,
+            &signer,
+        )
+        .unwrap();
+        let label = ["PRIVATE", "KEY"].join(" ");
+        let private = format!(
+            "-----BEGIN {label}-----\n{}\n-----END {label}-----\n",
+            encode_base64(&der)
+        );
+        for (pem, expected) in [
+            (signer.pem(), Ok(())),
+            (private, Err(ErrorCode::IntegritySignatureInvalid)),
+        ] {
+            let keys = Keyring::new(vec![(
+                "key:boundary".into(),
+                json!({"role": "threads_authority", "public_key_pem": pem}),
+            )]);
+            let result = verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &keys,
+                Some("threads_authority"),
+                &Ring,
+            )
+            .map(|_| ())
+            .map_err(|error| error.code);
+            assert_eq!(result, expected);
+        }
     }
 
     #[test]
