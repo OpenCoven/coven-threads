@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createPrivateKey, createPublicKey, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
@@ -452,5 +452,17 @@ test("evidence sensitivity must be one of the names (erratum 2)", () => {
   assert.equal(authorize("internal").ok, true);
   for (const sensitivity of [["internal"], [["internal"]], ["internal", null], 1, true, {}, null]) {
     assert.throws(() => authorize(sensitivity), throwsCode("evidence_sensitivity_unknown"), JSON.stringify(sensitivity));
+  }
+});
+
+
+test("Node private-PEM acceptance is an explicit extension of the Rust public-key contract", () => {
+  const der = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), Buffer.alloc(32, 88)]);
+  const privateKey = createPrivateKey({ key: der, format: "der", type: "pkcs8" });
+  const value = profile.signArtifact({ kind: "synthetic-public-key-boundary" }, "opencoven:automation-decision:v1", { key_id: "key:boundary", private_key: privateKey });
+  for (const pem of [createPublicKey(privateKey).export({ type: "spki", format: "pem" }), privateKey.export({ type: "pkcs8", format: "pem" })]) {
+    const record = { role: "threads_authority", public_key_pem: pem };
+    const verified = profile.verifySignedArtifact(value, "opencoven:automation-decision:v1", new Map([["key:boundary", record]]), "threads_authority");
+    assert.equal(verified.role, "threads_authority");
   }
 });
