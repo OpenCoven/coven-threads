@@ -1,6 +1,6 @@
 # Automation-authority keyring differential candidate
 
-Status: proposed engineering disposition for [#93](https://github.com/OpenCoven/coven-threads/issues/93), covering original [#88](https://github.com/OpenCoven/coven-threads/issues/88) item 2. Maintainer approval and merged delivery remain required. This packet does not close either Phase-5 human gate.
+Status: maintainer-approved behavioral disposition; expanded PEM verification and merged delivery pending. Original candidate engineering disposition for [#93](https://github.com/OpenCoven/coven-threads/issues/93), covering original [#88](https://github.com/OpenCoven/coven-threads/issues/88) item 2. Maintainer approval and merged delivery remain required. This packet does not close either Phase-5 human gate.
 
 ## Objective and boundaries
 
@@ -22,7 +22,13 @@ The corpus deliberately preserves reversed insertion order, integer-like ids, an
 
 ## PEM behavior
 
-The fixed Ed25519 SPKI prefix commits the first DER object's length, Ed25519 OID, absent parameters, bit-string length, and unused-bit count. Node/OpenSSL accepts a complete such SPKI followed by trailing bytes. The Rust port now extracts exactly those first 32 key bytes; every signature still must verify under that key. It still refuses truncated key bytes, changed algorithms, malformed PEM, key substitution, and tampered digests/signatures. This fixes a demonstrated difference from the canonical reference without replacing reference behavior with a stricter invented encoding contract.
+The public Ed25519 SPKI decoder checks the exact Ed25519 OID, absent algorithm parameters, a single public BIT STRING, and exactly 32 resulting key bytes. It preserves Node/OpenSSL's accepted BER long-form and indefinite lengths, bounded nested single-child BIT STRING wrappers, unused-bit masking, and ignored bytes after the complete outer SPKI. It refuses extra internal elements, algorithm substitution, truncated keys, excessive length octets, split BIT STRING children, and malformed framing. Every signed artifact still verifies through the caller's real crypto backend under the decoded key. This replaces the earlier fixed-prefix decoder, which omitted valid Node-accepted public SPKI encodings.
+
+The expanded PEM boundary work preserves plain-text preambles/postambles, the first public-key block, an initial UTF-8 BOM, and valid marker-line whitespace. It refuses inline markers, leading marker indentation, CR-only framing, repeated/interior blank separators, and invalid body characters instead of accepting them through a whitespace-stripping decoder. The implementation was checked against the public OpenSSL 3.5.8 PEM reader and Node v24.22.0 crypto adapter source and real public-only BER/signature probes; this is public SPKI compatibility, not general-purpose OpenSSL container decoding.
+
+Val approved the public-key-only verification contract and explicit Node private-key divergence on 2026-10-28. Paired Rust/Node tests construct the same synthetic seed and private encoding only in memory, sign through real crypto, verify the public control, and assert the intentional private-container difference. Neither private PEM nor private reference input is retained in differential artifacts. The profile clarification records the caller migration: export public SPKI before constructing the Rust verification keyring.
+
+Expanded red evidence: 31,803 cases, 1,608 mismatches; the direct Rust public-PEM boundary regression failed before the parser correction. After correction, ordinary-mode comparison produced zero mismatches, 60 valid controls, 600 unknown-role refusals, and 2,412 non-profile exceptions refused. Input SHA-256: `a3b7e574f728aa3e59d1cc6a31a5143bac8c66e70f4130d1c94850abc659b154`. Review subsequently found accepted BER encodings missing from the initial corpus; the direct long-form-length test failed before the bounded public-SPKI correction. Full pinned-toolchain and second-feature evidence must be refreshed before merge; earlier 16,803-case hosted receipts remain historical.
 
 ## Corpus and evidence
 
