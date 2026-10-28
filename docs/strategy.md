@@ -1,5 +1,7 @@
 # Delivery strategy
 
+**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+
 Finish the real-daemon authority boundary before declaring Phase 5 complete
 or expanding its authority claims.
 
@@ -32,7 +34,7 @@ do not mistake diagnostic acceptance for a runtime repair or a new pin.
 | Surface | Present in the repository | Not established by that fact |
 | --- | --- | --- |
 | Rust core | Typed validation, approvals, identity predicates, audit schema/migrations, `.weave` portability, and conformance suites | Authentication, filesystem effects, or every daemon route |
-| Automation Authority Profile v1 | Schemas, reference validator, signed evidence contracts, and exact vectors | Production scheduler, credential issuance, runtime-adapter adoption, or Rust API integration |
+| Automation Authority Profile v1 | Schemas, reference validator, Rust port (#82/#84/#89), exact vectors, downstream pin (#1472) and signed decision producer (#1602) | Production Runtime Authority certification or credential issuance; the landed decision producer has no production caller |
 | Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret/privacy guards, and four-target daemon compatibility | Immutable checker authority, installed-binary conformance, or a coverage ratchet |
 | Governance | Adopted solo-maintainer policy, required PRs, resolved conversations, and six strict required checks | GitHub-enforced independent review or either Phase-5 human decision |
 | Downstream integration | Accepted current-route identity, protected proposal, and seven-case corpus engineering at `226bfcc8` | Deployed historical-audit closure, live Cave acceptance, long-run reliability, or human approval |
@@ -74,15 +76,9 @@ This completes the bounded rollout, not the daemon acceptance work below.
 A required scanner job is not tamper-proof enforcement against
 changes to the checker or calling workflow.
 
-### 2. Complete remaining root acceptance in Coven
+### 2. Preserve accepted root scope and refresh evidence
 
-**Current disposition:** OpenCoven/coven#885, OpenCoven/coven#887, and
-OpenCoven/coven#888 are closed after normal component landing, native
-acceptance, and the fresh required current-Threads lane. OpenCoven/coven#886
-remains open: its census is read-only classification, not resolution of missing
-proposal evidence or unprovable interrupted apply. Start with the
-[operator handoff](reviews/2026-09-13-engineering-acceptance.md#remaining-operator-and-human-work),
-not a duplicate implementation of the accepted matrices.
+**Current disposition:** All four roots are closed within their accepted scope. Val closed #886 on the September 15 workstation census with zero opened windows; that is not global deployed-history closure. #1305 repaired the later power-loss defect and Cave #5256 completed its qualified window. Use the [October 28 ledger](reviews/2026-10-28-current-coherence.md) for current work. The dated sequence below preserves historical engineering plans; stale open-work descriptions do not authorize duplicate implementation.
 
 **Owners:** daemon integration lane and Cody for implementation; Echo for
 predicate/audit/replay review; Sage for evidence mapping.
@@ -252,10 +248,7 @@ changes.
 
 ## Keep adjacent work separate
 
-The promotion-seam contract merged in #25 is language-only. `threads-xpo` owns deliberate
-channel reachability, `threads-55s` owns admission-channel audit follow-through,
-and `threads-lm4` owns runtime conformance. `threads-5mn` retains the unresolved
-upstream mirror reference; do not invent an ID or a promotion command.
+The promotion-seam contract merged in #25 is language-only. Decision 2 of the [September 17 maintainer record](reviews/2026-09-17-maintainer-decisions.md) closed `threads-xpo` and `threads-lm4`; they are not owners of open implementation work. The admission-channel fix landed through #72 and Coven #1260. Future runtime adoption belongs to Coven and requires its own scoped evidence. Local bead mirror state is unknown here because Beads is unavailable; do not infer an upstream issue ID or a promotion command.
 
 Automation-profile consumers need their own owner-specific adoption evidence.
 The trusted runtime adapter remains Coven-owned. Neither this work nor

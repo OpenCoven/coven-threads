@@ -1,5 +1,7 @@
 # coven-threads documentation
 
+**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+
 `coven-threads` is OpenCoven's **protected-authority validator**, imported by the
 trusted `coven` daemon. The daemon owns authentication and effects; Threads
 defines whether protected-surface state permits a write. Its contracts target
@@ -8,7 +10,7 @@ findings.
 
 If you are new here, read [concepts.md](concepts.md) first. Everything else assumes its vocabulary.
 
-## Current status (2026-09-13 UTC)
+## Historical status checkpoint (2026-09-13 UTC)
 
 - **Phase 0 (design) — `[FROZEN]`.** The design doc `specs/PHASE-0-DESIGN.md` is frozen at v0.2 (2026-07-14, tag `v0.2-phase0-design`), with Nova sign-off and an RFC-0001 §5 round-trip verified.
 - **Phases 1–2: `[FROZEN; IN RELEASE TAG]`; Phase 3: `[ENGINEERING FROZEN]`.** Coven `v0.4.3` includes the daemon integration and pins Threads to `c102844`. This is release-source provenance, not verification of deployed configuration or current-checkout compatibility. Phase 3 retains the decided `.weave` envelope and lossy one-way `.af` export semantics.
