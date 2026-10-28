@@ -17,7 +17,11 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   - canonical digests;
   - keyring validation;
   - Ed25519 artifact verification through a caller-supplied
-    `SignatureVerifier`, and signing through `ArtifactSigner`;
+    `SignatureVerifier`, and signing through `ArtifactSigner`. `sign_artifact`
+    refuses an empty signer key id with `integrity_signer_required`, as the
+    reference's `signArtifact` does, instead of filing a real signature under
+    `""`; the variant joins the `#[non_exhaustive]` `ErrorCode`, so existing
+    `match` arms keep compiling (`coven-threads#99`);
   - request validation and adoption;
   - `evaluate_authorization`;
   - decision validation, bundle verification and consumption;
