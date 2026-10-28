@@ -1,18 +1,29 @@
 //! Answers automation-authority cases in one process, for
 //! `scripts/automation-authority-differential.mjs`.
 //!
-//! Reads JSON Lines from stdin, one case per line: `{"operation", "body",
-//! "keys"}`, where `keys` is a keyring's records by key id. Writes one line
-//! per case: `{"code": <first error code or null>, "result": <string or
-//! null>}`. `evaluate_request` returns the canonical decision text,
+//! Reads frames from stdin, one case each: an envelope line, `{"operation",
+//! "body_bytes", "keys"?}`, then exactly `body_bytes` bytes of the vector body
+//! as serialized text, then a newline. The envelope is transport, parsed with
+//! `serde_json`. The body is the artifact under test: it crosses the
+//! production [`strict_parse_json`], and nothing else, before any operation
+//! runs, so the parser is compared on the same bytes the reference reads, and
+//! a body it refuses answers with that `json_*` code. `keys`, a keyring's
+//! records by key id, is given when the keyring changes and holds for the
+//! frames that follow. Writes one line per case: `{"code": <first error code
+//! or null>, "result": <string or null>}`. `strict_parse` returns the
+//! canonical text of the parsed
+//! `raw_json`, `evaluate_request` the canonical decision text,
 //! `verify_decision` the outcome, `request_adoption` and
 //! `decision_consumption` the canonical final replay state (`"null"` when no
 //! repetition ran), `lifecycle` the canonical lifecycle state (`"null"` before
 //! any event), `verify_dispatch` the canonical dispatch result, and every
 //! other operation `"ok"`. Each operation is invoked as
 //! `profiles/automation-authority/v1/run-vectors.mjs` invokes it.
+//!
+//! `--describe` prints the build's `serde_json` configuration instead, so a
+//! run records which one it compared.
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 
 use coven_threads_core::automation_authority::{
     adopt_authorization_request, apply_lifecycle_event, authorize_evidence_read, canonicalize,
@@ -39,12 +50,34 @@ impl SignatureVerifier for Ring {
     }
 }
 
+/// How many times `for (let index = 0; index < (body.repetitions ?? 1);
+/// index += 1)` runs: once when the count is missing or null, never when it
+/// is negative or not a number, and up to the next integer for a fraction.
+fn repetitions(body: &Value) -> u64 {
+    let count = match body.get("repetitions") {
+        None | Some(Value::Null) => return 1,
+        Some(Value::Number(number)) => number.as_f64().unwrap_or(f64::NAN),
+        Some(Value::Bool(flag)) => f64::from(u8::from(*flag)),
+        // `Number(text)`: blank is zero, and anything that is not a number is
+        // NaN, which no index is less than.
+        Some(Value::String(text)) if text.trim().is_empty() => 0.0,
+        Some(Value::String(text)) => text.trim().parse().unwrap_or(f64::NAN),
+        Some(_) => f64::NAN,
+    };
+    if count.is_nan() || count <= 0.0 {
+        0
+    } else {
+        // Saturates at u64::MAX for an infinite count, as the reference's loop
+        // would run until an operation refuses.
+        count.ceil() as u64
+    }
+}
+
 fn run(operation: &str, body: &Value, keyring: &Keyring) -> AuthorityResult<String> {
-    let repetitions = body["repetitions"].as_u64().unwrap_or(1);
+    let repetitions = repetitions(body);
     match operation {
-        "strict_parse" => {
-            strict_parse_json(body["raw_json"].as_str().unwrap_or_default()).map(|_| "ok".into())
-        }
+        "strict_parse" => strict_parse_json(body["raw_json"].as_str().unwrap_or_default())
+            .and_then(|parsed| canonicalize(&parsed)),
         "validate_request" => {
             validate_authorization_request(&body["request"], keyring, &Ring).map(|()| "ok".into())
         }
@@ -217,22 +250,64 @@ fn lifecycle(body: &Value, keyring: &Keyring) -> AuthorityResult<String> {
     }))
 }
 
+/// The build's `serde_json` configuration, probed rather than declared: with
+/// `arbitrary_precision` a number keeps its literal text.
+fn describe() -> Value {
+    let arbitrary_precision = serde_json::from_str::<Value>("1.00")
+        .map(|number| number.to_string())
+        .is_ok_and(|text| text == "1.00");
+    json!({ "serde_json_arbitrary_precision": arbitrary_precision })
+}
+
+/// The artifact body, from its serialized text, through the production
+/// parser: never `serde_json`, which would collapse a duplicate key to its
+/// last value and give every refusal one code.
+fn parse_body(text: &str) -> AuthorityResult<Value> {
+    strict_parse_json(text)
+}
+
 fn main() -> io::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("--describe") {
+        println!("{}", describe());
+        return Ok(());
+    }
+    let malformed = |message: &str| io::Error::new(io::ErrorKind::InvalidData, message.to_owned());
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    for line in io::stdin().lock().lines() {
-        let case: Value = serde_json::from_str(&line?)?;
-        let keys = case["keys"].as_object().cloned().unwrap_or_default();
-        let keyring = Keyring::from_object(&keys);
-        let answer = match run(
-            case["operation"].as_str().unwrap_or_default(),
-            &case["body"],
-            &keyring,
-        ) {
+    let mut keyring: Option<Keyring> = None;
+    let mut envelope = String::new();
+    loop {
+        // The envelope line is transport; the body bytes after it are the
+        // artifact, and cross the production parser as text.
+        envelope.clear();
+        if input.read_line(&mut envelope)? == 0 {
+            return Ok(());
+        }
+        let frame: Value = serde_json::from_str(&envelope)?;
+        if let Some(keys) = frame.get("keys").and_then(Value::as_object) {
+            keyring = Some(Keyring::from_object(keys));
+        }
+        let Some(keyring) = keyring.as_ref() else {
+            return Err(malformed("a case needs a keyring before it"));
+        };
+        let Some(length) = frame["body_bytes"].as_u64() else {
+            return Err(malformed("a frame must give the body's length in bytes"));
+        };
+        let mut body = vec![0_u8; usize::try_from(length).map_err(|_| malformed("body too long"))?];
+        input.read_exact(&mut body)?;
+        let mut newline = [0_u8; 1];
+        input.read_exact(&mut newline)?;
+        if newline != *b"\n" {
+            return Err(malformed("a body must end its frame with a newline"));
+        }
+        let text = std::str::from_utf8(&body).map_err(|_| malformed("a body must be UTF-8"))?;
+        let operation = frame["operation"].as_str().unwrap_or_default();
+        let answer = match parse_body(text).and_then(|body| run(operation, &body, keyring)) {
             Ok(result) => json!({ "code": null, "result": result }),
             Err(error) => json!({ "code": error.code.as_str(), "result": null }),
         };
         writeln!(out, "{answer}")?;
     }
-    Ok(())
 }
