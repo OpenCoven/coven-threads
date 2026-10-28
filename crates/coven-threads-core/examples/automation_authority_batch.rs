@@ -2,15 +2,23 @@
 //! `scripts/automation-authority-differential.mjs`.
 //!
 //! Reads JSON Lines from stdin, one case per line: `{"operation", "body",
-//! "keys"}`, where `keys` is a keyring's records by key id. Writes one line
-//! per case: `{"code": <first error code or null>, "result": <string or
-//! null>}`. `evaluate_request` returns the canonical decision text,
+//! "keys"}`. The line is transport, parsed with `serde_json`. `body` is the
+//! vector body as serialized text, the artifact under test: it crosses the
+//! production [`strict_parse_json`] before any operation runs, so the parser
+//! is compared on the same bytes the reference reads, and a body it refuses
+//! answers with that `json_*` code. `keys` is a keyring's records by key id.
+//! Writes one line per case: `{"code": <first error code or null>, "result":
+//! <string or null>}`. `strict_parse` returns the canonical text of the parsed
+//! `raw_json`, `evaluate_request` the canonical decision text,
 //! `verify_decision` the outcome, `request_adoption` and
 //! `decision_consumption` the canonical final replay state (`"null"` when no
 //! repetition ran), `lifecycle` the canonical lifecycle state (`"null"` before
 //! any event), `verify_dispatch` the canonical dispatch result, and every
 //! other operation `"ok"`. Each operation is invoked as
 //! `profiles/automation-authority/v1/run-vectors.mjs` invokes it.
+//!
+//! `--describe` prints the build's `serde_json` configuration instead, so a
+//! run records which one it compared.
 
 use std::io::{self, BufRead, Write};
 
@@ -39,12 +47,34 @@ impl SignatureVerifier for Ring {
     }
 }
 
+/// How many times `for (let index = 0; index < (body.repetitions ?? 1);
+/// index += 1)` runs: once when the count is missing or null, never when it
+/// is negative or not a number, and up to the next integer for a fraction.
+fn repetitions(body: &Value) -> u64 {
+    let count = match body.get("repetitions") {
+        None | Some(Value::Null) => return 1,
+        Some(Value::Number(number)) => number.as_f64().unwrap_or(f64::NAN),
+        Some(Value::Bool(flag)) => f64::from(u8::from(*flag)),
+        // `Number(text)`: blank is zero, and anything that is not a number is
+        // NaN, which no index is less than.
+        Some(Value::String(text)) if text.trim().is_empty() => 0.0,
+        Some(Value::String(text)) => text.trim().parse().unwrap_or(f64::NAN),
+        Some(_) => f64::NAN,
+    };
+    if count.is_nan() || count <= 0.0 {
+        0
+    } else {
+        // Saturates at u64::MAX for an infinite count, as the reference's loop
+        // would run until an operation refuses.
+        count.ceil() as u64
+    }
+}
+
 fn run(operation: &str, body: &Value, keyring: &Keyring) -> AuthorityResult<String> {
-    let repetitions = body["repetitions"].as_u64().unwrap_or(1);
+    let repetitions = repetitions(body);
     match operation {
-        "strict_parse" => {
-            strict_parse_json(body["raw_json"].as_str().unwrap_or_default()).map(|_| "ok".into())
-        }
+        "strict_parse" => strict_parse_json(body["raw_json"].as_str().unwrap_or_default())
+            .and_then(|parsed| canonicalize(&parsed)),
         "validate_request" => {
             validate_authorization_request(&body["request"], keyring, &Ring).map(|()| "ok".into())
         }
@@ -217,18 +247,43 @@ fn lifecycle(body: &Value, keyring: &Keyring) -> AuthorityResult<String> {
     }))
 }
 
+/// The build's `serde_json` configuration, probed rather than declared: with
+/// `arbitrary_precision` a number keeps its literal text.
+fn describe() -> Value {
+    let arbitrary_precision = serde_json::from_str::<Value>("1.00")
+        .map(|number| number.to_string())
+        .is_ok_and(|text| text == "1.00");
+    json!({ "serde_json_arbitrary_precision": arbitrary_precision })
+}
+
+/// The artifact body, from its serialized text, through the production
+/// parser: never `serde_json`, which would collapse a duplicate key to its
+/// last value and give every refusal one code.
+fn parse_body(text: &str) -> AuthorityResult<Value> {
+    strict_parse_json(text)
+}
+
 fn main() -> io::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("--describe") {
+        println!("{}", describe());
+        return Ok(());
+    }
     let stdout = io::stdout();
     let mut out = stdout.lock();
     for line in io::stdin().lock().lines() {
+        // The line is the transport envelope; the body inside is the
+        // artifact, and crosses the production parser as text.
         let case: Value = serde_json::from_str(&line?)?;
+        let Some(text) = case["body"].as_str() else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "a case body must be the artifact's serialized text",
+            ));
+        };
         let keys = case["keys"].as_object().cloned().unwrap_or_default();
         let keyring = Keyring::from_object(&keys);
-        let answer = match run(
-            case["operation"].as_str().unwrap_or_default(),
-            &case["body"],
-            &keyring,
-        ) {
+        let operation = case["operation"].as_str().unwrap_or_default();
+        let answer = match parse_body(text).and_then(|body| run(operation, &body, &keyring)) {
             Ok(result) => json!({ "code": null, "result": result }),
             Err(error) => json!({ "code": error.code.as_str(), "result": null }),
         };
