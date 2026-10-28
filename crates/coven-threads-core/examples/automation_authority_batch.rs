@@ -1,14 +1,17 @@
 //! Answers automation-authority cases in one process, for
 //! `scripts/automation-authority-differential.mjs`.
 //!
-//! Reads JSON Lines from stdin, one case per line: `{"operation", "body",
-//! "keys"}`. The line is transport, parsed with `serde_json`. `body` is the
-//! vector body as serialized text, the artifact under test: it crosses the
-//! production [`strict_parse_json`] before any operation runs, so the parser
-//! is compared on the same bytes the reference reads, and a body it refuses
-//! answers with that `json_*` code. `keys` is a keyring's records by key id.
-//! Writes one line per case: `{"code": <first error code or null>, "result":
-//! <string or null>}`. `strict_parse` returns the canonical text of the parsed
+//! Reads frames from stdin, one case each: an envelope line, `{"operation",
+//! "body_bytes", "keys"?}`, then exactly `body_bytes` bytes of the vector body
+//! as serialized text, then a newline. The envelope is transport, parsed with
+//! `serde_json`. The body is the artifact under test: it crosses the
+//! production [`strict_parse_json`], and nothing else, before any operation
+//! runs, so the parser is compared on the same bytes the reference reads, and
+//! a body it refuses answers with that `json_*` code. `keys`, a keyring's
+//! records by key id, is given when the keyring changes and holds for the
+//! frames that follow. Writes one line per case: `{"code": <first error code
+//! or null>, "result": <string or null>}`. `strict_parse` returns the
+//! canonical text of the parsed
 //! `raw_json`, `evaluate_request` the canonical decision text,
 //! `verify_decision` the outcome, `request_adoption` and
 //! `decision_consumption` the canonical final replay state (`"null"` when no
@@ -20,7 +23,7 @@
 //! `--describe` prints the build's `serde_json` configuration instead, so a
 //! run records which one it compared.
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 
 use coven_threads_core::automation_authority::{
     adopt_authorization_request, apply_lifecycle_event, authorize_evidence_read, canonicalize,
@@ -268,26 +271,43 @@ fn main() -> io::Result<()> {
         println!("{}", describe());
         return Ok(());
     }
+    let malformed = |message: &str| io::Error::new(io::ErrorKind::InvalidData, message.to_owned());
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    for line in io::stdin().lock().lines() {
-        // The line is the transport envelope; the body inside is the
-        // artifact, and crosses the production parser as text.
-        let case: Value = serde_json::from_str(&line?)?;
-        let Some(text) = case["body"].as_str() else {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "a case body must be the artifact's serialized text",
-            ));
+    let mut keyring: Option<Keyring> = None;
+    let mut envelope = String::new();
+    loop {
+        // The envelope line is transport; the body bytes after it are the
+        // artifact, and cross the production parser as text.
+        envelope.clear();
+        if input.read_line(&mut envelope)? == 0 {
+            return Ok(());
+        }
+        let frame: Value = serde_json::from_str(&envelope)?;
+        if let Some(keys) = frame.get("keys").and_then(Value::as_object) {
+            keyring = Some(Keyring::from_object(keys));
+        }
+        let Some(keyring) = keyring.as_ref() else {
+            return Err(malformed("a case needs a keyring before it"));
         };
-        let keys = case["keys"].as_object().cloned().unwrap_or_default();
-        let keyring = Keyring::from_object(&keys);
-        let operation = case["operation"].as_str().unwrap_or_default();
-        let answer = match parse_body(text).and_then(|body| run(operation, &body, &keyring)) {
+        let Some(length) = frame["body_bytes"].as_u64() else {
+            return Err(malformed("a frame must give the body's length in bytes"));
+        };
+        let mut body = vec![0_u8; usize::try_from(length).map_err(|_| malformed("body too long"))?];
+        input.read_exact(&mut body)?;
+        let mut newline = [0_u8; 1];
+        input.read_exact(&mut newline)?;
+        if newline != *b"\n" {
+            return Err(malformed("a body must end its frame with a newline"));
+        }
+        let text = std::str::from_utf8(&body).map_err(|_| malformed("a body must be UTF-8"))?;
+        let operation = frame["operation"].as_str().unwrap_or_default();
+        let answer = match parse_body(text).and_then(|body| run(operation, &body, keyring)) {
             Ok(result) => json!({ "code": null, "result": result }),
             Err(error) => json!({ "code": error.code.as_str(), "result": null }),
         };
         writeln!(out, "{answer}")?;
     }
-    Ok(())
 }

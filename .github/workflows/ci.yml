@@ -46,7 +46,10 @@ jobs:
   quality:
     name: Rust quality and repository contract
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # The gate runs the automation-authority differential twice, once per
+    # serde_json configuration; each pass compares about 200,000 cases and
+    # takes 5 to 6 minutes on this runner (coven-threads#92).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master

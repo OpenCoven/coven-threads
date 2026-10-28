@@ -21,11 +21,12 @@
 // signature, so re-signing one artifact keeps every other artifact's binding
 // to it intact.
 //
-// Every case crosses to the port as text. The batch binary's input line is
-// transport, but the body inside it is the serialized artifact, which the
-// port parses with its production strict parser, and the reference parses the
-// same text with strictParseJson before running the operation. So both
-// parsers see the same bytes, and the comparison covers them. Each re-signed
+// Every case crosses to the port as text. The batch binary reads frames: an
+// envelope line, which is transport, then the serialized artifact's bytes,
+// which the port parses with its production strict parser and nothing else,
+// while the reference parses the same text with strictParseJson before
+// running the operation. So both parsers see the same bytes, and the
+// comparison covers them. Each re-signed
 // vector body is also rewritten at the text level, at every depth: a key
 // written twice, written \u-escaped, and written both ways (a duplicate the
 // parser must detect after unescaping); an object's members reversed; an
@@ -37,8 +38,8 @@
 // plain text does, from both validators: that compares the normalized parse
 // result through the whole operation. A rewrite that breaks the document must
 // produce exactly the profile code it specifies. Each positive vector body is
-// also parsed on its own as raw_json, with those equivalent rewrites, so the
-// canonical text of the parsed documents is compared directly.
+// also parsed on its own as raw_json, with the rewrites the parser accepts, so
+// the canonical text of the parsed documents is compared directly.
 //
 // Both validators must report the same first error code, or the same result:
 // the full canonical decision for evaluate_request, the outcome for
@@ -52,7 +53,9 @@
 // since raw it fails that artifact's own validation, which its own operation
 // already compares. The positive dispatch vectors and the negative permit
 // (no approval) ones are mutated in full, and each other negative one
-// contributes a fixed, evenly spaced sample of its mutants and text rewrites.
+// contributes a fixed, evenly spaced sample of its mutants. Every dispatch
+// body contributes the same sample of its text rewrites, since the artifacts
+// it composes are rewritten in full under their own operations.
 //
 // Where the reference throws something other than an AuthorityError (a
 // TypeError on a null member, say), it defines no code. Those cases are not
@@ -65,8 +68,8 @@
 // mutant carrying an own __proto__ member therefore expects json_invalid from
 // the port, and the reference is given the member in memory and counted.
 //
-// On a mismatch the failing cases are kept, as the exact lines the batch
-// binary read, with their labels and both answers, and the path is printed.
+// On a mismatch the failing cases are kept, as frames the batch binary reads,
+// with their labels and both answers, and the path is printed.
 //
 // Usage: node scripts/automation-authority-differential.mjs <batch binary>
 
@@ -623,22 +626,37 @@ const operations = [];
 // For a text rewrite: its variant, the index its answer must equal, and the
 // code it must be refused with.
 const rewrites = [];
-// Where each case's line starts in the file, and its length, in bytes: the
-// file is too large to read back whole.
-const offsets = [];
-const lengths = [];
+// Each case is a frame: an envelope line, `{"operation", "body_bytes",
+// "keys"?}`, then the body text, then a newline. The keys go only when they
+// change, and the body goes as bytes rather than as a JSON string, so the
+// port parses each body exactly once, with its strict parser. Where each
+// body starts in the file, its length, and its keys are kept, so a failing
+// case can be written out whole: the file is too large to read back.
+const bodyOffsets = [];
+const bodyLengths = [];
+const caseKeys = [];
+let lastKeys = null;
 let undefinedReference = 0;
 let protoCases = 0;
 let protoRefused = 0;
 let label = "";
-let caseBytes = 0;
+let fileBytes = 0;
+let bodyBytes = 0;
+function frame(operation, body, keys) {
+  const head = Buffer.from(`${JSON.stringify({ operation, body_bytes: body.length, ...(keys ? { keys } : {}) })}\n`, "utf8");
+  return Buffer.concat([head, body, Buffer.from("\n")]);
+}
 function record(operation, text, keys, answer, rewrite = null) {
   if (answer.code?.startsWith("THROW:")) undefinedReference += 1;
-  const line = Buffer.from(`${JSON.stringify({ operation, body: text, keys })}\n`, "utf8");
-  offsets.push(caseBytes);
-  lengths.push(line.length);
-  caseBytes += line.length;
-  writeSync(casesFile, line);
+  const body = Buffer.from(text, "utf8");
+  const bytes = frame(operation, body, keys === lastKeys ? null : keys);
+  lastKeys = keys;
+  bodyOffsets.push(fileBytes + bytes.length - body.length - 1);
+  bodyLengths.push(body.length);
+  caseKeys.push(keys);
+  fileBytes += bytes.length;
+  bodyBytes += body.length;
+  writeSync(casesFile, bytes);
   expected.push(answer);
   labels.push(label);
   operations.push(operation);
@@ -660,9 +678,12 @@ function add(operation, body, keys) {
 }
 // The rewrites of `document`, as `wrap` embeds each text in a body; one in
 // `sample` of them is kept. `baseIndex` is the plain text's case.
-function addRewrites(operation, document, keys, wrap, baseIndex, sample) {
+function addRewrites(operation, document, keys, wrap, baseIndex, sample, { accepted = false } = {}) {
   let index = 0;
   for (const rewrite of [...documentRewrites(document), ...textRewrites(document)]) {
+    // Inside raw_json, a rewrite the parser refuses gets the code the body's
+    // own rewrite already compared; only the ones it accepts add anything.
+    if (accepted && rewrite.code) continue;
     index += 1;
     if (index % sample !== 0) continue;
     let first = null;
@@ -682,6 +703,7 @@ function poolTimestamps(base) {
   )];
 }
 
+const started = performance.now();
 const vectors = read(join(PROFILE, "manifest.json")).vectors;
 const repairedPermits = new Map();
 for (const vector of vectors) {
@@ -704,8 +726,11 @@ for (const vector of vectors) {
   // mutated in full itself below.
   const permit = operation === "verify_dispatch" && base.decision?.outcome === "permit";
   const sample = operation === "verify_dispatch" && vector.kind === "negative" && !permit ? DISPATCH_SAMPLE : 1;
-  // The body's text, rewritten at every depth.
-  addRewrites(operation, base, keysFresh, (text) => text, baseIndex, sample);
+  // The body's text, rewritten at every depth. A dispatch body composes the
+  // artifacts the other operations' bodies carry, and those are rewritten in
+  // full, so every dispatch body contributes a sample.
+  const textSample = operation === "verify_dispatch" ? DISPATCH_SAMPLE : 1;
+  addRewrites(operation, base, keysFresh, (text) => text, baseIndex, textSample);
   if (operation === "strict_parse") {
     for (const text of textMutants(body.raw_json)) add(operation, { ...body, raw_json: text }, keysFresh);
     continue;
@@ -716,7 +741,9 @@ for (const vector of vectors) {
     label = `${vector.id} (raw_json)`;
     const raw = add("strict_parse", { raw_json: JSON.stringify(base) }, keysFresh);
     if (raw.code !== null) throw new Error(`${vector.id}: the reference refuses its own body text`);
-    addRewrites("strict_parse", base, keysFresh, (text) => JSON.stringify({ raw_json: text }), expected.length - 1, 1);
+    addRewrites("strict_parse", base, keysFresh, (text) => JSON.stringify({ raw_json: text }), expected.length - 1, textSample, {
+      accepted: true,
+    });
     label = vector.id;
   }
   let repaired = null;
@@ -787,10 +814,12 @@ function mutateAll(operation, base, keysFresh, sample, onAccepted) {
   }
 }
 closeSync(casesFile);
+const built = performance.now();
 
 const input = openSync(casesPath, "r");
 const run = spawnSync(batch, [], { stdio: [input, "pipe", "inherit"], maxBuffer: 1 << 30 });
 closeSync(input);
+const answered = performance.now();
 if (run.status !== 0) {
   console.error(`batch binary exited with ${run.status}`);
   process.exit(1);
@@ -849,17 +878,18 @@ for (const index of failOpen.slice(0, 15)) {
   );
 }
 if (failures.length > 0 || failOpen.length > 0) {
-  // Keep the failing cases: the exact lines the batch binary read, with
-  // their labels and both answers. The keys are the synthetic test keyring.
+  // Keep the failing cases: the exact body bytes the batch binary read, each
+  // in a frame of its own with its keys, with their labels and both answers.
+  // The keys are the synthetic test keyring.
   const kept = mkdtempSync(join(tmpdir(), "automation-authority-differential-failures-"));
   const keep = new Set([...failures.map(({ index }) => index), ...failOpen]);
   const cases = openSync(casesPath, "r");
   const casesOut = [];
   const report = [];
   for (const index of [...keep].sort((left, right) => left - right)) {
-    const line = Buffer.alloc(lengths[index]);
-    readSync(cases, line, 0, lengths[index], offsets[index]);
-    casesOut.push(line.toString("utf8").trimEnd());
+    const body = Buffer.alloc(bodyLengths[index]);
+    readSync(cases, body, 0, bodyLengths[index], bodyOffsets[index]);
+    casesOut.push(frame(operations[index], body, caseKeys[index]));
     report.push({
       case: index,
       label: labels[index],
@@ -871,10 +901,10 @@ if (failures.length > 0 || failOpen.length > 0) {
     });
   }
   closeSync(cases);
-  writeFileSync(join(kept, "cases.jsonl"), `${casesOut.join("\n")}\n`);
+  writeFileSync(join(kept, "cases.stream"), Buffer.concat(casesOut));
   writeFileSync(join(kept, "report.json"), `${JSON.stringify({ build, batch, failures: report }, null, 2)}\n`);
-  console.log(`Failing cases kept in ${kept}: cases.jsonl (one envelope per line, in report order) and report.json`);
-  console.log(`Reproduce: ${batch} < ${join(kept, "cases.jsonl")}`);
+  console.log(`Failing cases kept in ${kept}: cases.stream (one frame per case, in report order) and report.json`);
+  console.log(`Reproduce: ${batch} < ${join(kept, "cases.stream")}`);
 }
 console.log(
   `Differential: ${expected.length - undefinedReference} cases compared from ${vectors.length} vectors, ` +
@@ -884,7 +914,7 @@ console.log(
 console.log(
   `Text rewrites: ${rewritten} (${equivalent} spelling the same document, ${refusing} refused by a specified code); ` +
     `${protoCases} own __proto__ members refused by the port's parser as json_invalid, ` +
-    `${protoRefused} of them refused by the reference in memory; ${(caseBytes / 1048576).toFixed(1)} MiB of body text parsed by both`,
+    `${protoRefused} of them refused by the reference in memory; ${(bodyBytes / 1048576).toFixed(1)} MiB of body text parsed by both`,
 );
 console.log(
   `Cases by operation: ${Object.entries(perOperation)
@@ -894,4 +924,8 @@ console.log(
 );
 console.log(`Codes exercised (${codes.size}): ${[...codes].sort().join(" ")}`);
 console.log(`Build: serde_json arbitrary_precision ${build.serde_json_arbitrary_precision ? "on" : "off"} (${batch})`);
+console.log(
+  `Timing: cases built and answered by the reference in ${((built - started) / 1000).toFixed(0)}s, ` +
+    `answered by the port in ${((answered - built) / 1000).toFixed(0)}s`,
+);
 process.exit(failures.length === 0 && failOpen.length === 0 ? 0 : 1);
