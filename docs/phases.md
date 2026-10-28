@@ -1,5 +1,7 @@
 # Phases
 
+**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
 > **As of 2026-09-17 (UTC): phases 0–4 remain frozen, and Phase 5 remains active.** All four root engineering blockers are closed at accepted daemon `226bfcc8`; Val closed OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows ([maintainer decisions](reviews/2026-09-17-maintainer-decisions.md)). The four-target current-Threads compatibility lane is now required. Neither engineering acceptance nor policy adoption supplies either human coherence/freeze decision.
@@ -16,9 +18,7 @@ original dates; a later observation does not transfer acceptance between heads.
 
 ## Current decision
 
-Keep Phase 5 active. Resolve deployed historical audit uncertainty, preserve
-native reliability follow-ups, and prepare Val's separate human decisions.
-Do not reopen accepted finite engineering roots or rebuild the landed lane.
+Keep Phase 5 active and prepare Val’s separate decisions using the [October 28 packet](reviews/2026-10-28-current-coherence.md). Preserve the completed profile census, native follow-up dispositions and Cave window within their exact limits. Do not reopen accepted finite engineering roots or rebuild delivered work. The September checkpoints below retain their original evidence dates.
 
 The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
 records subsequent fixture corrections and accepted Unix/Windows diagnostics.
