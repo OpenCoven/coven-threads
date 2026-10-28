@@ -1,23 +1,7 @@
 # coven-threads
 
-**Status (2026-09-17):** Engineering phases 0–4 remain **frozen**. Phase 5 is
-**active**. All four root engineering blockers are closed; Val closed
-OpenCoven/coven#886 on 2026-09-17 after the 2026-09-15 read-only census of the maintainer workstation profile, the only inspected deployed profile, found zero opened windows
-([decision record](docs/reviews/2026-09-17-maintainer-decisions.md)). The
-[adopted solo-maintainer policy](specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) lets
-Val author and self-review; human coherence acceptance and a subsequent scoped
-freeze remain separate. Protection requires PRs and six strict checks on
-`main`, including the four-target pinned-daemon compatibility lane, not an
-independent approving reviewer. The
-[engineering acceptance handoff](docs/reviews/2026-09-13-engineering-acceptance.md)
-records the accepted sources and remaining operator work.
-The [September 14 reliability handoff](docs/reviews/2026-09-14-native-reliability.md)
-records subsequent fixture corrections and diagnostic contributions without
-claiming a native timing repair or changing that acceptance scope.
-Coven `v0.4.3` includes the earlier integration,
-not proof of full Phase-5 conformance. Start with the
-[delivery strategy](docs/strategy.md), [evidence ledger](docs/phases.md), and
-[readiness review](docs/reviews/2026-09-11-landscape-and-readiness.md).
+**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](docs/reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+
 **License:** the committed `LICENSE` and Cargo package metadata specify MIT. The frozen design retains an older Apache-2.0 plan; reconciling that historical text requires a maintainer decision, not an inferred license change.
 **Owners (design phase):** Sage 🌿 + Echo 🔮 co-drive; Nova 👑 + Sage on lane assignments; Cody ⚡ Phase 1+ crate lane
 
@@ -65,11 +49,7 @@ persistence, final dispatch, and effects.
 
 The `coven` daemon already ships an authority boundary — untrusted clients speak over a unix socket to a trusted Rust daemon that revalidates every sensitive request. That boundary is real, documented in `coven/docs/SAFETY-MODEL.md`, and works.
 
-Threads supplies the typed protected-surface question alongside **who** may act
-and **what action** exists. The daemon imports this validator; Threads does not
-replace its trust boundary or own filesystem and persistence effects. The
-remaining work is complete route, predicate, and replay enforcement, not the
-absence of any integration.
+Threads supplies the typed protected-surface question alongside **who** may act and **what action** exists. The daemon imports this validator; Threads does not replace its trust boundary or own filesystem and persistence effects. The accepted September roots cover their enumerated route, predicate and replay obligations. Current work is the source-scoped evidence review and Val’s separate coherence/freeze decisions described in the [October 28 packet](docs/reviews/2026-10-28-current-coherence.md).
 
 ![Historical Phase-2 enforcement flow, not current protected-proposal acceptance](docs/diagrams/enforcement.png)
 
