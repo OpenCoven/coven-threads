@@ -104,6 +104,9 @@ lifecycle events MUST authenticate Threads authority. Approvals MUST
 authenticate the named approving principal/key. The repository keyring is
 synthetic conformance material and contains public keys only.
 
+**Public-key input clarification (2026-10-28, #93, approved by Val):** The Rust verification keyring accepts Ed25519 public-key SPKI PEM, not private-key PEM. Node's crypto utility also accepts private-key PEM in the same verification field; that broader container support is an explicit implementation divergence, not a required Threads verification input. Callers holding private material must export the public SPKI before constructing the verification keyring. Private-key decoding and credential custody remain outside this library's authority. Existing public-key callers need no migration; callers relying on Node's broader input must export public keys. This clarification changes no signed bytes, profile version, public Rust signature, or audit schema.
+
+
 > **Additive documentation erratum (2026-09-11, #44):** The consumption
 > snapshot row documents the existing `DOMAIN.consumption` preimage in
 > `profiles/automation-authority/v1/validator.mjs`, previously omitted from
