@@ -138,7 +138,7 @@ const CODE_DISPOSITIONS = {
   runtime_capability_unknown: "request validation emits capability_unknown first; direct private vocabulary guard tests",
   integrity_role_unknown: "exercised by the required keyring companion, not this fixed-role corpus",
   integrity_domain_invalid: "public digest utility tested directly in Rust and Node; batch uses fixed domains",
-  integrity_signer_required: "Node dynamic producer utility; typed missing-signer boundary differs and representable empty-id parity is tracked in #99",
+  integrity_signer_required: "producer helper tested directly in Rust and Node for empty ids; missing signer/private material stays a Rust type boundary, outside manifest operations",
 };
 if (REFERENCE_CODES.size < 100) {
   console.error(`found only ${REFERENCE_CODES.size} reference codes; the extraction is broken`);
