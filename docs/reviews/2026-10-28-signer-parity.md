@@ -57,7 +57,7 @@ Both regressions also take a real signature made under a valid id, empty the art
 
 ## Non-goals
 
-No new credential owner, principal store or issuer. No change to `Keyring`, `verify_signed_artifact`, the general or keyring differential, the 132 vectors, the manifest, the spec, the CI workflow or any gate. The reference validator is unchanged.
+No new credential owner, principal store or issuer. No change to `Keyring`, `verify_signed_artifact`, the general or keyring differential, the 132 vectors, the manifest, the CI workflow or any gate. The reference validator is unchanged. The only spec change is the additive §11 sentence below, applied at the maintainer's direction.
 
 ## Verification
 
@@ -69,4 +69,4 @@ Coven's signed-decision producer (coven#1602) is the intended caller of `sign_ar
 
 Rollback: revert the single commit. Restoring acceptance of an empty signer id would restore the producer divergence and should be an explicit maintainer decision.
 
-Decision for Val: approve the typed rule (empty signer id refused with `integrity_signer_required`; missing signer and private key remain type boundaries) and the additive `ErrorCode` variant. If a spec clarification is wanted, the proposed additive text for §11 is: "The reference's producer helper `signArtifact` and the Rust `sign_artifact` refuse a missing or empty signer key id with `integrity_signer_required` before signing; receiving validators independently refuse an empty `integrity.key_id` as `schema_type`." This packet does not apply it.
+Decision for Val: approve the typed rule (empty signer id refused with `integrity_signer_required`; missing signer and private key remain type boundaries) and the additive `ErrorCode` variant. The additive §11 clarification offered with this packet, "The reference's producer helper `signArtifact` and the Rust `sign_artifact` refuse a missing or empty signer key id with `integrity_signer_required` before signing; receiving validators independently refuse an empty `integrity.key_id` as `schema_type`.", was approved by Val on 2026-10-29 together with the rule and the variant, and is applied in `specs/AUTOMATION-AUTHORITY-PROFILE-v1.md` §11 in the same PR. It names behavior the reference already had and changes no vector, code or wire format.
