@@ -404,6 +404,45 @@ mod tests {
         );
     }
 
+    /// Spellings of one document parse to one value, in either `serde_json`
+    /// configuration: an integer written with a fraction or exponent is an
+    /// integer the validators can read as one, and an escaped key or string
+    /// is the character it spells.
+    #[test]
+    fn equivalent_spellings_normalize_to_one_value() {
+        let plain = strict_parse_json("{\"a\":{\"n\":[3,0,\"é😀\"]}}").unwrap();
+        for spelling in [
+            "{\"a\":{\"n\":[3.0,-0,\"é😀\"]}}",
+            "{\"a\":{\"n\":[3e0,0.0,\"é😀\"]}}",
+            "{\"a\":{\"n\":[3.00E+0,0e5,\"\\u00e9\\ud83d\\ude00\"]}}",
+            "{\"\\u0061\":{\"\\u006e\":[3,0,\"é😀\"]}}",
+            " {\n\"a\" : { \"n\" : [ 3 , 0 , \"é😀\" ] }\n} ",
+        ] {
+            let value = strict_parse_json(spelling).unwrap();
+            assert_eq!(value, plain, "{spelling}");
+            let n = &value["a"]["n"];
+            assert_eq!(n[0].as_u64(), Some(3), "{spelling}");
+            assert_eq!(n[0].as_i64(), Some(3), "{spelling}");
+            assert_eq!(n[1].as_u64(), Some(0), "{spelling}");
+            assert_eq!(
+                super::super::canonicalize(&value).unwrap(),
+                "{\"a\":{\"n\":[3,0,\"é😀\"]}}"
+            );
+        }
+        // Duplicates are found after unescaping, at any depth.
+        assert_eq!(
+            code("{\"a\":{\"b\":[{\"c\":1,\"\\u0063\":1}]}}"),
+            Some("json_duplicate_key")
+        );
+        // The safe bound, in every spelling.
+        assert_eq!(
+            code("[9007199254740991, 9007199254740991.0, 9.007199254740991e15]"),
+            None
+        );
+        assert_eq!(code("[9007199254740992.0]"), Some("json_unsafe_integer"));
+        assert_eq!(code("[9.007199254740992e15]"), Some("json_unsafe_integer"));
+    }
+
     #[test]
     fn errors_follow_the_reference_order() {
         assert_eq!(code("\u{feff}{}"), Some("json_non_ijson"));

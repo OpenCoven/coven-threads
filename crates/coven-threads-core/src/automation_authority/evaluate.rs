@@ -16,6 +16,17 @@ use super::{fail, AuthorityResult, Domain, ErrorCode};
 
 pub(crate) const DECISION_VERSION: &str = "opencoven.automation-authorization-decision/v1";
 
+/// Defense-in-depth guard, shadowed publicly by request validation.
+fn validate_runtime_vocabulary(capabilities: &[&str]) -> AuthorityResult<()> {
+    if let Some(unknown) = capabilities
+        .iter()
+        .find(|capability| capability_risk(capability).is_none())
+    {
+        return fail(ErrorCode::RuntimeCapabilityUnknown, *unknown, "$");
+    }
+    Ok(())
+}
+
 const SNAPSHOT_REQUIRED: [&str; 8] = [
     "now",
     "policy",
@@ -148,12 +159,7 @@ pub fn evaluate_authorization(
         .iter()
         .filter_map(Value::as_str)
         .collect();
-    if let Some(unknown) = runtime_capabilities
-        .iter()
-        .find(|capability| capability_risk(capability).is_none())
-    {
-        return fail(ErrorCode::RuntimeCapabilityUnknown, *unknown, "$");
-    }
+    validate_runtime_vocabulary(&runtime_capabilities)?;
     let grants = shape::array(
         field("recurring_grants"),
         "$.policy_snapshot.recurring_grants",
@@ -455,4 +461,20 @@ fn validate_recurring_grant(grant: &Value, index: usize) -> AuthorityResult<()> 
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod shadowed_guard_tests {
+    use super::*;
+
+    #[test]
+    fn runtime_vocabulary_refuses_unknown_capability_without_request_validation() {
+        assert!(validate_runtime_vocabulary(&["analysis.read", "network.fetch"]).is_ok());
+        assert_eq!(
+            validate_runtime_vocabulary(&["analysis.read", "unknown.capability"])
+                .unwrap_err()
+                .code,
+            ErrorCode::RuntimeCapabilityUnknown
+        );
+    }
 }

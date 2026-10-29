@@ -15,7 +15,29 @@ test("current CI pins every external action and selects the repository toolchain
   const workflow = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
   const config = readFileSync(new URL("../../rust-toolchain.toml", import.meta.url), "utf8");
   const version = config.match(/^channel = "([^"]+)"$/m)?.[1];
-  checkCiPins(workflow, version);
+  const nodeVersion = readFileSync(new URL("../../.node-version", import.meta.url), "utf8").trim();
+  checkCiPins(workflow, version, nodeVersion);
+});
+
+test("Node actions must select exactly the reviewed release", () => {
+  const node = `      - uses: actions/setup-node@${SHA}\n        with:\n          node-version: 24.22.0\n`;
+  checkCiPins(rust + node, "1.88.0", "24.22.0");
+  for (const replacement of ["24", "lts/*", "24.22.1", "${{ inputs.node }}"]) {
+    assert.throws(() => checkCiPins(rust + node.replace("24.22.0", replacement), "1.88.0", "24.22.0"), /with.node-version/);
+  }
+  assert.throws(() => checkCiPins(rust, "1.88.0", "24.22.0"), /Node/);
+  assert.throws(() => checkCiPins(rust + node + node.replace("24.22.0", "24.22.1"), "1.88.0", "24.22.0"), /with.node-version/);
+  const jobs = `jobs:\n  quality:\n    steps:\n${rust}${node}      - run: bash scripts/agent-check.sh fast\n  privacy:\n    steps:\n      - run: node scripts/privacy-guard.mjs\n`;
+  assert.throws(() => checkCiPins(jobs, "1.88.0", "24.22.0"), /privacy.*Node/);
+  assert.throws(() => checkCiPins(jobs.replace("privacy:", "release:").replace("node scripts/privacy-guard.mjs", "bash scripts/authority-differential-matrix.sh release"), "1.88.0", "24.22.0"), /release.*Node/);
+  for (const setting of ["if: false", "continue-on-error: true", "continue-on-error: ${{ inputs.ignore }}"]) {
+    assert.throws(() => checkCiPins(rust + node.replace("        with:", `        ${setting}\n        with:`), "1.88.0", "24.22.0"), /unconditional|continue-on-error/);
+  }
+  const named = node.replace("- uses:", "- name: Node\n        if: false\n        uses:");
+  assert.throws(() => checkCiPins(rust + named, "1.88.0", "24.22.0"), /unconditional/);
+  for (const leader of ["if: false", "continue-on-error: true", '"if": false', '"continue-on-error": true']) {
+    assert.throws(() => checkCiPins(rust + node.replace("- uses:", `- ${leader}\n        uses:`), "1.88.0", "24.22.0"), /unconditional|continue-on-error/);
+  }
 });
 
 test("accepts immutable actions, local actions, named steps, and quoted versions", () => {

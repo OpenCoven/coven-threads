@@ -27,9 +27,18 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   - proposal validation and evidence-read authorization.
 
   It matches `validator.mjs` on all 132 conformance vectors and on about
-  126,000 differential mutants, which run in the agent gate. `ring` is a
+  126,000 differential mutants, which run in the agent gate. Every case
+  crosses to the port as serialized text through `strict_parse_json`, and the
+  reference parses the same text, so the parsers are compared on the same
+  bytes (`coven-threads#92`): each vector body is also rewritten at every
+  depth with duplicate, escaped and escaped-duplicate keys, reordered
+  members, integers spelled with a fraction or exponent, numbers at and
+  beyond the safe bound, non-finite numbers, escaped strings, lone
+  surrogates and escaped surrogate pairs. A rewrite that spells the same
+  document must get the plain text's exact answer from both validators, and
+  the canonical parsed document is the `strict_parse` result. `ring` is a
   dev-dependency only; dev builds optimize it and `sha2` so the differential
-  stays near two minutes.
+  stays within a few minutes.
 - Automation Authority Profile v1 (`coven-threads#29`):
   - closed schemas and a Node-core validator for request, decision, approval,
     append-only lifecycle, proposal-only, evidence-read, R0–R4,
