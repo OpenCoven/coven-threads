@@ -16,13 +16,7 @@ break under Cargo `^0.1`, so this ships on the `0.2.x` line rather than as a
   - strict I-JSON parsing;
   - canonical digests;
   - keyring validation;
-  - Ed25519 artifact verification through a caller-supplied
-    `SignatureVerifier`, and signing through `ArtifactSigner`. `sign_artifact`
-    refuses an empty signer key id with `integrity_signer_required`, as the
-    reference's `signArtifact` does, instead of filing a real signature under
-    `""`; the variant joins the `#[non_exhaustive]` `ErrorCode`, so existing
-    `match` arms keep compiling, and the profile spec's §11 now names the
-    producer-side refusal (`coven-threads#99`);
+  - Ed25519 artifact verification through a caller-supplied `SignatureVerifier`, and signing through `ArtifactSigner`. `sign_artifact` refuses an empty signer key id with `integrity_signer_required`, as the reference's `signArtifact` does, instead of filing a real signature under `""`; the variant joins the `#[non_exhaustive]` `ErrorCode`, so existing `match` arms keep compiling, and the approved profile spec's §11 names the producer-side refusal (`coven-threads#99`). The helper reads the key id once and reuses the guarded value in the artifact (`coven-threads#104`);
   - request validation and adoption;
   - `evaluate_authorization`;
   - decision validation, bundle verification and consumption;
