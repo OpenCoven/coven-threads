@@ -88,7 +88,7 @@ fn main() -> io::Result<()> {
             .is_ok_and(|text| text == "1.00");
         println!(
             "{}",
-            json!({"serde_json_arbitrary_precision": arbitrary_precision})
+            json!({"serde_json_arbitrary_precision": arbitrary_precision, "debug_assertions": cfg!(debug_assertions)})
         );
         return Ok(());
     }

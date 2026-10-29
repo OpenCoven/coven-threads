@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.0
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
@@ -37,14 +40,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.0
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Indexed privacy scan
         run: node scripts/privacy-guard.mjs
 
-  quality:
-    name: Rust quality and repository contract
+  quality_checks:
+    name: Debug quality and authority differential
     runs-on: ubuntu-latest
     # The gate runs the automation-authority differential twice, once per
     # serde_json configuration. Each pass compares about 190,000 cases and
@@ -52,7 +58,13 @@ jobs:
     # code, so the budget holds two slow passes and a cold cache
     # (coven-threads#92).
     timeout-minutes: 20
+    outputs:
+      general_input_sha256: ${{ steps.debug.outputs.general_input_sha256 }}
+      keyring_input_sha256: ${{ steps.debug.outputs.keyring_input_sha256 }}
     steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.0
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master
         with:
@@ -60,7 +72,77 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Fast agent-ready gate
+        id: debug
         run: bash scripts/agent-check.sh fast
+      - name: Retain exact-attempt debug evidence and sanitized failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: authority-debug-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/authority-differential.*
+            /tmp/automation-authority-differential-failures-*
+            /tmp/authority-keyring-failures-*
+          if-no-files-found: warn
+          retention-days: 14
+
+  authority_release:
+    name: Release authority differential
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      general_input_sha256: ${{ steps.release.outputs.general_input_sha256 }}
+      keyring_input_sha256: ${{ steps.release.outputs.keyring_input_sha256 }}
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Compare release artifacts in both serde_json modes
+        id: release
+        run: bash scripts/authority-differential-matrix.sh release
+      - name: Retain exact-attempt release evidence and sanitized failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: authority-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/authority-differential.*
+            /tmp/automation-authority-differential-failures-*
+            /tmp/authority-keyring-failures-*
+          if-no-files-found: warn
+          retention-days: 14
+
+  quality:
+    # Preserve the required context and fail closed on failed/skipped lanes or
+    # different input streams. No branch-protection setting changes are needed.
+    name: Rust quality and repository contract
+    needs: [quality_checks, authority_release]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require successful debug/release lanes with identical inputs
+        shell: bash
+        env:
+          DEBUG_RESULT: ${{ needs.quality_checks.result }}
+          RELEASE_RESULT: ${{ needs.authority_release.result }}
+          DEBUG_GENERAL: ${{ needs.quality_checks.outputs.general_input_sha256 }}
+          RELEASE_GENERAL: ${{ needs.authority_release.outputs.general_input_sha256 }}
+          DEBUG_KEYRING: ${{ needs.quality_checks.outputs.keyring_input_sha256 }}
+          RELEASE_KEYRING: ${{ needs.authority_release.outputs.keyring_input_sha256 }}
+        run: |
+          test "$DEBUG_RESULT" = success
+          test "$RELEASE_RESULT" = success
+          [[ "$DEBUG_GENERAL" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$DEBUG_KEYRING" =~ ^[0-9a-f]{64}$ ]]
+          test "$DEBUG_GENERAL" = "$RELEASE_GENERAL"
+          test "$DEBUG_KEYRING" = "$RELEASE_KEYRING"
 
   cargo-test:
     name: Cargo test (compatibility baseline)

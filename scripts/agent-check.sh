@@ -103,21 +103,13 @@ else
   cargo test --locked --workspace
 fi
 
-# The Rust automation-authority port must agree with validator.mjs on mutants
-# of every evaluation vector, not only on the vectors themselves.
-cargo build --locked --quiet -p coven-threads-core --example automation_authority_batch
-node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
-cargo build --locked --quiet -p coven-threads-core --example automation_authority_keyring_batch
-node scripts/automation-authority-keyring-differential.mjs target/debug/examples/automation_authority_keyring_batch --ordered
-
-# Coven builds serde_json with arbitrary_precision, and Cargo unifies features,
-# so the port must also agree with the reference in that configuration.
-ap=(--features serde_json/arbitrary_precision)
-cargo test --locked -p coven-threads-core "${ap[@]}" --test automation_authority_vectors
-cargo build --locked --quiet -p coven-threads-core "${ap[@]}" --example automation_authority_batch
-node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
-cargo build --locked --quiet -p coven-threads-core "${ap[@]}" --example automation_authority_keyring_batch
-node scripts/automation-authority-keyring-differential.mjs target/debug/examples/automation_authority_keyring_batch --ordered
+# Both features always run. Full verification also checks release artifacts;
+# the fast gate retains debug feedback. CI requires the release lane separately.
+if [[ "$mode" == full ]]; then
+  bash scripts/authority-differential-matrix.sh all
+else
+  bash scripts/authority-differential-matrix.sh debug
+fi
 
 # Verification must not rewrite dependency resolution.
 git diff --exit-code -- Cargo.lock

@@ -7,6 +7,7 @@ import {
   applyLifecycleEvent,
   canonicalDigest,
   evaluateAuthorization,
+  signArtifact,
   strictParseJson,
   validateApproval,
   validateAuthorizationRequest,
@@ -17,6 +18,16 @@ import {
 
 const principalPair = generateKeyPairSync("ed25519");
 const authorityPair = generateKeyPairSync("ed25519");
+
+test("the public digest utility refuses an empty domain outside fixed-domain operations", () => {
+  assert.throws(() => canonicalDigest({}, ""), (error) => error instanceof AuthorityError && error.code === "integrity_domain_invalid");
+});
+
+test("dynamic producer utilities require signing material and a nonempty key id", () => {
+  for (const signer of [undefined, { key_id: "key:synthetic" }, { key_id: "", private_key: authorityPair.privateKey }]) {
+    assert.throws(() => signArtifact({}, "opencoven:automation-decision:v1", signer), (error) => error instanceof AuthorityError && error.code === "integrity_signer_required");
+  }
+});
 const keyId = "key:principal:alice";
 const authorityKeyId = "key:threads:test-authority";
 const keyring = new Map([
