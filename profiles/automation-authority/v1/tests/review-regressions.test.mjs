@@ -470,3 +470,40 @@ test("Node private-PEM acceptance is an explicit extension of the Rust public-ke
     assert.equal(verified.role, "threads_authority");
   }
 });
+
+test("signArtifact refuses an empty key_id or a missing private key before signing (#99)", () => {
+  // The producer helper's own guard, with a real ephemeral Ed25519 key. The
+  // Rust `sign_artifact` must refuse the representable empty id the same way;
+  // a missing private key is a type matter there, since `ArtifactSigner`
+  // supplies the signature.
+  const authority = generateKeyPairSync("ed25519");
+  const domain = "opencoven:automation-decision:v1";
+  const artifact = { kind: "test", value: 1 };
+  for (const signer of [
+    { key_id: "", private_key: authority.privateKey },
+    { key_id: "key:test" },
+    { key_id: "", private_key: undefined },
+    undefined,
+    null,
+  ]) {
+    assert.throws(
+      () => profile.signArtifact(artifact, domain, signer),
+      (error) => throwsCode("integrity_signer_required")(error) && error.path === "$",
+      JSON.stringify(signer ?? null),
+    );
+  }
+
+  // The receiving side fails closed on its own: the same real signature filed
+  // under an empty id is refused at `$.integrity.key_id` before any keyring
+  // lookup, so an escaped artifact never verifies.
+  const signed = profile.signArtifact(artifact, domain, { key_id: "key:test", private_key: authority.privateKey });
+  const keys = new Map([
+    ["key:test", { role: "threads_authority", public_key_pem: authority.publicKey.export({ type: "spki", format: "pem" }) }],
+  ]);
+  assert.equal(profile.verifySignedArtifact(signed, domain, keys, "threads_authority").role, "threads_authority");
+  const emptied = { ...signed, integrity: { ...signed.integrity, key_id: "" } };
+  assert.throws(
+    () => profile.verifySignedArtifact(emptied, domain, keys, "threads_authority"),
+    (error) => throwsCode("schema_type")(error) && error.path === "$.integrity.key_id",
+  );
+});
