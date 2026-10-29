@@ -472,6 +472,11 @@ The reference validator emits stable codes, including:
   `evidence_read_role_mismatch`, `evidence_read_not_yet_valid`,
   `evidence_read_expired`.
 
+The reference's producer helper `signArtifact` and the Rust `sign_artifact`
+refuse a missing or empty signer key id with `integrity_signer_required` before
+signing; receiving validators independently refuse an empty `integrity.key_id`
+as `schema_type`.
+
 The manifest pins the exact expected code for every negative vector. Consumers
 may add diagnostics, but must not reinterpret a named failure as success.
 

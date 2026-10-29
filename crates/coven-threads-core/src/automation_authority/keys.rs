@@ -261,12 +261,23 @@ pub(crate) fn verify_signed_artifact(
 ///
 /// # Errors
 ///
-/// `schema_type` when `value` is not an object, or a canonicalization error.
+/// `integrity_signer_required` when the signer's key id is empty: the
+/// reference's `signArtifact` refuses a falsy `key_id` or private key before
+/// it signs, and while a missing private key is a type matter here, an empty
+/// id is representable. Then `schema_type` when `value` is not an object, or
+/// a canonicalization error.
 pub fn sign_artifact(
     value: &Value,
     domain: Domain,
     signer: &dyn ArtifactSigner,
 ) -> AuthorityResult<Value> {
+    if signer.key_id().is_empty() {
+        return fail(
+            ErrorCode::IntegritySignerRequired,
+            "a key_id and Ed25519 private_key are required",
+            "$",
+        );
+    }
     let mut signed = shape::object(Some(value), "$")?.clone();
     let digest = canonical_digest(value, domain.as_str())?;
     let message = decode_hex32(&digest).expect("a SHA-256 digest is 32 bytes");
@@ -562,6 +573,48 @@ mod tests {
         fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64] {
             self.pair.sign(message).as_ref().try_into().unwrap()
         }
+    }
+
+    #[test]
+    fn an_empty_signer_key_id_is_refused_before_signing_like_the_reference() {
+        // The reference's `signArtifact` refuses a falsy `key_id` with
+        // `integrity_signer_required` before it signs anything. A missing
+        // private key is a type matter in Rust, since `ArtifactSigner`
+        // supplies the signature, but an empty id is representable and must
+        // get the same refusal rather than a signed artifact filed under "".
+        assert_eq!(
+            ErrorCode::IntegritySignerRequired.as_str(),
+            "integrity_signer_required"
+        );
+        let artifact = json!({"kind": "test", "value": 1});
+        let refused = sign_artifact(&artifact, Domain::Decision, &TestSigner::new(""))
+            .map_err(|error| (error.code, error.path));
+        assert_eq!(
+            refused,
+            Err((ErrorCode::IntegritySignerRequired, "$".to_owned()))
+        );
+
+        // The receiving side already fails closed on its own: the same real
+        // signature filed under an empty id is refused at `$.integrity.key_id`
+        // before any keyring lookup, so an escaped artifact never verifies.
+        let signer = TestSigner::new("key:test");
+        let mut emptied = sign_artifact(&artifact, Domain::Decision, &signer).unwrap();
+        emptied["integrity"]["key_id"] = json!("");
+        let error = verify_signed_artifact(
+            &emptied,
+            Domain::Decision,
+            &Keyring::new(vec![(
+                "key:test".into(),
+                json!({"role": "threads_authority", "public_key_pem": signer.pem()}),
+            )]),
+            Some("threads_authority"),
+            &Ring,
+        )
+        .unwrap_err();
+        assert_eq!(
+            (error.code, error.path.as_str()),
+            (ErrorCode::SchemaType, "$.integrity.key_id")
+        );
     }
 
     #[test]
