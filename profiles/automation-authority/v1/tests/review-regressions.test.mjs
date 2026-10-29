@@ -443,6 +443,10 @@ test("consumption is valid only from approved (erratum 1)", () => {
     assert.equal(apply(chain(before)).state, from);
     assert.throws(() => apply(chain([...before, consumeFrom(from)])), throwsCode("lifecycle_transition_invalid"), from);
   }
+  // A consume as the first event, with no request or approve. The
+  // pre-erratum reference accepted it too: it is the shortest erratum-1
+  // counterexample of the coven-threads#95 lifecycle model.
+  assert.throws(() => apply(chain([consumeFrom("required")])), throwsCode("lifecycle_transition_invalid"), "required");
 });
 
 test("evidence sensitivity must be one of the names (erratum 2)", () => {
