@@ -32,6 +32,7 @@ pub trait SignatureVerifier {
 /// An Ed25519 signer for one keyring key, supplied by the caller.
 pub trait ArtifactSigner {
     /// The keyring id the signature is filed under.
+    /// `sign_artifact` reads it once, validates it, and reuses that value.
     fn key_id(&self) -> &str;
     /// The Ed25519 signature over `message`.
     fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64];
@@ -261,12 +262,24 @@ pub(crate) fn verify_signed_artifact(
 ///
 /// # Errors
 ///
-/// `schema_type` when `value` is not an object, or a canonicalization error.
+/// `integrity_signer_required` when the signer's key id is empty: the
+/// reference's `signArtifact` refuses a falsy `key_id` or private key before
+/// it signs, and while a missing private key is a type matter here, an empty
+/// id is representable. Then `schema_type` when `value` is not an object, or
+/// a canonicalization error.
 pub fn sign_artifact(
     value: &Value,
     domain: Domain,
     signer: &dyn ArtifactSigner,
 ) -> AuthorityResult<Value> {
+    let key_id = signer.key_id();
+    if key_id.is_empty() {
+        return fail(
+            ErrorCode::IntegritySignerRequired,
+            "a key_id and Ed25519 private_key are required",
+            "$",
+        );
+    }
     let mut signed = shape::object(Some(value), "$")?.clone();
     let digest = canonical_digest(value, domain.as_str())?;
     let message = decode_hex32(&digest).expect("a SHA-256 digest is 32 bytes");
@@ -274,7 +287,7 @@ pub fn sign_artifact(
         "integrity".to_owned(),
         json!({
             "alg": "ed25519",
-            "key_id": signer.key_id(),
+            "key_id": key_id,
             "signed_digest": digest,
             "signature_b64": encode_base64(&signer.sign_ed25519(&message)),
         }),
@@ -562,6 +575,120 @@ mod tests {
         fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64] {
             self.pair.sign(message).as_ref().try_into().unwrap()
         }
+    }
+
+    struct ObservedSigner {
+        inner: TestSigner,
+        key_reads: std::cell::Cell<usize>,
+        signing_calls: std::cell::Cell<usize>,
+        change_id_after_first_read: bool,
+    }
+
+    impl ArtifactSigner for ObservedSigner {
+        fn key_id(&self) -> &str {
+            let reads = self.key_reads.get();
+            self.key_reads.set(reads + 1);
+            if self.change_id_after_first_read && reads != 0 {
+                ""
+            } else {
+                self.inner.key_id()
+            }
+        }
+
+        fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64] {
+            self.signing_calls.set(self.signing_calls.get() + 1);
+            self.inner.sign_ed25519(message)
+        }
+    }
+
+    #[test]
+    fn signing_uses_the_same_key_id_that_passed_the_producer_guard() {
+        let signer = ObservedSigner {
+            inner: TestSigner::new("key:test"),
+            key_reads: std::cell::Cell::new(0),
+            signing_calls: std::cell::Cell::new(0),
+            change_id_after_first_read: true,
+        };
+        let value = json!({"kind": "test", "value": 1});
+        let expected = sign_artifact(&value, Domain::Decision, &signer.inner).unwrap();
+        let actual = sign_artifact(&value, Domain::Decision, &signer).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(signer.key_reads.get(), 1);
+        assert_eq!(signer.signing_calls.get(), 1);
+        let keys = Keyring::new(vec![(
+            "key:test".into(),
+            json!({"role": "threads_authority", "public_key_pem": signer.inner.pem()}),
+        )]);
+        verify_signed_artifact(
+            &actual,
+            Domain::Decision,
+            &keys,
+            Some("threads_authority"),
+            &Ring,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn empty_signer_refusal_precedes_body_validation_and_crypto() {
+        let signer = ObservedSigner {
+            inner: TestSigner::new(""),
+            key_reads: std::cell::Cell::new(0),
+            signing_calls: std::cell::Cell::new(0),
+            change_id_after_first_read: false,
+        };
+        for value in [json!(null), json!([]), json!({"kind": "test"})] {
+            let error = sign_artifact(&value, Domain::Decision, &signer).unwrap_err();
+            assert_eq!(error.code, ErrorCode::IntegritySignerRequired);
+            assert_eq!(
+                error.message,
+                "a key_id and Ed25519 private_key are required"
+            );
+            assert_eq!(error.path, "$");
+            assert_eq!(signer.signing_calls.get(), 0);
+        }
+    }
+
+    #[test]
+    fn an_empty_signer_key_id_is_refused_before_signing_like_the_reference() {
+        // The reference's `signArtifact` refuses a falsy `key_id` with
+        // `integrity_signer_required` before it signs anything. A missing
+        // private key is a type matter in Rust, since `ArtifactSigner`
+        // supplies the signature, but an empty id is representable and must
+        // get the same refusal rather than a signed artifact filed under "".
+        assert_eq!(
+            ErrorCode::IntegritySignerRequired.as_str(),
+            "integrity_signer_required"
+        );
+        let artifact = json!({"kind": "test", "value": 1});
+        let refused = sign_artifact(&artifact, Domain::Decision, &TestSigner::new(""))
+            .map_err(|error| (error.code, error.path));
+        assert_eq!(
+            refused,
+            Err((ErrorCode::IntegritySignerRequired, "$".to_owned()))
+        );
+
+        // The receiving side already fails closed on its own: the same real
+        // signature filed under an empty id is refused at `$.integrity.key_id`
+        // before any keyring lookup, so an escaped artifact never verifies.
+        let signer = TestSigner::new("key:test");
+        let mut emptied = sign_artifact(&artifact, Domain::Decision, &signer).unwrap();
+        emptied["integrity"]["key_id"] = json!("");
+        let error = verify_signed_artifact(
+            &emptied,
+            Domain::Decision,
+            &Keyring::new(vec![(
+                "key:test".into(),
+                json!({"role": "threads_authority", "public_key_pem": signer.pem()}),
+            )]),
+            Some("threads_authority"),
+            &Ring,
+        )
+        .unwrap_err();
+        assert_eq!(
+            (error.code, error.path.as_str()),
+            (ErrorCode::SchemaType, "$.integrity.key_id")
+        );
     }
 
     #[test]
