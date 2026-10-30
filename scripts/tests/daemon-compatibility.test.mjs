@@ -86,7 +86,8 @@ test("required workflow always runs four-target pinned acceptance separately fro
   const workflow = readFileSync(
     new URL("../../.github/workflows/daemon-compatibility.yml", import.meta.url), "utf8",
   );
-  checkCiPins(workflow, "1.95.0");
+  const nodeVersion = readFileSync(new URL("../../.node-version", import.meta.url), "utf8").trim();
+  checkCiPins(workflow, "1.95.0", nodeVersion);
   assert.match(workflow, /pull_request:/);
   assert.match(workflow, /push:\s*\n\s*branches:\s*\[main\]/);
   assert.doesNotMatch(workflow, /schedule:|paths:|continue-on-error|pull_request_target|secrets\.|write-all/);

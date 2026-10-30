@@ -11,6 +11,7 @@ use super::canonical::canonical_digest;
 use super::{fail, shape, AuthorityResult, Domain, ErrorCode};
 
 /// The DER prefix of an Ed25519 SubjectPublicKeyInfo.
+#[cfg(test)]
 const ED25519_SPKI_PREFIX: [u8; 12] = [
     0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
 ];
@@ -31,6 +32,7 @@ pub trait SignatureVerifier {
 /// An Ed25519 signer for one keyring key, supplied by the caller.
 pub trait ArtifactSigner {
     /// The keyring id the signature is filed under.
+    /// `sign_artifact` reads it once, validates it, and reuses that value.
     fn key_id(&self) -> &str;
     /// The Ed25519 signature over `message`.
     fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64];
@@ -47,14 +49,18 @@ pub struct Keyring {
 
 impl Keyring {
     /// A keyring from `(key_id, record)` pairs, validated when first used, as
-    /// the reference validates on every verification.
+    /// the reference validates on every verification. Record validation follows
+    /// supplied order (as a JavaScript Map does). Duplicate ids are refused at
+    /// validation before any record can supply authority.
     #[must_use]
     pub fn new(records: Vec<(String, Value)>) -> Self {
         Self { records }
     }
 
     /// A keyring from a JSON object of records, such as `keyring.json`'s
-    /// `keys`.
+    /// `keys`. Validation follows this map's iteration order. To retain an
+    /// external object's original order, pass its ordered pairs to [`Self::new`]
+    /// before converting to a map that may sort keys.
     #[must_use]
     pub fn from_object(keys: &Map<String, Value>) -> Self {
         Self::new(
@@ -64,8 +70,12 @@ impl Keyring {
         )
     }
 
-    /// The record for `key_id`, to adjust in place.
+    /// The unique record for `key_id`, to adjust in place. An ambiguous id
+    /// returns `None`; duplicate ids must be removed explicitly by the caller.
     pub fn record_mut(&mut self, key_id: &str) -> Option<&mut Value> {
+        if self.records.iter().filter(|(id, _)| id == key_id).count() != 1 {
+            return None;
+        }
         self.records
             .iter_mut()
             .find(|(id, _)| id == key_id)
@@ -76,8 +86,19 @@ impl Keyring {
     ///
     /// # Errors
     ///
-    /// The first malformed record's `integrity_*` or `schema_*` code.
+    /// `json_duplicate_key` for duplicate ids, otherwise the first malformed
+    /// record's `integrity_*` or `schema_*` code in supplied iteration order.
     pub fn validate(&self) -> AuthorityResult<()> {
+        let mut ids = std::collections::BTreeSet::new();
+        for (id, _) in &self.records {
+            if !ids.insert(id) {
+                return fail(
+                    ErrorCode::JsonDuplicateKey,
+                    "duplicate keyring id",
+                    "$.keyring",
+                );
+            }
+        }
         for (key_id, record) in &self.records {
             if key_id.is_empty() {
                 return fail(
@@ -241,12 +262,24 @@ pub(crate) fn verify_signed_artifact(
 ///
 /// # Errors
 ///
-/// `schema_type` when `value` is not an object, or a canonicalization error.
+/// `integrity_signer_required` when the signer's key id is empty: the
+/// reference's `signArtifact` refuses a falsy `key_id` or private key before
+/// it signs, and while a missing private key is a type matter here, an empty
+/// id is representable. Then `schema_type` when `value` is not an object, or
+/// a canonicalization error.
 pub fn sign_artifact(
     value: &Value,
     domain: Domain,
     signer: &dyn ArtifactSigner,
 ) -> AuthorityResult<Value> {
+    let key_id = signer.key_id();
+    if key_id.is_empty() {
+        return fail(
+            ErrorCode::IntegritySignerRequired,
+            "a key_id and Ed25519 private_key are required",
+            "$",
+        );
+    }
     let mut signed = shape::object(Some(value), "$")?.clone();
     let digest = canonical_digest(value, domain.as_str())?;
     let message = decode_hex32(&digest).expect("a SHA-256 digest is 32 bytes");
@@ -254,7 +287,7 @@ pub fn sign_artifact(
         "integrity".to_owned(),
         json!({
             "alg": "ed25519",
-            "key_id": signer.key_id(),
+            "key_id": key_id,
             "signed_digest": digest,
             "signature_b64": encode_base64(&signer.sign_ed25519(&message)),
         }),
@@ -291,16 +324,131 @@ fn public_key_text(record: &Value) -> AuthorityResult<&str> {
 
 /// The raw Ed25519 key in a `PUBLIC KEY` PEM, or `None` for anything else.
 fn ed25519_from_pem(pem: &str) -> Option<[u8; 32]> {
-    let body = pem
-        .trim()
-        .strip_prefix("-----BEGIN PUBLIC KEY-----")?
-        .strip_suffix("-----END PUBLIC KEY-----")?;
-    let base64: String = body
-        .chars()
-        .filter(|ch| !ch.is_ascii_whitespace())
-        .collect();
+    // PEM markers occupy their own lines. Search preamble lines, preserve the
+    // first matching public block, and never merge adjacent containers.
+    let mut lines = pem.strip_prefix('\u{feff}').unwrap_or(pem).split('\n');
+    fn clean(line: &str) -> &str {
+        line.trim_end_matches(|ch: char| ch.is_ascii() && ch <= ' ')
+    }
+    lines.find(|line| clean(line) == "-----BEGIN PUBLIC KEY-----")?;
+    let mut base64 = String::new();
+    let mut separator = false;
+    let mut short_line = false;
+    let mut closed = false;
+    for line in lines {
+        let line = clean(line);
+        if line == "-----END PUBLIC KEY-----" {
+            closed = true;
+            break;
+        }
+        if line.is_empty() {
+            if separator || !base64.is_empty() {
+                return None;
+            }
+            separator = true;
+            continue;
+        }
+        if line
+            .bytes()
+            .any(|byte| !byte.is_ascii_alphanumeric() && !b"+/= \t\r".contains(&byte))
+        {
+            return None;
+        }
+        if separator {
+            if short_line || line.len() > 64 {
+                return None;
+            }
+            short_line = line.len() < 64;
+        }
+        base64.extend(line.chars().filter(|ch| !matches!(ch, ' ' | '\t' | '\r')));
+    }
+    if !closed || base64.is_empty() {
+        return None;
+    }
     let der = decode_base64(&base64)?;
-    der.strip_prefix(&ED25519_SPKI_PREFIX)?.try_into().ok()
+    // OpenSSL accepts BER lengths and constructed BIT STRINGs in public SPKI.
+    // Decode only this public Ed25519 structure; private containers never enter.
+    let mut input = der.as_slice();
+    let (0x30, mut spki) = public_ber_element(&mut input, 0)? else {
+        return None;
+    };
+    let (0x30, mut algorithm) = public_ber_element(&mut spki, 0)? else {
+        return None;
+    };
+    let (0x06, oid) = public_ber_element(&mut algorithm, 0)? else {
+        return None;
+    };
+    if oid != [0x2b, 0x65, 0x70] || !algorithm.is_empty() {
+        return None;
+    }
+    let mut key = Vec::new();
+    public_ber_bits(&mut spki, &mut key, 0)?;
+    if !spki.is_empty() {
+        return None;
+    }
+    key.try_into().ok()
+}
+
+/// Read one bounded BER element, retaining exact container boundaries.
+fn public_ber_element<'a>(input: &mut &'a [u8], depth: usize) -> Option<(u8, &'a [u8])> {
+    if depth > 30 {
+        return None;
+    }
+    let (&tag, rest) = input.split_first()?;
+    let (&length, rest) = rest.split_first()?;
+    if length == 0x80 {
+        if tag & 0x20 == 0 {
+            return None;
+        }
+        let mut cursor = rest;
+        while !cursor.starts_with(&[0, 0]) {
+            public_ber_element(&mut cursor, depth + 1)?;
+        }
+        let content = &rest[..rest.len().checked_sub(cursor.len())?];
+        *input = &cursor[2..];
+        return Some((tag, content));
+    }
+    let (length, rest) = if length & 0x80 == 0 {
+        (usize::from(length), rest)
+    } else {
+        let count = usize::from(length & 0x7f);
+        if count > std::mem::size_of::<usize>() {
+            return None;
+        }
+        let bytes = rest.get(..count)?;
+        let length = bytes.iter().try_fold(0_usize, |length, byte| {
+            length.checked_mul(256)?.checked_add(usize::from(*byte))
+        })?;
+        (length, &rest[count..])
+    };
+    let content = rest.get(..length)?;
+    *input = &rest[length..];
+    Some((tag, content))
+}
+
+fn public_ber_bits(input: &mut &[u8], output: &mut Vec<u8>, depth: usize) -> Option<()> {
+    if depth > 6 {
+        return None;
+    }
+    let (tag, mut content) = public_ber_element(input, depth)?;
+    match tag {
+        0x03 => {
+            let (&unused, bytes) = content.split_first()?;
+            if unused > 7 || bytes.is_empty() || output.len().checked_add(bytes.len())? > 32 {
+                return None;
+            }
+            output.extend_from_slice(bytes);
+            *output.last_mut()? &= 0xff_u8 << unused;
+        }
+        0x23 => {
+            public_ber_bits(&mut content, output, depth + 1)?;
+            if !content.is_empty() {
+                return None;
+            }
+        }
+        _ => return None,
+    }
+    Some(())
 }
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -429,6 +577,120 @@ mod tests {
         }
     }
 
+    struct ObservedSigner {
+        inner: TestSigner,
+        key_reads: std::cell::Cell<usize>,
+        signing_calls: std::cell::Cell<usize>,
+        change_id_after_first_read: bool,
+    }
+
+    impl ArtifactSigner for ObservedSigner {
+        fn key_id(&self) -> &str {
+            let reads = self.key_reads.get();
+            self.key_reads.set(reads + 1);
+            if self.change_id_after_first_read && reads != 0 {
+                ""
+            } else {
+                self.inner.key_id()
+            }
+        }
+
+        fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64] {
+            self.signing_calls.set(self.signing_calls.get() + 1);
+            self.inner.sign_ed25519(message)
+        }
+    }
+
+    #[test]
+    fn signing_uses_the_same_key_id_that_passed_the_producer_guard() {
+        let signer = ObservedSigner {
+            inner: TestSigner::new("key:test"),
+            key_reads: std::cell::Cell::new(0),
+            signing_calls: std::cell::Cell::new(0),
+            change_id_after_first_read: true,
+        };
+        let value = json!({"kind": "test", "value": 1});
+        let expected = sign_artifact(&value, Domain::Decision, &signer.inner).unwrap();
+        let actual = sign_artifact(&value, Domain::Decision, &signer).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(signer.key_reads.get(), 1);
+        assert_eq!(signer.signing_calls.get(), 1);
+        let keys = Keyring::new(vec![(
+            "key:test".into(),
+            json!({"role": "threads_authority", "public_key_pem": signer.inner.pem()}),
+        )]);
+        verify_signed_artifact(
+            &actual,
+            Domain::Decision,
+            &keys,
+            Some("threads_authority"),
+            &Ring,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn empty_signer_refusal_precedes_body_validation_and_crypto() {
+        let signer = ObservedSigner {
+            inner: TestSigner::new(""),
+            key_reads: std::cell::Cell::new(0),
+            signing_calls: std::cell::Cell::new(0),
+            change_id_after_first_read: false,
+        };
+        for value in [json!(null), json!([]), json!({"kind": "test"})] {
+            let error = sign_artifact(&value, Domain::Decision, &signer).unwrap_err();
+            assert_eq!(error.code, ErrorCode::IntegritySignerRequired);
+            assert_eq!(
+                error.message,
+                "a key_id and Ed25519 private_key are required"
+            );
+            assert_eq!(error.path, "$");
+            assert_eq!(signer.signing_calls.get(), 0);
+        }
+    }
+
+    #[test]
+    fn an_empty_signer_key_id_is_refused_before_signing_like_the_reference() {
+        // The reference's `signArtifact` refuses a falsy `key_id` with
+        // `integrity_signer_required` before it signs anything. A missing
+        // private key is a type matter in Rust, since `ArtifactSigner`
+        // supplies the signature, but an empty id is representable and must
+        // get the same refusal rather than a signed artifact filed under "".
+        assert_eq!(
+            ErrorCode::IntegritySignerRequired.as_str(),
+            "integrity_signer_required"
+        );
+        let artifact = json!({"kind": "test", "value": 1});
+        let refused = sign_artifact(&artifact, Domain::Decision, &TestSigner::new(""))
+            .map_err(|error| (error.code, error.path));
+        assert_eq!(
+            refused,
+            Err((ErrorCode::IntegritySignerRequired, "$".to_owned()))
+        );
+
+        // The receiving side already fails closed on its own: the same real
+        // signature filed under an empty id is refused at `$.integrity.key_id`
+        // before any keyring lookup, so an escaped artifact never verifies.
+        let signer = TestSigner::new("key:test");
+        let mut emptied = sign_artifact(&artifact, Domain::Decision, &signer).unwrap();
+        emptied["integrity"]["key_id"] = json!("");
+        let error = verify_signed_artifact(
+            &emptied,
+            Domain::Decision,
+            &Keyring::new(vec![(
+                "key:test".into(),
+                json!({"role": "threads_authority", "public_key_pem": signer.pem()}),
+            )]),
+            Some("threads_authority"),
+            &Ring,
+        )
+        .unwrap_err();
+        assert_eq!(
+            (error.code, error.path.as_str()),
+            (ErrorCode::SchemaType, "$.integrity.key_id")
+        );
+    }
+
     #[test]
     fn signatures_verify_only_under_the_named_key_and_unchanged_bytes() {
         // No conformance vector carries a well-formed signature that fails to
@@ -534,6 +796,205 @@ mod tests {
             verify(json!({"role": "threads_authority", "public_key_pem": ""})),
             Err(ErrorCode::IntegrityKeyUnknown)
         );
+    }
+
+    #[test]
+    fn public_pem_boundaries_require_marker_lines_and_preserve_first_key() {
+        let signer = TestSigner::new("key:test");
+        let other = TestSigner::new("key:other");
+        let signed =
+            sign_artifact(&json!({"kind": "pem-boundary"}), Domain::Decision, &signer).unwrap();
+        let pem = signer.pem();
+        let verify = |pem: String| {
+            let keys = Keyring::new(vec![(
+                "key:test".into(),
+                json!({"role": "threads_authority", "public_key_pem": pem}),
+            )]);
+            verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &keys,
+                Some("threads_authority"),
+                &Ring,
+            )
+            .map(|_| ())
+            .map_err(|error| error.code)
+        };
+        for accepted in [
+            format!("preamble\n{pem}postamble\n"),
+            format!("{pem}{}", other.pem()),
+            format!("\u{feff}{pem}"),
+            pem.replace("-----\n", "----- \n"),
+        ] {
+            assert_eq!(verify(accepted), Ok(()));
+        }
+        assert_eq!(
+            verify(format!("{}{pem}", other.pem())),
+            Err(ErrorCode::IntegritySignatureInvalid)
+        );
+        for refused in [
+            pem.replace("KEY-----\n", "KEY-----"),
+            pem.replace("\n-----END", "-----END"),
+            format!(" {pem}"),
+            format!("\t{pem}"),
+            pem.replace('\n', "\r"),
+            pem.replace("MCow", "M\u{c}Cow"),
+        ] {
+            assert_eq!(verify(refused), Err(ErrorCode::IntegritySignatureInvalid));
+        }
+    }
+
+    #[test]
+    fn public_spki_accepts_long_form_lengths() {
+        let signer = TestSigner::new("key:test");
+        let pem = signer.pem();
+        let base64 = pem.lines().nth(1).unwrap();
+        let der = decode_base64(base64).unwrap();
+        let mut encoded = vec![0x30, 0x81, der[1]];
+        encoded.extend_from_slice(&der[2..]);
+        let long_pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            encode_base64(&encoded)
+        );
+        assert_eq!(ed25519_from_pem(&long_pem), ed25519_from_pem(&pem));
+    }
+
+    #[test]
+    fn private_pem_is_outside_the_public_key_contract() {
+        // Synthetic seed and private encoding exist only in this test's memory.
+        let mut der = vec![
+            0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22,
+            0x04, 0x20,
+        ];
+        der.extend_from_slice(&[88; 32]);
+        let signer = TestSigner {
+            id: "key:boundary",
+            pair: ring::signature::Ed25519KeyPair::from_pkcs8_maybe_unchecked(&der).unwrap(),
+        };
+        let signed = sign_artifact(
+            &json!({"kind": "synthetic-public-key-boundary"}),
+            Domain::Decision,
+            &signer,
+        )
+        .unwrap();
+        let label = ["PRIVATE", "KEY"].join(" ");
+        let private = format!(
+            "-----BEGIN {label}-----\n{}\n-----END {label}-----\n",
+            encode_base64(&der)
+        );
+        for (pem, expected) in [
+            (signer.pem(), Ok(())),
+            (private, Err(ErrorCode::IntegritySignatureInvalid)),
+        ] {
+            let keys = Keyring::new(vec![(
+                "key:boundary".into(),
+                json!({"role": "threads_authority", "public_key_pem": pem}),
+            )]);
+            let result = verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &keys,
+                Some("threads_authority"),
+                &Ring,
+            )
+            .map(|_| ())
+            .map_err(|error| error.code);
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn duplicate_constructor_ids_are_refused_before_record_validation() {
+        for second in [
+            json!({"role": "threads_authority"}),
+            json!({"role": "principal"}),
+        ] {
+            let mut keys = Keyring::new(vec![
+                ("same".into(), json!({"role": "threads_authority"})),
+                ("same".into(), second),
+            ]);
+            assert_eq!(
+                keys.validate().unwrap_err().code,
+                ErrorCode::JsonDuplicateKey
+            );
+            assert!(keys.record_mut("same").is_none());
+        }
+        let keys = Keyring::new(vec![
+            ("same".into(), json!(null)),
+            ("same".into(), json!({"role": "unknown"})),
+        ]);
+        assert_eq!(
+            keys.validate().unwrap_err().code,
+            ErrorCode::JsonDuplicateKey
+        );
+        let signer = TestSigner::new("key:test");
+        let signed = sign_artifact(&json!({"kind": "test"}), Domain::Decision, &signer).unwrap();
+        let record = json!({"role": "threads_authority", "public_key_pem": signer.pem()});
+        let keys = Keyring::new(vec![
+            ("key:test".into(), record.clone()),
+            ("key:test".into(), record),
+        ]);
+        assert_eq!(
+            verify_signed_artifact(
+                &signed,
+                Domain::Decision,
+                &keys,
+                Some("threads_authority"),
+                &Ring
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::JsonDuplicateKey
+        );
+    }
+
+    #[test]
+    fn malformed_records_follow_supplied_order_without_sorting_ids() {
+        let role = ("z".into(), json!({"role": "unknown"}));
+        let principal = ("a".into(), json!({"role": "principal"}));
+        for (records, expected) in [
+            (
+                vec![role.clone(), principal.clone()],
+                ErrorCode::IntegrityRoleUnknown,
+            ),
+            (
+                vec![principal, role],
+                ErrorCode::IntegrityPrincipalIdMissing,
+            ),
+        ] {
+            assert_eq!(Keyring::new(records).validate().unwrap_err().code, expected);
+        }
+    }
+
+    #[test]
+    fn pem_uses_the_first_complete_spki_like_the_reference_crypto_backend() {
+        let signer = TestSigner::new("key:test");
+        let signed = sign_artifact(&json!({"kind": "test"}), Domain::Decision, &signer).unwrap();
+        let pem = signer.pem();
+        let body = pem
+            .trim()
+            .strip_prefix("-----BEGIN PUBLIC KEY-----")
+            .unwrap()
+            .strip_suffix("-----END PUBLIC KEY-----")
+            .unwrap();
+        let mut der = decode_base64(&body.split_whitespace().collect::<String>()).unwrap();
+        der.push(0);
+        let pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            encode_base64(&der)
+        );
+        let keys = Keyring::new(vec![(
+            "key:test".into(),
+            json!({"role": "threads_authority", "public_key_pem": pem}),
+        )]);
+        assert!(verify_signed_artifact(
+            &signed,
+            Domain::Decision,
+            &keys,
+            Some("threads_authority"),
+            &Ring
+        )
+        .is_ok());
     }
 
     #[test]
