@@ -10,6 +10,8 @@ findings.
 
 If you are new here, read [concepts.md](concepts.md) first. Everything else assumes its vocabulary.
 
+The [October 30 decision handoff](reviews/2026-10-30-coherence-decision-handoff.md) consolidates all eight criteria, #100/#86 wording and residual decisions, later native durability evidence and the newer Cave repin limits. It prepares Val’s review without adopting the proposed wording or accepting #13/#14.
+
 ## Historical status checkpoint (2026-09-13 UTC)
 
 - **Phase 0 (design) — `[FROZEN]`.** The design doc `specs/PHASE-0-DESIGN.md` is frozen at v0.2 (2026-07-14, tag `v0.2-phase0-design`), with Nova sign-off and an RFC-0001 §5 round-trip verified.
