@@ -507,3 +507,26 @@ test("signArtifact refuses an empty key_id or a missing private key before signi
     (error) => throwsCode("schema_type")(error) && error.path === "$.integrity.key_id",
   );
 });
+
+
+test("empty signer refusal precedes body processing and private-key access (#99)", () => {
+  const authority = generateKeyPairSync("ed25519");
+  let privateReads = 0;
+  const signer = {
+    key_id: "",
+    get private_key() {
+      privateReads++;
+      return authority.privateKey;
+    },
+  };
+  for (const value of [null, [], { kind: "test" }]) {
+    assert.throws(
+      () => profile.signArtifact(value, "opencoven:automation-decision:v1", signer),
+      (error) => error instanceof profile.AuthorityError
+        && error.code === "integrity_signer_required"
+        && error.message === "a key_id and Ed25519 private_key are required"
+        && error.path === "$",
+    );
+    assert.equal(privateReads, 0);
+  }
+});

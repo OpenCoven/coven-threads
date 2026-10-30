@@ -32,6 +32,7 @@ pub trait SignatureVerifier {
 /// An Ed25519 signer for one keyring key, supplied by the caller.
 pub trait ArtifactSigner {
     /// The keyring id the signature is filed under.
+    /// `sign_artifact` reads it once, validates it, and reuses that value.
     fn key_id(&self) -> &str;
     /// The Ed25519 signature over `message`.
     fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64];
@@ -271,7 +272,8 @@ pub fn sign_artifact(
     domain: Domain,
     signer: &dyn ArtifactSigner,
 ) -> AuthorityResult<Value> {
-    if signer.key_id().is_empty() {
+    let key_id = signer.key_id();
+    if key_id.is_empty() {
         return fail(
             ErrorCode::IntegritySignerRequired,
             "a key_id and Ed25519 private_key are required",
@@ -285,7 +287,7 @@ pub fn sign_artifact(
         "integrity".to_owned(),
         json!({
             "alg": "ed25519",
-            "key_id": signer.key_id(),
+            "key_id": key_id,
             "signed_digest": digest,
             "signature_b64": encode_base64(&signer.sign_ed25519(&message)),
         }),
@@ -572,6 +574,78 @@ mod tests {
 
         fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64] {
             self.pair.sign(message).as_ref().try_into().unwrap()
+        }
+    }
+
+    struct ObservedSigner {
+        inner: TestSigner,
+        key_reads: std::cell::Cell<usize>,
+        signing_calls: std::cell::Cell<usize>,
+        change_id_after_first_read: bool,
+    }
+
+    impl ArtifactSigner for ObservedSigner {
+        fn key_id(&self) -> &str {
+            let reads = self.key_reads.get();
+            self.key_reads.set(reads + 1);
+            if self.change_id_after_first_read && reads != 0 {
+                ""
+            } else {
+                self.inner.key_id()
+            }
+        }
+
+        fn sign_ed25519(&self, message: &[u8; 32]) -> [u8; 64] {
+            self.signing_calls.set(self.signing_calls.get() + 1);
+            self.inner.sign_ed25519(message)
+        }
+    }
+
+    #[test]
+    fn signing_uses_the_same_key_id_that_passed_the_producer_guard() {
+        let signer = ObservedSigner {
+            inner: TestSigner::new("key:test"),
+            key_reads: std::cell::Cell::new(0),
+            signing_calls: std::cell::Cell::new(0),
+            change_id_after_first_read: true,
+        };
+        let value = json!({"kind": "test", "value": 1});
+        let expected = sign_artifact(&value, Domain::Decision, &signer.inner).unwrap();
+        let actual = sign_artifact(&value, Domain::Decision, &signer).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(signer.key_reads.get(), 1);
+        assert_eq!(signer.signing_calls.get(), 1);
+        let keys = Keyring::new(vec![(
+            "key:test".into(),
+            json!({"role": "threads_authority", "public_key_pem": signer.inner.pem()}),
+        )]);
+        verify_signed_artifact(
+            &actual,
+            Domain::Decision,
+            &keys,
+            Some("threads_authority"),
+            &Ring,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn empty_signer_refusal_precedes_body_validation_and_crypto() {
+        let signer = ObservedSigner {
+            inner: TestSigner::new(""),
+            key_reads: std::cell::Cell::new(0),
+            signing_calls: std::cell::Cell::new(0),
+            change_id_after_first_read: false,
+        };
+        for value in [json!(null), json!([]), json!({"kind": "test"})] {
+            let error = sign_artifact(&value, Domain::Decision, &signer).unwrap_err();
+            assert_eq!(error.code, ErrorCode::IntegritySignerRequired);
+            assert_eq!(
+                error.message,
+                "a key_id and Ed25519 private_key are required"
+            );
+            assert_eq!(error.path, "$");
+            assert_eq!(signer.signing_calls.get(), 0);
         }
     }
 
