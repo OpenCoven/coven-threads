@@ -60,7 +60,7 @@ export function parseLcov(text, {root, sources, llvm = null}) {
     const counts = (map, expected, hits, hit = v => v > 0) => {
       const found = map.size;
       const covered = [...map.values()].filter(hit).length;
-      if (record.summaries.get(expected) !== found || record.summaries.get(hits) !== covered) refuse("inconsistent summary");
+      if (record.summaries.get(expected) !== found || record.summaries.get(hits) !== covered) refuse(`inconsistent ${expected}/${hits} summary for ${record.source.path}: exported ${record.summaries.get(expected)}/${record.summaries.get(hits)}, detailed ${found}/${covered}`);
       return metric(covered, found);
     };
     if (record.functions.size !== record.hits.size || [...record.functions.keys()].some(k => !record.hits.has(k))) refuse("unbound function count");
