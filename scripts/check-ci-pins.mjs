@@ -112,7 +112,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   checkCiPins(workflow, process.argv[2], nodeVersion);
   // The pinned real daemon uses its own existing Rust toolchain; do not
   // conflate that consumer pin with this library's Rust 1.88 MSRV.
-  for (const name of ["daemon-compatibility.yml", "daemon-observation.yml"]) {
+  for (const name of ["daemon-compatibility.yml", "daemon-observation.yml", "daemon-reliability.yml"]) {
     checkCiPins(readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8"), "1.95.0", nodeVersion);
   }
 }
