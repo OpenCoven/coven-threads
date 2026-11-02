@@ -32,7 +32,7 @@ function fixture(t) {
     else if(args[0] === "--version") stdout = "cargo 1.88.0 (synthetic)\n";
     else if(args[0] === "llvm-cov" && args[1] === "--version") stdout = "cargo-llvm-cov 0.9.1\n";
     else if(args[0] === "llvm-cov") {
-      writeFileSync(args.at(-1),args.includes("--json") ? JSON.stringify({type:"llvm.coverage.json.export",version:"2.0.1",data:[{files:[{filename:join(root,"src/lib.rs"),summary:{functions:{count:1,covered:1},instantiations:{count:1,covered:1},lines:{count:1,covered:1},branches:{count:0,covered:0}}}]}]}) : lcov);
+      writeFileSync(args.at(-1),args.includes("--json") ? JSON.stringify({type:"llvm.coverage.json.export",version:"2.0.1",data:[{files:[{filename:join(root,"src/lib.rs"),segments:[[1,1,1,true,true,false],[1,20,0,false,false,false]],summary:{functions:{count:1,covered:1},instantiations:{count:1,covered:1},lines:{count:1,covered:1},branches:{count:0,covered:0}}}]}]}) : lcov);
       writeFileSync(options.stdio[1], "synthetic measurement output\n");
       stdout = "";
     } else if(args[0] === "metadata") stdout = JSON.stringify({workspace_members:["control"],packages:[{id:"control",name:"control",version:"0.1.0",source:null}],resolve:{nodes:[{id:"control",features:[]}]}});

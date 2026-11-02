@@ -93,7 +93,7 @@ export function measureCoverage({root, output, run=spawnSync, env=process.env}) 
     if(result.error || result.signal || result.status !== 0) fail("coverage command did not complete successfully");
     // FNF/FNH count LLVM function groups; FN/FNDA enumerate instantiations.
     // Export the same profile's summary to bind both denominators without guessing groups.
-    const exportArgs=["llvm-cov","report","--locked","--workspace","--json","--summary-only","--output-path",join(output,"llvm-summary.json")];
+    const exportArgs=["llvm-cov","report","--locked","--workspace","--json","--output-path",join(output,"llvm-summary.json")];
     receipt.exportCommand={program:"cargo",args:[...exportArgs.slice(0,-1),"<output>/llvm-summary.json"],status:null,signal:null};
     const exportFd=openSync(join(output,"export.log"),"wx");
     let exported;
@@ -115,7 +115,7 @@ export function measureCoverage({root, output, run=spawnSync, env=process.env}) 
       return {name:p.name,version:p.version,source:p.source,workspace:metadata.workspace_members.includes(p.id),features:[...features].sort()};
     }).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b),"en"));
     receipt.coverage=parseLcov(readFileSync(join(output,"lcov.info"),"utf8"),{root,sources:receipt.source.rustFiles,llvm:JSON.parse(readFileSync(join(output,"llvm-summary.json"),"utf8"))});
-    receipt.scope={command:receipt.command.args,exportCommand:receipt.exportCommand.args,metadataCommand:receipt.metadataCommand,environment:{cargoIncremental:env.CARGO_INCREMENTAL ?? null},profile:"default test/dev",features:"workspace defaults; no extra features",doctests:false,defaultFilenameExclusions:true,tools:receipt.tools,platform:receipt.platform,config:receipt.source.config,sourcePaths:receipt.source.rustFiles.map(f=>f.path),reportedPaths:receipt.coverage.files.map(f=>f.path),resolvedFeatures:receipt.resolvedFeatures};
+    receipt.scope={command:receipt.command.args,exportCommand:receipt.exportCommand.args,metadataCommand:receipt.metadataCommand,environment:{cargoIncremental:env.CARGO_INCREMENTAL ?? null},lineMetric:"unique mapped source lines; DA matched to LLVM segments",functionMetric:"LLVM function groups; instantiations separate",profile:"default test/dev",features:"workspace defaults; no extra features",doctests:false,defaultFilenameExclusions:true,tools:receipt.tools,platform:receipt.platform,config:receipt.source.config,sourcePaths:receipt.source.rustFiles.map(f=>f.path),reportedPaths:receipt.coverage.files.map(f=>f.path),resolvedFeatures:receipt.resolvedFeatures};
     receipt.scopeSha256=sha256(json(receipt.scope));
     if(JSON.stringify(snapshot(root)) !== JSON.stringify(receipt.source)) fail("coverage source changed during qualification");
     captureFiles();

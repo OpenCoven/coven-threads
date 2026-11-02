@@ -69,7 +69,7 @@ test("real generic export distinguishes functions from instantiations", () => {
   // LLVM 20's exporter/report source has the same function-group semantics.
   const lcov = `SF:src/a.rs\nFN:1,_RINvCsieHBN5Fwi9J_7generic7generichEB2_\nFN:1,_RINvCsieHBN5Fwi9J_7generic7generictEB2_\nFN:2,_RNvCsieHBN5Fwi9J_7generic4main\nFNDA:1,_RINvCsieHBN5Fwi9J_7generic7generichEB2_\nFNDA:1,_RINvCsieHBN5Fwi9J_7generic7generictEB2_\nFNDA:1,_RNvCsieHBN5Fwi9J_7generic4main\nFNF:2\nFNH:2\nDA:1,2\nDA:2,1\nBRF:0\nBRH:0\nLF:2\nLH:2\nend_of_record\n`;
   const summary={functions:{count:2,covered:2},instantiations:{count:3,covered:3},lines:{count:2,covered:2},branches:{count:0,covered:0}};
-  const llvm={type:"llvm.coverage.json.export",version:"2.0.1",data:[{files:[{filename:"src/a.rs",summary}]}]};
+  const llvm={type:"llvm.coverage.json.export",version:"2.0.1",data:[{files:[{filename:"src/a.rs",segments:[[1,1,2,true,true,false],[1,50,0,false,false,false],[2,1,1,true,true,false],[2,10,0,false,false,false]],summary}]}]};
   const r=parseLcov(lcov,{root,sources,llvm});
   assert.deepEqual(parseLcov(lcov,{root,sources,llvm:{...llvm,version:"3.0.1"}}),r);
   assert.deepEqual(r.totals.functions,{total:2,covered:2,percent:100});
@@ -81,4 +81,25 @@ test("real generic export distinguishes functions from instantiations", () => {
     {...llvm,data:[{files:[{filename:"src/a.rs",summary:{...summary,instantiations:{count:2,covered:2}}}]}]},
     {...llvm,data:[{files:[{filename:"src/a.rs",summary:{...summary,functions:{count:1,covered:1}}}]}]},
   ]) assert.throws(()=>parseLcov(lcov,{root,sources,llvm:bad}));
+});
+
+test("real shared-line export keeps LLVM group-lines separate from unique DA lines", () => {
+  // rustc 1.88.0: fn a() {} fn main() { a(); }, Apple LLVM 21 original semantics.
+  const lcov=`SF:src/a.rs\nFN:1,a\nFN:1,main\nFNDA:1,a\nFNDA:1,main\nFNF:2\nFNH:2\nDA:1,1\nBRF:0\nBRH:0\nLF:2\nLH:2\nend_of_record\n`;
+  const file={filename:"src/a.rs",segments:[[1,1,1,true,true,false],[1,7,0,false,false,false],[1,9,1,true,true,false],[1,10,0,false,false,false],[1,11,1,true,true,false],[1,20,0,false,false,false],[1,23,1,true,true,false],[1,24,0,false,false,false],[1,28,1,true,true,false],[1,29,0,false,false,false]],summary:{lines:{count:2,covered:2},functions:{count:2,covered:2},instantiations:{count:2,covered:2},branches:{count:0,covered:0}}};
+  const llvm={type:"llvm.coverage.json.export",version:"3.0.1",data:[{files:[file]}]};
+  const r=parseLcov(lcov,{root,sources,llvm});
+  assert.equal(r.totals.lines.total,1);
+  assert.equal(r.totals.llvmLines.total,2);
+  for(const corrupted of [lcov.replace("DA:1,1\n",""),lcov.replace("DA:1,1","DA:1,2"),lcov.replace("LF:2","LF:3")]) assert.throws(()=>parseLcov(corrupted,{root,sources,llvm}));
+  for(const segments of [[],null,[...file.segments,file.segments[0]],[[1,1,1,"true",true,false]]]) assert.throws(()=>parseLcov(lcov,{root,sources,llvm:{...llvm,data:[{files:[{...file,segments}]}]}}));
+});
+
+test("paired segments authenticate wrapped, skipped and gap line counts", () => {
+  const lcov=`SF:src/a.rs\nFN:1,f\nFNDA:3,f\nFNF:1\nFNH:1\nDA:1,3\nDA:3,4\nDA:4,4\nDA:5,4\nDA:7,0\nBRF:0\nBRH:0\nLF:5\nLH:4\nend_of_record\n`;
+  const segments=[[1,1,3,true,true,false],[2,1,0,false,true,false],[3,1,4,true,true,false],[5,1,0,false,false,false],[6,1,0,false,true,false],[7,1,0,true,true,true],[8,1,0,false,true,false]];
+  const summary={lines:{count:5,covered:4},functions:{count:1,covered:1},instantiations:{count:1,covered:1},branches:{count:0,covered:0}};
+  const llvm={type:"llvm.coverage.json.export",version:"2.0.1",data:[{files:[{filename:"src/a.rs",segments,summary}]}]};
+  assert.equal(parseLcov(lcov,{root,sources,llvm}).totals.lines.total,5);
+  assert.throws(()=>parseLcov(lcov.replace("DA:4,4\n",""),{root,sources,llvm}));
 });
