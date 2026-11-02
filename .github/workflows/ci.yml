@@ -199,6 +199,8 @@ jobs:
         with:
           tool: cargo-llvm-cov@0.9.1
       - name: Generate LCOV baseline
+        env:
+          CARGO_INCREMENTAL: "0"
         run: node scripts/measure-rust-coverage.mjs "$RUNNER_TEMP/threads-coverage-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Upload coverage baseline
         id: coverage-artifact

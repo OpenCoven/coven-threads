@@ -25,6 +25,7 @@ function snapshot(root) {
 
 function rejectOverrides(root,env) {
   for(const [key,value] of Object.entries(env)) {
+    if(key === "CARGO_INCREMENTAL" && value === "0") continue; // reviewed CI toolchain default, recorded in scope
     if(value && /^(?:RUSTFLAGS|RUSTDOCFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_ENCODED_RUSTDOCFLAGS|LLVM_PROFILE_FILE(?:_NAME)?|LLVM_COV(?:_FLAGS)?|LLVM_PROFDATA(?:_FLAGS)?|CARGO_INCREMENTAL|RUSTC|RUSTDOC|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|RUSTC_BOOTSTRAP)$|^CARGO_(?:BUILD|TARGET|PROFILE|LLVM_COV)_/.test(key)) fail(`unsupported coverage override: ${key}`);
   }
   // Cargo searches ancestor and user configuration. Do not silently inherit it.
@@ -114,7 +115,7 @@ export function measureCoverage({root, output, run=spawnSync, env=process.env}) 
       return {name:p.name,version:p.version,source:p.source,workspace:metadata.workspace_members.includes(p.id),features:[...features].sort()};
     }).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b),"en"));
     receipt.coverage=parseLcov(readFileSync(join(output,"lcov.info"),"utf8"),{root,sources:receipt.source.rustFiles,llvm:JSON.parse(readFileSync(join(output,"llvm-summary.json"),"utf8"))});
-    receipt.scope={command:receipt.command.args,exportCommand:receipt.exportCommand.args,metadataCommand:receipt.metadataCommand,profile:"default test/dev",features:"workspace defaults; no extra features",doctests:false,defaultFilenameExclusions:true,tools:receipt.tools,platform:receipt.platform,config:receipt.source.config,sourcePaths:receipt.source.rustFiles.map(f=>f.path),reportedPaths:receipt.coverage.files.map(f=>f.path),resolvedFeatures:receipt.resolvedFeatures};
+    receipt.scope={command:receipt.command.args,exportCommand:receipt.exportCommand.args,metadataCommand:receipt.metadataCommand,environment:{cargoIncremental:env.CARGO_INCREMENTAL ?? null},profile:"default test/dev",features:"workspace defaults; no extra features",doctests:false,defaultFilenameExclusions:true,tools:receipt.tools,platform:receipt.platform,config:receipt.source.config,sourcePaths:receipt.source.rustFiles.map(f=>f.path),reportedPaths:receipt.coverage.files.map(f=>f.path),resolvedFeatures:receipt.resolvedFeatures};
     receipt.scopeSha256=sha256(json(receipt.scope));
     if(JSON.stringify(snapshot(root)) !== JSON.stringify(receipt.source)) fail("coverage source changed during qualification");
     captureFiles();

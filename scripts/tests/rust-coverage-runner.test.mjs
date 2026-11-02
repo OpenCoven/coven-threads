@@ -153,3 +153,16 @@ test("only matching source/tool/feature/configuration scopes are comparable", t 
   };
   assert.notEqual(a.scopeSha256,measureCoverage(feature).scopeSha256);
 });
+
+test("the pinned CI incremental=0 setting qualifies in its own explicit scope", t => {
+  const normal=fixture(t), baseline=measureCoverage(normal);
+  const ci=fixture(t);ci.env.CARGO_INCREMENTAL="0";
+  const r=measureCoverage(ci);
+  assert.equal(r.qualified,true);
+  assert.deepEqual(r.scope.environment,{cargoIncremental:"0"});
+  assert.notEqual(r.scopeSha256,baseline.scopeSha256);
+  for(const value of ["1","true","unknown"]) {
+    const f=fixture(t);f.env.CARGO_INCREMENTAL=value;
+    assert.throws(()=>measureCoverage(f),/override/);
+  }
+});
