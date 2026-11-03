@@ -1,0 +1,158 @@
+import { createHash } from "node:crypto";
+import { isAbsolute, posix, relative, resolve, sep } from "node:path";
+
+export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+const refuse = message => { throw new Error(`LCOV refused: ${message}`); };
+const integer = (value, positive = false) => {
+  if (!/^(0|[1-9][0-9]*)$/.test(value)) refuse("invalid counter");
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || (positive && n === 0)) refuse("unsafe or zero counter");
+  return n;
+};
+function insert(map, key, value) {
+  if (map.has(key)) refuse("duplicate record");
+  map.set(key, value);
+}
+const metric = (covered, total) => ({covered, total, percent: total ? covered * 100 / total : null});
+function add(metrics) {
+  const covered = metrics.reduce((n, m) => n + m.covered, 0);
+  const total = metrics.reduce((n, m) => n + m.total, 0);
+  if (!Number.isSafeInteger(covered) || !Number.isSafeInteger(total)) refuse("unsafe aggregate");
+  return metric(covered, total);
+}
+
+// LLVM 20 LineCoverageStats/LineCoverageIterator semantics, from serialized segments.
+// This authenticates individual DA records independently of function-group totals.
+function segmentLines(segments, sourceLines) {
+  if (!Array.isArray(segments)) refuse("missing detailed LLVM segments");
+  let previous=[0,0];
+  const grouped=new Map();
+  for (const s of segments) {
+    if (!Array.isArray(s) || s.length !== 6 || !s.slice(0,3).every(Number.isSafeInteger) || s[0] < 1 || s[0] > sourceLines + 1 || s[1] < 1 || s[2] < 0 || !s.slice(3).every(v=>typeof v === "boolean") || s[0] < previous[0] || (s[0] === previous[0] && s[1] <= previous[1])) refuse("invalid or unsorted LLVM segment");
+    previous=s;
+    if (!grouped.has(s[0])) grouped.set(s[0],[]);
+    grouped.get(s[0]).push(s);
+  }
+  const lines=new Map();
+  let wrapped=null;
+  for (let n=1;n<=previous[0];n++) {
+    const row=grouped.get(n) ?? [];
+    const entries=row.filter(s=>!s[5] && s[3] && s[4]);
+    const skipped=row.length && !row[0][3] && row[0][4];
+    const mapped=(!skipped && (wrapped?.[3] || entries.length)) || row.some(s=>s[3] && s[4]);
+    if (mapped) {
+      if (n > sourceLines) refuse("mapped segment exceeds source");
+      lines.set(n,Math.max(wrapped?.[2] ?? 0,...entries.map(s=>s[2])));
+    }
+    if (row.length) wrapped=row.at(-1);
+  }
+  return lines;
+}
+
+// Deliberately supports the detailed LLVM exporter subset, not every LCOV dialect.
+export function parseLcov(text, {root, sources, llvm = null}) {
+  if (typeof text !== "string" || text.includes("\0")) refuse("invalid text");
+  const inventory = new Map();
+  for (const source of sources) {
+    if (!source.path || source.path.startsWith("/") || source.path.includes("\\") || posix.normalize(source.path) !== source.path || source.path.startsWith("../") || !/^[a-f0-9]{64}$/.test(source.sha256) || !Number.isSafeInteger(source.lines) || source.lines < 0) refuse("invalid source inventory");
+    insert(inventory, source.path, source);
+  }
+  const files = new Map();
+  function sourcePath(body) {
+    if (typeof body !== "string" || body.includes("\\") || body.split("/").some(p => p === ".." || p === ".") || body.includes("//")) refuse("source alias");
+    const path = isAbsolute(body) ? relative(resolve(root), body).split(sep).join("/") : body;
+    if (!inventory.has(path) || !path.endsWith(".rs")) refuse("foreign or untracked source");
+    return path;
+  }
+  const paired = new Map();
+  if (llvm !== null) {
+    if (llvm.type !== "llvm.coverage.json.export" || !["2.0.1","3.0.1"].includes(llvm.version) || llvm.data?.length !== 1 || !Array.isArray(llvm.data[0].files)) refuse("unsupported LLVM JSON summary");
+    for (const file of llvm.data[0].files) {
+      const summary={};
+      for (const kind of ["lines","functions","instantiations","branches"]) {
+        const total=integer(String(file.summary?.[kind]?.count)), covered=integer(String(file.summary?.[kind]?.covered));
+        if (covered > total) refuse("invalid LLVM summary count");
+        summary[kind]=metric(covered,total);
+      }
+      const path=sourcePath(file.filename);
+      summary.detailedLines=segmentLines(file.segments,inventory.get(path).lines);
+      insert(paired,path,summary);
+    }
+  }
+  let record = null;
+  function line(value) {
+    const n = integer(value, true);
+    if (n > record.source.lines) refuse("line exceeds source length");
+    return n;
+  }
+  function finish() {
+    for (const key of ["LF", "LH", "FNF", "FNH"]) if (!record.summaries.has(key)) refuse(`missing ${key}`);
+    const counts = (map, expected, hits, hit = v => v > 0) => {
+      const found = map.size;
+      const covered = [...map.values()].filter(hit).length;
+      if (record.summaries.get(expected) !== found || record.summaries.get(hits) !== covered) refuse(`inconsistent ${expected}/${hits} summary for ${record.source.path}: exported ${record.summaries.get(expected)}/${record.summaries.get(hits)}, detailed ${found}/${covered}`);
+      return metric(covered, found);
+    };
+    if (record.functions.size !== record.hits.size || [...record.functions.keys()].some(k => !record.hits.has(k))) refuse("unbound function count");
+    const branchesPresent = record.branches.size || record.summaries.has("BRF") || record.summaries.has("BRH");
+    const instantiations=metric([...record.hits.values()].filter(n=>n>0).length,record.hits.size);
+    const functions=metric(record.summaries.get("FNH"),record.summaries.get("FNF"));
+    if (functions.covered > functions.total || functions.total > instantiations.total || functions.covered > instantiations.covered || Boolean(functions.covered) !== Boolean(instantiations.covered) || Boolean(functions.total) !== Boolean(instantiations.total) || (instantiations.covered === instantiations.total && functions.covered !== functions.total)) refuse("inconsistent function groups");
+    const file = {
+      path: record.source.path, sha256: record.source.sha256,
+      lines: llvm === null ? counts(record.lines, "LF", "LH") : metric([...record.lines.values()].filter(n=>n>0).length,record.lines.size),
+      llvmLines: metric(record.summaries.get("LH"),record.summaries.get("LF")),
+      functions, instantiations,
+      branches: branchesPresent ? counts(record.branches, "BRF", "BRH", v => v !== "-" && v > 0) : null,
+    };
+    if (llvm !== null) {
+      const summary=paired.get(file.path);
+      if (!summary || JSON.stringify(summary.lines) !== JSON.stringify(file.llvmLines) || ["functions","instantiations","branches"].some(k=>JSON.stringify(summary[k]) !== JSON.stringify(file[k]))) refuse("LCOV/LLVM summary mismatch");
+      if (summary.detailedLines.size !== record.lines.size || [...summary.detailedLines].some(([n,count])=>record.lines.get(n) !== count)) refuse("DA records differ from detailed LLVM segments");
+    } else if (JSON.stringify(functions) !== JSON.stringify(instantiations)) refuse("function groups require paired LLVM summary");
+    insert(files,record.source.path,file);
+    record = null;
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw) continue;
+    if (raw === "end_of_record") {
+      if (!record) refuse("orphan end_of_record");
+      finish();
+      continue;
+    }
+    const colon = raw.indexOf(":");
+    if (colon < 1) refuse("malformed record");
+    const tag = raw.slice(0, colon), body = raw.slice(colon + 1);
+    if (tag === "SF") {
+      if (record) refuse("unclosed source");
+      const path = sourcePath(body);
+      const source = inventory.get(path);
+      if (!source || !path.endsWith(".rs")) refuse("foreign or untracked source");
+      record = {source, functions:new Map(), hits:new Map(), lines:new Map(), branches:new Map(), summaries:new Map()};
+      continue;
+    }
+    if (!record) refuse("record outside source");
+    if (["LF", "LH", "FNF", "FNH", "BRF", "BRH"].includes(tag)) {
+      insert(record.summaries, tag, integer(body));
+    } else if (tag === "FN" || tag === "FNDA") {
+      const comma = body.indexOf(","), name = body.slice(comma + 1);
+      if (comma < 1 || !name || /[\r\x00-\x1f]/.test(name)) refuse("invalid function");
+      insert(tag === "FN" ? record.functions : record.hits, name, tag === "FN" ? line(body.slice(0, comma)) : integer(body.slice(0, comma)));
+    } else if (tag === "DA") {
+      const fields = body.split(",");
+      if (fields.length < 2 || fields.length > 3 || (fields.length === 3 && !/^[a-zA-Z0-9+/=_-]+$/.test(fields[2]))) refuse("invalid DA");
+      insert(record.lines, line(fields[0]), integer(fields[1]));
+    } else if (tag === "BRDA") {
+      const fields = body.split(",");
+      if (fields.length !== 4) refuse("invalid BRDA");
+      const key = [line(fields[0]), integer(fields[1]), integer(fields[2])].join(",");
+      insert(record.branches, key, fields[3] === "-" ? "-" : integer(fields[3]));
+    } else refuse(`unsupported tag ${tag}`);
+  }
+  if (record) refuse("unterminated source");
+  if (llvm !== null && (paired.size !== files.size || [...paired.keys()].some(p=>!files.has(p)))) refuse("LLVM/LCOV source set mismatch");
+  const sorted = [...files.values()].sort((a,b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  const totals = {lines:add(sorted.map(f => f.lines)), llvmLines:add(sorted.map(f => f.llvmLines)), functions:add(sorted.map(f => f.functions)), instantiations:add(sorted.map(f => f.instantiations)), branches:sorted.every(f => f.branches !== null) ? add(sorted.map(f => f.branches)) : null};
+  if (!totals.lines.total || !totals.functions.total || !totals.lines.covered || !totals.functions.covered) refuse("zero global denominator or covered count");
+  return {files:sorted, totals, unreported:[...inventory.keys()].filter(p => !files.has(p)).sort()};
+}
