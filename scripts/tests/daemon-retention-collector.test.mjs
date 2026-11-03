@@ -33,7 +33,7 @@ function fixture(t) {
   };
   return f;
 }
-function addValidSyntheticArtifact(f) {
+function addValidSyntheticArtifact(f,terminalControl=null) {
   const dir = join(f.root, "producer"); mkdirSync(dir);
   const inventory = JSON.parse(readFileSync(new URL("../../e2e/native-daemon-scenarios.json", import.meta.url)));
   const scenarios = [...inventory.common, ...inventory.unix, ...inventory.linux].sort();
@@ -47,6 +47,16 @@ function addValidSyntheticArtifact(f) {
     writeFileSync(join(path, "junit.xml"), `<testsuite name="threads-e2e" tests="1" failures="0"><testcase classname="threads_e2e" name="${scenario}"/></testsuite>`);
     writeFileSync(join(path, "request.json"), "null"); writeFileSync(join(path, "response.json"), "null");
     writeFileSync(join(path, "logs", "daemon.log"), "synthetic tooling control; no daemon executed\n");
+  }
+  if(terminalControl !== null) {
+    const directory=join(dir,"journeys/explicit-supersession-unique/state");mkdirSync(directory);
+    const windows=[{proposalId:"synthetic-first",classification:"typed_terminal_recorded",closeReason:"superseded"},{proposalId:"synthetic-second",classification:"typed_terminal_recorded",closeReason:"applied"}];
+    const rows=[{id:1,event_type:"proposal_window_opened",proposal_id:"synthetic-first"},{id:2,event_type:"proposal_rejected",proposal_id:"synthetic-first",detail:JSON.stringify({reason:"superseded",replay_hash_matched:null,rationale:null})},{id:3,event_type:"proposal_window_opened",proposal_id:"synthetic-second"},{id:4,event_type:"proposal_approved",proposal_id:"synthetic-second",detail:JSON.stringify({window_close:{reason:"applied",replay_hash_matched:true,rationale:null}})}];
+    if(terminalControl === "wrong-family") {rows[1].event_type=rows[3].event_type="proposal_vetoed";rows[3].detail=JSON.stringify({reason:"applied",replay_hash_matched:true});}
+    if(terminalControl === "bad-replay") rows[3].detail=JSON.stringify({window_close:{reason:"applied",replay_hash_matched:"not-a-boolean"}});
+    if(terminalControl === "close-before-open") {rows[0].id=2;rows[1].id=1;}
+    writeFileSync(join(directory,"ward-window-census.json"),JSON.stringify({complete:true,windows}));
+    writeFileSync(join(directory,"ward-audit.jsonl"),rows.map(row=>JSON.stringify(row)).join("\n")+"\n");
   }
   const runs = targets.map(target => ({ target, status: "passed",
     command: ["cargo", "test", "--locked", "--message-format=json", "-p", "coven-cli", "--features", "threads-test-clock", "--test", target, "--", "--nocapture"],
@@ -106,6 +116,29 @@ test("full synthetic archived bytes qualify only the explicitly successful OS ro
   const report = join(result.destination, "record.json");
   writeFileSync(report, "tampered");
   assert.throws(() => summarizeArchive(join(f.root, "archive")));
+});
+
+test("record replay derives original journeys and keeps missing terminal proof unqualified", async t => {
+  const {collectAttempt,readRetainedArchive}=await implementation();
+  assert.equal(typeof readRetainedArchive,"function");
+  const f=fixture(t);addValidSyntheticArtifact(f);
+  const archive=join(f.root,"archive"), collected=collectAttempt(42,1,archive,f.read);
+  const replay=readRetainedArchive(archive,{terminalEvidence:true});
+  assert.equal(replay.records[0].rows[0].terminal_proof.qualified,false);
+  const path=join(collected.destination,"record.json"), record=JSON.parse(readFileSync(path));
+  record.rows[0].journeys.manifests=999;
+  writeFileSync(path,JSON.stringify(record));rmSync(join(collected.destination,"artifact-index.json"));writeArtifactIndex(collected.destination);
+  assert.throws(()=>readRetainedArchive(archive));
+});
+
+test("original ZIP composition refuses wrong terminal families, replay types and reversed chains",async t=>{
+  const {collectAttempt,readRetainedArchive}=await implementation();
+  for(const kind of ["valid","wrong-family","bad-replay","close-before-open"]) {
+    const f=fixture(t);addValidSyntheticArtifact(f,kind);const archive=join(f.root,"archive");collectAttempt(42,1,archive,f.read);
+    const row=readRetainedArchive(archive,{terminalEvidence:true}).records[0].rows[0];
+    assert.equal(row.terminal_proof.qualified,kind === "valid");
+    if(kind === "valid") assert.equal(row.terminal_proof.windows,2);
+  }
 });
 
 test("corrupt downloaded bytes are retained as unqualified evidence without retry replacement", async (t) => {

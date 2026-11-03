@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from "node:util";
 import { classifyMetadata, qualifyReport, summarizeRetained } from "./lib/daemon-retention.mjs";
 import { extractArtifact, publishArchive, verifyArtifactIndex } from "./lib/daemon-artifact-archive.mjs";
 import { parseTestCounts, qualifyJourneys, writeArtifactIndex } from "./lib/daemon-reliability-evidence.mjs";
+import { qualifyTerminalCaptures } from "./lib/daemon-window-terminals.mjs";
 
 const repository = "OpenCoven/coven-threads";
 const inventory = JSON.parse(readFileSync(new URL("../e2e/native-daemon-scenarios.json", import.meta.url)));
@@ -31,7 +32,7 @@ function githubRead(endpoint) {
 
 function collectorIdentity() {
   const sources = ["retain-daemon-evidence.mjs", "lib/daemon-retention.mjs", "lib/daemon-artifact-archive.mjs",
-    "lib/extract-daemon-artifact.py", "lib/daemon-reliability-evidence.mjs", "run-daemon-canary.mjs",
+    "lib/extract-daemon-artifact.py", "lib/daemon-reliability-evidence.mjs", "lib/daemon-window-terminals.mjs", "run-daemon-canary.mjs",
     "../e2e/native-daemon-scenarios.json"];
   const python = spawnSync("python3", ["-I", "-c", "import sys; assert sys.version_info >= (3,11); print(sys.version.split()[0])"], { encoding: "utf8" });
   if (python.error || python.status !== 0) throw new Error("Python 3.11+ is required for retained evidence validation");
@@ -155,7 +156,7 @@ function savedPages(metadata, prefix, key) {
   return rows;
 }
 
-export function summarizeArchive(archiveRoot) {
+export function readRetainedArchive(archiveRoot, {terminalEvidence=false}={}) {
   const root = resolve(archiveRoot);
   if (!lstatSync(root).isDirectory()) throw new Error("archive root must be a regular directory");
   const records = [];
@@ -202,15 +203,25 @@ export function summarizeArchive(archiveRoot) {
           extractArtifact(join(directory, row.os, "original.zip"), expected.artifact?.digest?.slice(7), evidence);
           const proof = qualifyExtracted(evidence, expected);
           if (proof.execution_passed !== row.execution_passed || proof.first_attempt_qualified !== row.first_attempt_qualified ||
-              JSON.stringify(proof.source_series) !== JSON.stringify(row.source_series) || JSON.stringify(proof.counts) !== JSON.stringify(row.counts)) {
+              JSON.stringify(proof.source_series) !== JSON.stringify(row.source_series) || JSON.stringify(proof.counts) !== JSON.stringify(row.counts) ||
+              !isDeepStrictEqual(proof.journeys,row.journeys)) {
             throw new Error("retained qualification contradicts original ZIP evidence");
+          }
+          if(terminalEvidence) {
+            try {row.terminal_proof=qualifyTerminalCaptures(join(evidence,"journeys"));}
+            catch {row.terminal_proof={qualified:false,reason:"missing_or_invalid_terminal_capture"};}
           }
         } finally { rmSync(scratch, { recursive: true }); }
       }
       records.push(record);
     }
   }
-  return { ...summarizeRetained(records), separately_retained_collections: separateCollections };
+  return {records,separately_retained_collections:separateCollections};
+}
+
+export function summarizeArchive(archiveRoot) {
+  const {records,separately_retained_collections}=readRetainedArchive(archiveRoot);
+  return {...summarizeRetained(records),separately_retained_collections};
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
