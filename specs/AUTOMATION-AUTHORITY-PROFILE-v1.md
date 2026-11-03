@@ -104,6 +104,9 @@ lifecycle events MUST authenticate Threads authority. Approvals MUST
 authenticate the named approving principal/key. The repository keyring is
 synthetic conformance material and contains public keys only.
 
+**Public-key input clarification (2026-10-28, #93, approved by Val):** The Rust verification keyring accepts Ed25519 public-key SPKI PEM, not private-key PEM. Node's crypto utility also accepts private-key PEM in the same verification field; that broader container support is an explicit implementation divergence, not a required Threads verification input. Callers holding private material must export the public SPKI before constructing the verification keyring. Private-key decoding and credential custody remain outside this library's authority. Existing public-key callers need no migration; callers relying on Node's broader input must export public keys. This clarification changes no signed bytes, profile version, public Rust signature, or audit schema.
+
+
 > **Additive documentation erratum (2026-09-11, #44):** The consumption
 > snapshot row documents the existing `DOMAIN.consumption` preimage in
 > `profiles/automation-authority/v1/validator.mjs`, previously omitted from
@@ -184,6 +187,24 @@ sufficient; a policy grant and matching scope are also required.
 Filesystem scopes use `project` or `workspace` roots and a relative path.
 Absolute paths, `..`, wildcards, root-wide paths, drive paths, and shallow
 recursive grants fail closed.
+
+> **Additive consumer note (2026-10-20, OpenCoven/coven#857):** A consumer
+> that enforces filesystem scopes maps them to operations as follows.
+>
+> - **A recursive `read` scope on directory D** permits reading any file at or
+>   beneath D, and listing or searching D or any directory beneath it.
+> - **A non-recursive `read` scope on path P** permits reading P if it is a
+>   file, or listing P's entries if it is a directory. It never permits
+>   reading those entries, and never permits a search.
+> - **A `write` scope** permits no read, listing or search.
+>
+> The consumer decides a resource's type from the object it actually opened,
+> never from the path's spelling. It bounds recursion itself. It may refuse
+> more than a scope permits, never less. Examples are its own state, harness
+> credentials, and secret-bearing names such as `.git` folders and `.env` files
+> beneath a recursive scope. A listing or search never discloses an entry that
+> a read of it would refuse. This note records how consumers apply scopes. It
+> changes no artifact, no validator behavior and no profile version.
 
 Network scopes require HTTPS, an exact non-local DNS host, a port, a path prefix
 narrower than `/`, and explicit methods. Credential scopes bind an exact
@@ -450,6 +471,11 @@ The reference validator emits stable codes, including:
   `evidence_retention_unknown`, `evidence_scope_cross_principal_forbidden`,
   `evidence_read_role_mismatch`, `evidence_read_not_yet_valid`,
   `evidence_read_expired`.
+
+The reference's producer helper `signArtifact` and the Rust `sign_artifact`
+refuse a missing or empty signer key id with `integrity_signer_required` before
+signing; receiving validators independently refuse an empty `integrity.key_id`
+as `schema_type`.
 
 The manifest pins the exact expected code for every negative vector. Consumers
 may add diagnostics, but must not reinterpret a named failure as success.

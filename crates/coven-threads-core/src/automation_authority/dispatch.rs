@@ -17,6 +17,132 @@ use super::{fail, AuthorityResult, Domain, ErrorCode};
 /// The domain of the digest that binds a dispatch to its snapshot.
 const DISPATCH_BINDING_DOMAIN: &str = "opencoven:automation-dispatch-binding:v1";
 
+/// Lower-level guard; full dispatch reaches it only after semantic equality.
+fn validate_decision_request_bindings(
+    request: &Value,
+    decision: &Value,
+    request_digest: &Value,
+) -> AuthorityResult<()> {
+    let runtime = &request["context"]["runtime"];
+    assert_binding(
+        "request digest",
+        &decision["request_digest"],
+        request_digest,
+        ErrorCode::DecisionRequestMismatch,
+    )?;
+    assert_binding(
+        "request id",
+        &decision["request_id"],
+        &request["request_id"],
+        ErrorCode::DecisionRequestMismatch,
+    )?;
+    let execution = &request["execution"];
+    let correlation = &decision["correlation"];
+    for (name, member) in [
+        ("decision occurrence", "occurrence_id"),
+        ("decision run", "run_id"),
+        ("decision attempt", "attempt"),
+        ("decision fence", "fence_generation"),
+    ] {
+        assert_binding(
+            name,
+            &correlation[member],
+            &execution[member],
+            ErrorCode::DecisionBindingMismatch,
+        )?;
+    }
+    let bindings = &decision["bindings"];
+    let expected = [
+        ("principal_id", &request["principal"]["id"]),
+        ("familiar_id", &request["familiar"]["id"]),
+        (
+            "familiar_embodiment_digest",
+            &request["familiar"]["embodiment_digest"],
+        ),
+        ("automation_id", &request["automation"]["id"]),
+        (
+            "definition_revision",
+            &request["automation"]["definition_revision"],
+        ),
+        (
+            "definition_digest",
+            &request["automation"]["definition_digest"],
+        ),
+        ("action_digest", &request["action"]["digest"]),
+        ("project_id", &request["context"]["project_id"]),
+        ("workspace_id", &request["context"]["workspace_id"]),
+        ("runtime_id", &runtime["id"]),
+        ("runtime_descriptor_digest", &runtime["descriptor_digest"]),
+        (
+            "previous_approval_digest",
+            &request["previous_approval_digest"],
+        ),
+    ];
+    for (name, value) in expected {
+        assert_binding(
+            name,
+            &bindings[name],
+            value,
+            ErrorCode::DecisionBindingMismatch,
+        )?;
+    }
+
+    Ok(())
+}
+fn validate_granted_runtime_capabilities(
+    required: &[Value],
+    available: &[Value],
+) -> AuthorityResult<()> {
+    for capability in required {
+        if !available.contains(capability) {
+            return fail(
+                ErrorCode::DispatchRuntimeDowngrade,
+                format!(
+                    "runtime no longer exposes {}",
+                    capability.as_str().unwrap_or_default()
+                ),
+                "$",
+            );
+        }
+    }
+    Ok(())
+}
+fn validate_approval_runtime_capabilities(
+    required: &[Value],
+    available: &[Value],
+) -> AuthorityResult<()> {
+    for capability in required {
+        if !available.contains(capability) {
+            return fail(
+                ErrorCode::DispatchRuntimeCapabilityMissing,
+                format!(
+                    "approval-required dispatch runtime lacks {}",
+                    capability.as_str().unwrap_or_default()
+                ),
+                "$",
+            );
+        }
+    }
+    Ok(())
+}
+fn validate_decision_time(validity: &Value, now: i64) -> AuthorityResult<()> {
+    if now < shape::millis(validity.get("not_before")) {
+        return fail(
+            ErrorCode::DecisionNotYetValid,
+            "decision validity interval has not started",
+            "$",
+        );
+    }
+    if now >= shape::millis(validity.get("not_after")) {
+        return fail(
+            ErrorCode::DecisionExpired,
+            "decision validity interval has ended",
+            "$",
+        );
+    }
+    Ok(())
+}
+
 const BUNDLE_FIELDS: [&str; 8] = [
     "request",
     "decision",
@@ -302,68 +428,8 @@ pub fn verify_dispatch(
         );
     }
     let request_digest_value = Value::String(request_digest.clone());
-    assert_binding(
-        "request digest",
-        &decision["request_digest"],
-        &request_digest_value,
-        ErrorCode::DecisionRequestMismatch,
-    )?;
-    assert_binding(
-        "request id",
-        &decision["request_id"],
-        &request["request_id"],
-        ErrorCode::DecisionRequestMismatch,
-    )?;
+    validate_decision_request_bindings(request, decision, &request_digest_value)?;
     let execution = &request["execution"];
-    let correlation = &decision["correlation"];
-    for (name, member) in [
-        ("decision occurrence", "occurrence_id"),
-        ("decision run", "run_id"),
-        ("decision attempt", "attempt"),
-        ("decision fence", "fence_generation"),
-    ] {
-        assert_binding(
-            name,
-            &correlation[member],
-            &execution[member],
-            ErrorCode::DecisionBindingMismatch,
-        )?;
-    }
-    let bindings = &decision["bindings"];
-    let expected = [
-        ("principal_id", &request["principal"]["id"]),
-        ("familiar_id", &request["familiar"]["id"]),
-        (
-            "familiar_embodiment_digest",
-            &request["familiar"]["embodiment_digest"],
-        ),
-        ("automation_id", &request["automation"]["id"]),
-        (
-            "definition_revision",
-            &request["automation"]["definition_revision"],
-        ),
-        (
-            "definition_digest",
-            &request["automation"]["definition_digest"],
-        ),
-        ("action_digest", &request["action"]["digest"]),
-        ("project_id", &request["context"]["project_id"]),
-        ("workspace_id", &request["context"]["workspace_id"]),
-        ("runtime_id", &runtime["id"]),
-        ("runtime_descriptor_digest", &runtime["descriptor_digest"]),
-        (
-            "previous_approval_digest",
-            &request["previous_approval_digest"],
-        ),
-    ];
-    for (name, value) in expected {
-        assert_binding(
-            name,
-            &bindings[name],
-            value,
-            ErrorCode::DecisionBindingMismatch,
-        )?;
-    }
 
     let checks = [
         (
@@ -487,36 +553,13 @@ pub fn verify_dispatch(
     let runtime_capabilities = snapshot["runtime_capabilities"]
         .as_array()
         .expect("validated");
-    for capability in decision["granted_capabilities"]
-        .as_array()
-        .expect("validated")
-    {
-        if !runtime_capabilities.contains(capability) {
-            return fail(
-                ErrorCode::DispatchRuntimeDowngrade,
-                format!(
-                    "runtime no longer exposes {}",
-                    capability.as_str().unwrap_or_default()
-                ),
-                "$",
-            );
-        }
-    }
-    let validity = &decision["validity"];
-    if now < shape::millis(validity.get("not_before")) {
-        return fail(
-            ErrorCode::DecisionNotYetValid,
-            "decision validity interval has not started",
-            "$",
-        );
-    }
-    if now >= shape::millis(validity.get("not_after")) {
-        return fail(
-            ErrorCode::DecisionExpired,
-            "decision validity interval has ended",
-            "$",
-        );
-    }
+    validate_granted_runtime_capabilities(
+        decision["granted_capabilities"]
+            .as_array()
+            .expect("validated"),
+        runtime_capabilities,
+    )?;
+    validate_decision_time(&decision["validity"], now)?;
     match decision["outcome"].as_str() {
         Some("reject") => {
             return fail(
@@ -658,21 +701,12 @@ pub fn verify_dispatch(
                 "$",
             );
         }
-        for capability in request["requested_capabilities"]
-            .as_array()
-            .expect("validated")
-        {
-            if !runtime_capabilities.contains(capability) {
-                return fail(
-                    ErrorCode::DispatchRuntimeCapabilityMissing,
-                    format!(
-                        "approval-required dispatch runtime lacks {}",
-                        capability.as_str().unwrap_or_default()
-                    ),
-                    "$",
-                );
-            }
-        }
+        validate_approval_runtime_capabilities(
+            request["requested_capabilities"]
+                .as_array()
+                .expect("validated"),
+            runtime_capabilities,
+        )?;
         let decision_digest_value = Value::String(decision_digest.clone());
         if recurring {
             let prefix = approval["use"]["occurrence_prefix"]
@@ -942,4 +976,96 @@ fn verify_recurring_authorization(
         return mismatch("recurring approval exceeds or changes its grant decision");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod shadowed_guard_tests {
+    use super::*;
+
+    #[test]
+    fn decision_bindings_refuse_wrong_request_and_correlation_without_semantic_prerequisite() {
+        let body: Value = serde_json::from_str(include_str!(
+            "../../../../profiles/automation-authority/v1/vectors/01-r0-read-permit.json"
+        ))
+        .unwrap();
+        let request = &body["request"];
+        let decision = &body["decision"];
+        let digest = Value::String(format!(
+            "sha256:{}",
+            canonical_digest(request, Domain::Request.as_str()).unwrap()
+        ));
+        assert!(validate_decision_request_bindings(request, decision, &digest).is_ok());
+        for field in ["request_digest", "request_id"] {
+            let mut wrong = decision.clone();
+            wrong[field] = json!("changed");
+            assert_eq!(
+                validate_decision_request_bindings(request, &wrong, &digest)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::DecisionRequestMismatch
+            );
+        }
+        for field in ["occurrence_id", "run_id", "attempt", "fence_generation"] {
+            let mut wrong = decision.clone();
+            wrong["correlation"][field] = json!("changed");
+            assert_eq!(
+                validate_decision_request_bindings(request, &wrong, &digest)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::DecisionBindingMismatch
+            );
+        }
+        let mut wrong = decision.clone();
+        wrong["bindings"]["principal_id"] = json!("principal:other");
+        assert_eq!(
+            validate_decision_request_bindings(request, &wrong, &digest)
+                .unwrap_err()
+                .code,
+            ErrorCode::DecisionBindingMismatch
+        );
+    }
+
+    #[test]
+    fn granted_runtime_guard_refuses_a_missing_grant_without_prior_set_equality() {
+        let required = vec![json!("analysis.read"), json!("network.fetch")];
+        assert!(validate_granted_runtime_capabilities(&required, &required).is_ok());
+        assert_eq!(
+            validate_granted_runtime_capabilities(&required, &required[..1])
+                .unwrap_err()
+                .code,
+            ErrorCode::DispatchRuntimeDowngrade
+        );
+    }
+
+    #[test]
+    fn approval_runtime_guard_refuses_a_missing_request_without_prior_evaluation() {
+        let required = vec![json!("analysis.read"), json!("state.mutate")];
+        assert!(validate_approval_runtime_capabilities(&required, &required).is_ok());
+        assert_eq!(
+            validate_approval_runtime_capabilities(&required, &required[..1])
+                .unwrap_err()
+                .code,
+            ErrorCode::DispatchRuntimeCapabilityMissing
+        );
+    }
+
+    #[test]
+    fn decision_time_guard_uses_inclusive_start_and_exclusive_expiry() {
+        let validity =
+            json!({"not_before": "2026-09-03T13:00:00Z", "not_after": "2026-09-03T14:00:00Z"});
+        let start = shape::millis(validity.get("not_before"));
+        let end = shape::millis(validity.get("not_after"));
+        assert!(validate_decision_time(&validity, start).is_ok());
+        assert!(validate_decision_time(&validity, end - 1).is_ok());
+        assert_eq!(
+            validate_decision_time(&validity, start - 1)
+                .unwrap_err()
+                .code,
+            ErrorCode::DecisionNotYetValid
+        );
+        assert_eq!(
+            validate_decision_time(&validity, end).unwrap_err().code,
+            ErrorCode::DecisionExpired
+        );
+    }
 }

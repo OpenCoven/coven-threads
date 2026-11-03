@@ -78,9 +78,10 @@ test("observation is separate from required PR CI and pins its actions", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/daemon-observation.yml", import.meta.url), "utf8",
   );
-  checkCiPins(workflow, "1.95.0");
+  const nodeVersion = readFileSync(new URL("../../.node-version", import.meta.url), "utf8").trim();
+  checkCiPins(workflow, "1.95.0", nodeVersion);
   const coreCi = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  checkCiPins(coreCi, "1.88.0");
+  checkCiPins(coreCi, "1.88.0", nodeVersion);
   assert.match(workflow, /schedule:\s*\n\s*- cron:/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.doesNotMatch(workflow, /pull_request|continue-on-error|secrets\.|write-all/);

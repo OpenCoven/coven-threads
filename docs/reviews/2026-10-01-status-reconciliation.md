@@ -1,11 +1,6 @@
 # Status reconciliation — 2026-10-01
 
-**Recorded by:** Echo (agent), at Val's request to bring current-status text
-across repositories up to date.
-**Scope:** reconcile this repository's current-status text with downstream
-state that changed after the [2026-09-17 maintainer decisions](2026-09-17-maintainer-decisions.md).
-This record accepts nothing and closes no gate. It changes no contract, pin,
-schema, migration, or required check. Earlier dated reviews are not amended.
+**Recorded by:** Echo (agent), at Val's request to bring current-status text across repositories up to date. **Scope:** reconcile this repository's current-status text with downstream state that changed after the [2026-09-17 maintainer decisions](2026-09-17-maintainer-decisions.md). This record accepts nothing and closes no gate. It changes no contract, pin, schema, migration, or required check. Earlier dated reviews are not amended.
 
 ## Observations
 
@@ -22,21 +17,13 @@ Read on 2026-10-01 (UTC) from GitHub, git, and the local Beads board.
 | Human gates | #13 (`threads-uqx.9`) is open and has been dependency-clear since 2026-09-17. #14 (`threads-uqx.10`) is open and depends on #13. | GitHub; Beads |
 | Deferred design | `threads-5rr` (familiar inbox and handoff ledger) is deferred until 2026-10-31. | Beads |
 
-OpenCoven/coven#1067, intermittent macOS piped-lifecycle failures in the full
-source suites, remains open. The #1047 closing comment calls it a different
-failure shape. It has no Threads bead and is listed here only so it is not
-mistaken for a closed follow-up.
+OpenCoven/coven#1067, intermittent macOS piped-lifecycle failures in the full source suites, remains open. The #1047 closing comment calls it a different failure shape. It has no Threads bead and is listed here only so it is not mistaken for a closed follow-up.
 
 ## Effect on current-status text
 
-- The native reliability follow-ups named in the 2026-09-17 record are closed
-  on the Coven side. Two Threads bead mirrors still need reconciling, which is
-  a maintainer action and is not taken here.
-- `v0.4.4`, not `v0.4.3`, is the latest published Coven release carrying the
-  Threads integration. That remains release provenance, not proof of full
-  Phase-5 conformance.
-- `threads-xpo` and `threads-lm4` were closed by Decision 2 of 2026-09-17, so
-  the delivery strategy no longer names them as owners of open work.
+- The native reliability follow-ups named in the 2026-09-17 record are closed on the Coven side. Two Threads bead mirrors still need reconciling, which is a maintainer action and is not taken here.
+- `v0.4.4`, not `v0.4.3`, is the latest published Coven release carrying the Threads integration. That remains release provenance, not proof of full Phase-5 conformance.
+- `threads-xpo` and `threads-lm4` were closed by Decision 2 of 2026-09-17, so the delivery strategy no longer names them as owners of open work.
 
 ## Remaining after this reconciliation
 

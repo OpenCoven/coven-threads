@@ -6,6 +6,12 @@ cd "$ROOT"
 
 readonly REQUIRED_TOOLCHAIN="1.88.0"
 
+if ! command -v node >/dev/null 2>&1; then
+  echo "error: install Node $(cat .node-version) before bootstrap" >&2
+  exit 1
+fi
+node scripts/check-ci-pins.mjs "$REQUIRED_TOOLCHAIN"
+
 if ! command -v python3 >/dev/null 2>&1 || ! python3 -I -c 'import tomllib' 2>/dev/null; then
   echo "error: Python 3.11+ with standard-library tomllib is required for compatibility metadata" >&2
   exit 1

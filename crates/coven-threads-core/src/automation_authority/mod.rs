@@ -114,6 +114,7 @@ codes! {
     IntegrityRoleMismatch => "integrity_role_mismatch",
     IntegrityDigestMismatch => "integrity_digest_mismatch",
     IntegritySignatureInvalid => "integrity_signature_invalid",
+    IntegritySignerRequired => "integrity_signer_required",
     CapabilityUnknown => "capability_unknown",
     ScopeTooBroad => "scope_too_broad",
     ScopeInsecureNetwork => "scope_insecure_network",

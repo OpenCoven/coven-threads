@@ -110,9 +110,18 @@ cargo build --locked -p coven-threads-core --example automation_authority_batch
 node scripts/automation-authority-differential.mjs target/debug/examples/automation_authority_batch
 ```
 
+The differential hands the port every case as serialized text, which crosses
+`strict_parse_json` before any operation, and rewrites each vector body at the
+text level (duplicate and escaped keys, number spellings, lone surrogates) so
+the two parsers are compared on the same bytes. A change to the batch
+example's input protocol updates the script in the same pull request. On a
+mismatch the script keeps the failing cases and prints the directory and a
+reproduction command.
+
 Coven builds `serde_json` with `arbitrary_precision`, which Cargo unifies into
 this crate. The gate therefore runs the vectors and the differential a second
-time with `--features serde_json/arbitrary_precision`.
+time with `--features serde_json/arbitrary_precision`; the script prints which
+configuration it compared.
 
 ## R4 change rules
 

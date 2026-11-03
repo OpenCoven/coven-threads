@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createPrivateKey, createPublicKey, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
@@ -452,5 +452,77 @@ test("evidence sensitivity must be one of the names (erratum 2)", () => {
   assert.equal(authorize("internal").ok, true);
   for (const sensitivity of [["internal"], [["internal"]], ["internal", null], 1, true, {}, null]) {
     assert.throws(() => authorize(sensitivity), throwsCode("evidence_sensitivity_unknown"), JSON.stringify(sensitivity));
+  }
+});
+
+
+test("Node private-PEM acceptance is an explicit extension of the Rust public-key contract", () => {
+  const der = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), Buffer.alloc(32, 88)]);
+  const privateKey = createPrivateKey({ key: der, format: "der", type: "pkcs8" });
+  const value = profile.signArtifact({ kind: "synthetic-public-key-boundary" }, "opencoven:automation-decision:v1", { key_id: "key:boundary", private_key: privateKey });
+  for (const pem of [createPublicKey(privateKey).export({ type: "spki", format: "pem" }), privateKey.export({ type: "pkcs8", format: "pem" })]) {
+    const record = { role: "threads_authority", public_key_pem: pem };
+    const verified = profile.verifySignedArtifact(value, "opencoven:automation-decision:v1", new Map([["key:boundary", record]]), "threads_authority");
+    assert.equal(verified.role, "threads_authority");
+  }
+});
+
+test("signArtifact refuses an empty key_id or a missing private key before signing (#99)", () => {
+  // The producer helper's own guard, with a real ephemeral Ed25519 key. The
+  // Rust `sign_artifact` must refuse the representable empty id the same way;
+  // a missing private key is a type matter there, since `ArtifactSigner`
+  // supplies the signature.
+  const authority = generateKeyPairSync("ed25519");
+  const domain = "opencoven:automation-decision:v1";
+  const artifact = { kind: "test", value: 1 };
+  for (const signer of [
+    { key_id: "", private_key: authority.privateKey },
+    { key_id: "key:test" },
+    { key_id: "", private_key: undefined },
+    undefined,
+    null,
+  ]) {
+    assert.throws(
+      () => profile.signArtifact(artifact, domain, signer),
+      (error) => throwsCode("integrity_signer_required")(error) && error.path === "$",
+      JSON.stringify(signer ?? null),
+    );
+  }
+
+  // The receiving side fails closed on its own: the same real signature filed
+  // under an empty id is refused at `$.integrity.key_id` before any keyring
+  // lookup, so an escaped artifact never verifies.
+  const signed = profile.signArtifact(artifact, domain, { key_id: "key:test", private_key: authority.privateKey });
+  const keys = new Map([
+    ["key:test", { role: "threads_authority", public_key_pem: authority.publicKey.export({ type: "spki", format: "pem" }) }],
+  ]);
+  assert.equal(profile.verifySignedArtifact(signed, domain, keys, "threads_authority").role, "threads_authority");
+  const emptied = { ...signed, integrity: { ...signed.integrity, key_id: "" } };
+  assert.throws(
+    () => profile.verifySignedArtifact(emptied, domain, keys, "threads_authority"),
+    (error) => throwsCode("schema_type")(error) && error.path === "$.integrity.key_id",
+  );
+});
+
+
+test("empty signer refusal precedes body processing and private-key access (#99)", () => {
+  const authority = generateKeyPairSync("ed25519");
+  let privateReads = 0;
+  const signer = {
+    key_id: "",
+    get private_key() {
+      privateReads++;
+      return authority.privateKey;
+    },
+  };
+  for (const value of [null, [], { kind: "test" }]) {
+    assert.throws(
+      () => profile.signArtifact(value, "opencoven:automation-decision:v1", signer),
+      (error) => error instanceof profile.AuthorityError
+        && error.code === "integrity_signer_required"
+        && error.message === "a key_id and Ed25519 private_key are required"
+        && error.path === "$",
+    );
+    assert.equal(privateReads, 0);
   }
 });
