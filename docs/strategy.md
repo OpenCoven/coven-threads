@@ -28,6 +28,9 @@ The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
 records subsequent fixture corrections and accepted operation-level
 diagnostics. Use those observations for further native cause discrimination;
 do not mistake diagnostic acceptance for a runtime repair or a new pin.
+The [2026-10-01 status reconciliation](reviews/2026-10-01-status-reconciliation.md)
+records Coven's later closure of those native issues, the latest published
+release pin, and live Cave acceptance progress. It accepts nothing.
 
 ## Starting position
 
@@ -37,7 +40,7 @@ do not mistake diagnostic acceptance for a runtime repair or a new pin.
 | Automation Authority Profile v1 | Schemas, reference validator, Rust port (#82/#84/#89), exact vectors, downstream pin (#1472) and signed decision producer (#1602) | Production Runtime Authority certification or credential issuance; the landed decision producer has no production caller |
 | Repository quality | Pinned toolchain/actions, Cargo baseline, Nextest, informational coverage, required secret/privacy guards, and four-target daemon compatibility | Immutable checker authority, installed-binary conformance, or a coverage ratchet |
 | Governance | Adopted solo-maintainer policy, required PRs, resolved conversations, and six strict required checks | GitHub-enforced independent review or either Phase-5 human decision |
-| Downstream integration | Accepted current-route identity, protected proposal, and seven-case corpus engineering at `226bfcc8` | Deployed historical-audit closure, live Cave acceptance, long-run reliability, or human approval |
+| Downstream integration | Accepted current-route identity, protected proposal, and seven-case corpus engineering at `226bfcc8` | Deployed-history closure beyond the inspected workstation profile, completed live Cave acceptance, long-run reliability, or human approval |
 
 The core's three verdicts and the automation profile's four outcomes answer
 different questions. Do not add an automation approval outcome to the Rust
