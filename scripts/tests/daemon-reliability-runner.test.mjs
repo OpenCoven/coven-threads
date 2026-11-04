@@ -79,3 +79,13 @@ test("Windows escaped JSON paths are sanitized as well as ordinary paths", async
   assert.equal(JSON.parse(sanitizeOutput(output, { threads: windowsRoot })).manifest_path,
     "<threads>" + String.fromCharCode(92) + "Cargo.toml");
 });
+
+test("native workflow checks out committed line endings before any checkout (#115)", () => {
+  const workflow = readFileSync(new URL("../../.github/workflows/daemon-reliability.yml", import.meta.url), "utf8");
+  const firstCheckout = workflow.indexOf("uses: actions/checkout@");
+  const lf = workflow.indexOf("run: git config --global core.autocrlf false");
+  assert.ok(firstCheckout > 0, "workflow has a checkout step");
+  // Windows runners default to autocrlf=true, which rewrites the pinned Coven
+  // sources and makes the byte-strict scenario inventory refuse every run.
+  assert.ok(lf > 0 && lf < firstCheckout, "autocrlf is disabled before the first checkout");
+});
