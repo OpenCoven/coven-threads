@@ -99,9 +99,12 @@ export function readJourneyInventory(path, coven, pin, platform) {
   }
   for (const [source, digest] of Object.entries(inventory.source_sha256)) {
     if (!/^crates\/coven-cli\/tests\/(?:support\/)?threads_[a-z0-9_]+\.rs$/.test(source) ||
-        !/^[0-9a-f]{64}$/.test(digest) ||
-        createHash("sha256").update(regularFile(join(coven, source))).digest("hex") !== digest) {
-      throw new Error("native scenario inventory does not match its pinned daemon source bytes");
+        !/^[0-9a-f]{64}$/.test(digest)) {
+      throw new Error("native scenario inventory does not match its pinned daemon source content");
+    }
+    const contents = regularFile(join(coven, source)).toString("latin1").replace(/\r\n/g, "\n");
+    if (createHash("sha256").update(contents, "latin1").digest("hex") !== digest) {
+      throw new Error("native scenario inventory does not match its pinned daemon source content");
     }
   }
   const groups = [inventory.common, ...(platform !== "windows" ? [inventory.unix] : []),

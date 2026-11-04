@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -112,17 +113,20 @@ test("artifact index hashes regular files and refuses symlink evidence", async (
   assert.throws(() => writeArtifactIndex(f.root), /regular|symlink/);
 });
 
-test("scenario inventory refuses changed source bytes, wrong pins and unsupported platforms", async (t) => {
+test("scenario inventory normalizes CRLF and refuses changed content, wrong pins and unsupported platforms", async (t) => {
   const { readJourneyInventory } = await implementation();
   const f = fixture(t);
   const source = join(f.root, "crates", "coven-cli", "tests", "threads_e2e.rs");
   mkdirSync(join(f.root, "crates", "coven-cli", "tests"), { recursive: true });
-  writeFileSync(source, "abc");
+  const lfSource = "// π\n";
+  writeFileSync(source, lfSource);
   const inventory = join(f.root, "inventory.json");
   writeFileSync(inventory, JSON.stringify({ schema_version: "opencoven.threads-native-scenarios/v1",
     coven_ref: "a".repeat(40), source_sha256: { "crates/coven-cli/tests/threads_e2e.rs":
-      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" },
+      createHash("sha256").update(lfSource).digest("hex") },
     common: ["common-case"], unix: ["unix-case"], linux: ["linux-case"] }));
+  assert.deepEqual(readJourneyInventory(inventory, f.root, "a".repeat(40), "windows"), ["common-case"]);
+  writeFileSync(source, "// π\r\n");
   assert.deepEqual(readJourneyInventory(inventory, f.root, "a".repeat(40), "windows"), ["common-case"]);
   assert.deepEqual(readJourneyInventory(inventory, f.root, "a".repeat(40), "macos"), ["common-case", "unix-case"]);
   assert.deepEqual(readJourneyInventory(inventory, f.root, "a".repeat(40), "linux"), ["common-case", "linux-case", "unix-case"]);
