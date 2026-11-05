@@ -127,7 +127,7 @@ test("passing report bindings require all four actual nonzero target results", a
   const macReport = { ...report, platform: "darwin", runner_os: "macOS", arch: "x64" };
   macRow.job.labels = ["macos-15-intel"];
   assert.equal(qualifyReport(macRow, macReport, observation).source_series.arch, "x64");
-  for (const labels of [undefined, [], ["macos-15"], ["macos-26-intel"], ["macos-15", "macos-15-intel"]]) {
+  for (const labels of [undefined, [], ["macos-15"], ["macos-26-intel"], ["macos-15", "macos-15-intel"], ["macos-15-intel", "macos-26-intel"], ["self-hosted", "macos-15-intel"]]) {
     const wrong = structuredClone(macRow); wrong.job.labels = labels;
     assert.throws(() => qualifyReport(wrong, macReport, observation), /runner|platform/);
   }

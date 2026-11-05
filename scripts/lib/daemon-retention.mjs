@@ -59,8 +59,9 @@ export function qualifyReport(row, report, observation) {
   // never transfer qualification between architectures or accept both labels.
   if (row.platform === "macos") {
     const architectures = { "macos-15": "arm64", "macos-15-intel": "x64" };
-    const labels = row.job?.labels?.filter(label => Object.hasOwn(architectures, label));
-    if (labels?.length !== 1 || report?.arch !== architectures[labels[0]]) {
+    const labels = row.job?.labels;
+    if (!Array.isArray(labels) || labels.length !== 1 || !Object.hasOwn(architectures, labels[0]) ||
+        report?.arch !== architectures[labels[0]]) {
       throw new Error("macOS runner label and report architecture must agree");
     }
   }
