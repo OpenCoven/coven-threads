@@ -89,3 +89,12 @@ test("native workflow checks out committed line endings before any checkout (#11
   // sources and makes the byte-strict scenario inventory refuse every run.
   assert.ok(lf > 0 && lf < firstCheckout, "autocrlf is disabled before the first checkout");
 });
+
+
+test("macOS Intel candidate keeps exactly one macOS evidence slot", () => {
+  const workflow = readFileSync(new URL("../../.github/workflows/daemon-reliability.yml", import.meta.url), "utf8");
+  assert.match(workflow, /os: \[ubuntu-24\.04, macos-15, windows-2022\]/);
+  assert.match(workflow, /include:\s+- os: macos-15\s+runner: macos-15-intel/);
+  assert.match(workflow, /runs-on: \$\{\{ matrix\.runner \|\| matrix\.os \}\}/);
+  assert.match(workflow, /name: Native daemon \/ \$\{\{ matrix\.os \}\}/);
+});
