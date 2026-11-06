@@ -28,6 +28,10 @@ jobs:
       CARGO_TERM_COLOR: never
       RUST_BACKTRACE: "1"
     steps:
+      # Windows runners default to core.autocrlf=true, which rewrites the pinned
+      # Coven sources the scenario inventory hashes byte-for-byte (#115).
+      - name: Check out committed line endings
+        run: git config --global core.autocrlf false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.22.0
