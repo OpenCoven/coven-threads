@@ -1,0 +1,73 @@
+name: Native daemon reliability (scheduled)
+
+on:
+  schedule:
+    - cron: "47 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-reliability-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Native daemon / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: "1"
+    steps:
+      # Windows runners default to core.autocrlf=true, which rewrites the pinned
+      # Coven sources the scenario inventory hashes byte-for-byte (#115).
+      - name: Check out committed line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.22.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: threads
+          persist-credentials: false
+      - name: Resolve the reviewed immutable compatibility pin
+        id: pin
+        working-directory: threads
+        run: |
+          ref="$(node scripts/daemon-compatibility.mjs e2e/compatibility.toml)"
+          echo "coven_ref=$ref" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: OpenCoven/coven
+          ref: ${{ steps.pin.outputs.coven_ref }}
+          path: coven
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0 # master
+        with:
+          toolchain: 1.95.0
+      - name: Run and qualify every native daemon target once
+        working-directory: threads
+        env:
+          COVEN_REF: ${{ steps.pin.outputs.coven_ref }}
+          COVEN_THREADS_OBSERVATION_ROOT: ${{ runner.temp }}/threads-native-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node scripts/run-daemon-reliability.mjs ../coven "$COVEN_THREADS_OBSERVATION_ROOT"
+      - name: Retain original attempt, counts, executable hashes and sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: threads-native-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/threads-native-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 45
