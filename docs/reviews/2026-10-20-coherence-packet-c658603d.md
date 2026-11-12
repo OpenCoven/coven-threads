@@ -2,6 +2,16 @@
 
 OpenCoven/coven-threads#13 item 4 (audit completeness) re-checked at a Coven revision that contains coven#1305 (bead `threads-uqx.21`). Assembled by Echo from two read-only parts plus Echo's own CI and state checks. No tests were run locally; test results come only from the CI runs cited. This packet does not accept, reject or defer #13.
 
+## Review caveat — 2026-11-12
+
+This is historical Set C evidence, not a current-source qualification or an adopted contract decision. The original Set C findings, proposed verdicts and attributed October observations below are preserved. Their references to Decision 5 describe the unmerged proposal in [#86](https://github.com/OpenCoven/coven-threads/pull/86), not an adopted narrowing of criterion 4.
+
+The census-only interpretation does not establish the canonical lifecycle requirement. `OpenUnverified` observes pending or claimed artifact names; it does not prove a valid live window, worker ownership, timely progress or eventual typed settlement. Reporting an orphaned, quarantined, inconsistent or unprovable history likewise supplies no missing typed close. Read the conditional “supported under Decision 5” verdicts below as historical proposals about census reporting coverage, not proof of complete lifecycle settlement. The original-wording Set C verdict remains partial; this packet does not establish current-source completeness or select a human disposition.
+
+The [November 6 addendum](2026-11-06-coherence-addendum.md) records later delivered Coven #1643/#1622 repairs and their evidence limits; the [November 8 addendum](2026-11-08-coherence-addendum.md) records a further dated source/release observation. Those repairs do not retroactively change the Set C source tuple or transfer execution evidence between revisions. The [Phase-5 solo-maintainer policy](../../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md) and [E2E contract](../testing/e2e-contract.md) retain their requirements. Val's exact-revision wording decision, #13 coherence acceptance and subsequent #14 freeze/reaffirmation remain separate and unselected here.
+
+The later [November 10 criterion-4 checkpoint](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-6767044747) reports bounded evidence for unpublished Threads candidate `0c491d1f9930b920a92be193c8e343ab9c4cb299` and Coven candidate `8edeb939d35cd40c49a58f56153fd3326864087f`. That checkpoint is additional scoped evidence, not a claim that either candidate merged, that all histories settle, or that Val accepted criterion 4.
+
 ## Revisions (Set C)
 
 | Repo | SHA | How chosen |
