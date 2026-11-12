@@ -96,7 +96,12 @@ function packet(record){
 }
 export function collectNextestAttempt(runId,attempt,archiveRoot,read=githubRead){
  if(!safeId(runId)||!safeId(attempt))throw Error('positive explicit run and attempt required');
- const root=openArchive(archiveRoot,true),staging=mkdtempSync(join(root,`.collect-nextest-${runId}-${attempt}-`));mkdirSync(join(staging,'metadata'));
+ const root=openArchive(archiveRoot,true),parent=join(root,String(runId));
+ try{mkdirSync(parent);}catch(e){if(e.code!=='EEXIST')throw e;}
+ if(!lstatSync(parent).isDirectory())throw Error('run destination must be a regular directory');
+ const destination=join(parent,String(attempt)),existing=lstatSync(destination,{throwIfNoEntry:false});
+ if(existing&&!existing.isDirectory())throw Error('attempt destination must be a regular directory');
+ const staging=mkdtempSync(join(root,`.collect-nextest-${runId}-${attempt}-`));mkdirSync(join(staging,'metadata'));
  const snapshots=[];
  const retainedRead=endpoint=>{
   let bytes;
@@ -107,11 +112,11 @@ export function collectNextestAttempt(runId,attempt,archiveRoot,read=githubRead)
  try{
   const record=buildAttempt(runId,attempt,retainedRead,staging);
   writeFileSync(join(staging,'record.json'),json(record),{flag:'wx'});writeFileSync(join(staging,'snapshots.json'),json(snapshots),{flag:'wx'});writeFileSync(join(staging,'packet.md'),packet(record),{flag:'wx'});
-  writeArtifactIndex(staging);return {...publishArchive(staging,join(root,String(runId),String(attempt))),record};
+  writeArtifactIndex(staging);return {...publishArchive(staging,destination),record};
  }catch(error){
   writeFileSync(join(staging,'collection-failure.json'),json({run_id:runId,attempt,error:error.message}),{flag:'wx'});
   if(!existsSync(join(staging,'snapshots.json')))writeFileSync(join(staging,'snapshots.json'),json(snapshots),{flag:'wx'});
-  if(!existsSync(join(staging,'artifact-index.json')))writeArtifactIndex(staging);
+  rmSync(join(staging,'artifact-index.json'),{force:true});writeArtifactIndex(staging);
   throw new Error('core collection refused; original failure snapshot retained',{cause:error});
  }
 }

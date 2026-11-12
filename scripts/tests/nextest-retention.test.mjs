@@ -60,8 +60,8 @@ test('missing expired cancelled and setup-failed observations remain negative',a
  }
 });
 function qualificationFixture() {
- const source={commit:'a'.repeat(40),tree:'d'.repeat(40),parents:[],config:[{path:'Cargo.lock',sha256:'e'.repeat(64)}],sourcePaths:['src/lib.rs']};
- const log=`[command]/usr/bin/git log -1 --format=%H\n${source.commit}\n##[group]Runner Image\nImage: ubuntu-24.04\nVersion: 20261101.360.1\nrustc 1.88.0 (synthetic tooling fixture)\nhost: x86_64-unknown-linux-gnu\ncargo-nextest 0.9.143 (synthetic tooling fixture)\ncargo nextest run --locked --workspace --profile ci\nNextest run ID ${uuid} with nextest profile: ci\nSummary [ 1s ] 1 tests run: 1 passed, 0 skipped\n`;
+ const source={commit:'a'.repeat(40),tree:'d'.repeat(40),parents:[],config:[{path:'Cargo.lock',sha256:'e'.repeat(64)}],sourcePaths:['src/lib.rs'],sourceGitIdentities:[{path:'src/lib.rs',git_sha:'f'.repeat(40)}]};
+ const log=`[command]/usr/bin/git log -1 --format=%H\n${source.commit}\n##[group]Runner Image\nImage: ubuntu-24.04\nVersion: 20261101.360.1\nrustc 1.88.0 (synthetic tooling fixture)\nhost: x86_64-unknown-linux-gnu\ncargo-nextest 0.9.143 (synthetic tooling fixture)\n##[group]Run cargo nextest run --locked --workspace --profile ci\ncargo nextest run --locked --workspace --profile ci\nNextest run ID ${uuid} with nextest profile: ci\nSummary [ 1s ] 1 tests run: 1 passed, 0 skipped\n`;
  return {source,log,xml:Buffer.from(pass),metadata:metadataFixture()};
 }
 test('qualification binds actual checkout, JUnit UUID, timestamp and hosted tool scope',async()=>{
@@ -75,10 +75,22 @@ for(const[label,change]of[
  ['unrelated PR tree',f=>{f.source.commit='b'.repeat(40);f.log=f.log.replace('a'.repeat(40),'b'.repeat(40));}],
  ['outside step',f=>f.xml=Buffer.from(pass.replace(at,'2026-11-07T00:00:00Z'))],['missing tools',f=>f.log=f.log.replace('cargo-nextest 0.9.143','missing 0.9.143')],
  ['missing source inventory',f=>f.source.sourcePaths=[]],['contradictory summary',f=>f.log=f.log.replace('1 tests run: 1 passed','2 tests run: 2 passed')]
+ ,['contradictory outcome',f=>f.log=f.log.replace('1 passed, 0 skipped','0 passed, 1 failed, 0 skipped')]
+ ,['filtered command',f=>f.log=f.log.replaceAll('cargo nextest run --locked --workspace --profile ci','cargo nextest run --locked --workspace --profile ci -E all()')]
+ ,['unreported summary retry',f=>f.log=f.log.replace('1 passed, 0 skipped','1 passed (1 flaky), 0 skipped')]
 ])test(`qualification refuses ${label}`,async()=>{const{classifyNextestMetadata,qualifyNextest}=await implementation();const f=qualificationFixture();change(f);assert.throws(()=>qualifyNextest(classifyNextestMetadata(f.metadata),f.xml,f.log,f.source));});
 test('flaky-pass JUnit remains observed but never a first-execution pass',async()=>{
  const{classifyNextestMetadata,qualifyNextest}=await implementation();const f=qualificationFixture();f.xml=Buffer.from(pass.replace('/>','><flakyFailure/></testcase>'));
  const r=qualifyNextest(classifyNextestMetadata(f.metadata),f.xml,f.log,f.source);assert.equal(r.first_attempt_passed,false);assert.equal(r.report.counts.flaky,1);
+});
+test('valid skipped JUnit binds executed plus skipped totals without qualifying',async()=>{
+ const{classifyNextestMetadata,qualifyNextest}=await implementation();const f=qualificationFixture();f.xml=Buffer.from(pass.replaceAll('tests="1"','tests="2" skipped="1"').replace('</testsuite>','<testcase name="ignored" classname="core"><skipped/></testcase></testsuite>'));f.log=f.log.replace('1 passed, 0 skipped','1 passed, 1 skipped');
+ const r=qualifyNextest(classifyNextestMetadata(f.metadata),f.xml,f.log,f.source);assert.equal(r.state,'observed_nonpassing');assert.equal(r.report.counts.tests,2);assert(r.scope_sha256);
+});
+test('changed Rust blob identities create distinct scopes with explicit source revisions',async()=>{
+ const{classifyNextestMetadata,qualifyNextest,summarizeNextest}=await implementation();const f=qualificationFixture();const first=qualifyNextest(classifyNextestMetadata(f.metadata),f.xml,f.log,f.source);
+ f.source={...f.source,commit:'b'.repeat(40),tree:'c'.repeat(40),sourceGitIdentities:[{path:'src/lib.rs',git_sha:'e'.repeat(40)}]};f.log=f.log.replace('a'.repeat(40),'b'.repeat(40));f.metadata.run.id=43;f.metadata.run.head_sha=f.source.commit;f.metadata.jobs[0].run_id=43;f.metadata.jobs[0].head_sha=f.source.commit;f.metadata.artifacts[0].workflow_run={id:43,head_sha:f.source.commit};
+ const second=qualifyNextest(classifyNextestMetadata(f.metadata),f.xml,f.log,f.source);assert.notEqual(first.scope_sha256,second.scope_sha256);const summary=summarizeNextest([first,second]);assert.equal(summary.scopes.length,2);assert(summary.scopes.every(s=>s.sources.length===1));
 });
 test('summary keeps original failures later recovery and source scope separate',async()=>{
  const{classifyNextestMetadata,summarizeNextest}=await implementation();const f=metadataFixture();f.artifacts=[];f.jobs[0].conclusion='failure';const first=classifyNextestMetadata(f);

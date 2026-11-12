@@ -40,16 +40,23 @@ export function qualifyNextest(record,xml,rawLog,source) {
   const commits=[...log.matchAll(/\[command\][^\n]*git log -1 --format=%H\r?\n([a-f0-9]{40})(?:\r?\n|$)/g)].map(m=>m[1]);
   if(commits.length!==1||source?.commit!==commits[0]||!sha(source.tree)||!Array.isArray(source.config)||!source.config.length||!Array.isArray(source.sourcePaths)||!source.sourcePaths.length||new Set(source.sourcePaths).size!==source.sourcePaths.length)refuse('source checkout/configuration is missing or ambiguous');
   if(source.commit!==record.head_sha&&(record.event!=='pull_request'||!source.parents?.includes(record.head_sha)))refuse('checkout does not bind the requested source');
-  if(!log.includes(`Nextest run ID ${report.uuid} with nextest profile: ci`)||!log.includes('cargo nextest run --locked --workspace --profile ci'))refuse('JUnit does not bind the actual Nextest invocation');
+  const command='cargo nextest run --locked --workspace --profile ci';
+  const invocations=[...log.matchAll(/^##\[group\]Run (cargo nextest[^\r\n]*)$/gm)].map(m=>m[1]);
+  if(!log.includes(`Nextest run ID ${report.uuid} with nextest profile: ci`)||invocations.length!==1||invocations[0]!==command||log.split(/\r?\n/).filter(line=>line===command).length!==1)refuse('JUnit does not bind the exact supported Nextest invocation');
   const steps=record.job?.steps?.filter(s=>s.name==='Run tests with observable retry semantics')??[];
   if(steps.length!==1||!inside(report.timestamp,steps[0].started_at,steps[0].completed_at))refuse('JUnit timestamp is outside its execution step');
   const rustc=log.match(/^rustc (.+)$/m)?.[0],host=log.match(/^host: (.+)$/m)?.[1],nextest=log.match(/^cargo-nextest (.+)$/m)?.[0];
   const image=log.match(/##\[group\]Runner Image\r?\nImage: ([^\r\n]+)\r?\nVersion: ([^\r\n]+)/);
   if(!rustc||!host||!nextest||!image)refuse('hosted tool/platform identity missing');
   const summaries=[...log.matchAll(/^\s*Summary\s+\[[^\]\n]+\]\s+(\d+) tests run:\s*(.*)$/gm)];
-  if(summaries.length!==1||Number(summaries[0][1])!==report.counts.tests)refuse('JUnit denominator differs from actual Nextest summary');
-  const scope={profile:'core-nextest-ci',command:'cargo nextest run --locked --workspace --profile ci',rustc,host,nextest,image:image[1],imageVersion:image[2],cargoVersion:null,config:source.config,sourcePaths:source.sourcePaths,testIdentities:report.cases.map(c=>[c.suite,c.classname,c.name])};
+  if(summaries.length!==1||Number(summaries[0][1])!==report.counts.tests-report.counts.skipped)refuse('JUnit denominator differs from actual Nextest summary');
+  const suffix=summaries[0][2];
+  const observed=kind=>{const matches=[...suffix.matchAll(new RegExp(`(?:^|[, (])([0-9]+) ${kind}(?=$|[, )])`,'g'))];if(matches.length>1)refuse('ambiguous summary outcome');return matches.length?Number(matches[0][1]):0;};
+  if(observed('passed')!==report.counts.passed||observed('failed')+observed('exec failed')!==report.counts.failures+report.counts.errors||observed('skipped')!==report.counts.skipped)refuse('JUnit outcomes differ from actual Nextest summary');
+  if(!Array.isArray(source.sourceGitIdentities)||source.sourceGitIdentities.length!==source.sourcePaths.length||source.sourceGitIdentities.some((f,i)=>f.path!==source.sourcePaths[i]||!sha(f.git_sha)))refuse('Rust source blob identities missing');
+  const scope={profile:'core-nextest-ci',command,rustc,host,nextest,image:image[1],imageVersion:image[2],cargoVersion:null,config:source.config,sourcePaths:source.sourcePaths,sourceGitIdentities:source.sourceGitIdentities,testIdentities:report.cases.map(c=>[c.suite,c.classname,c.name])};
   const clean=report.counts.tests===report.counts.firstAttemptPassed;
+  if(clean&&!/^[0-9]+ passed(?: \([0-9]+ slow\))?, 0 skipped$/.test(suffix))refuse('summary contains unsupported or unreported execution outcomes');
   const execution=clean&&record.job.conclusion==='success'&&steps[0].conclusion==='success';
   return {...record,source,report,scope,scope_sha256:nextestHash(JSON.stringify(scope)),execution_passed:execution,first_attempt_passed:record.attempt===1&&execution,state:execution?'qualified':'observed_nonpassing',binding_limit:'Source checkout and tool versions are hosted-log observations. The legacy producer emitted no actual Cargo version, resolved features or test executable hashes.'};
 }
@@ -61,7 +68,9 @@ export function summarizeNextest(records) {
     seen.add(key);const group=groups.get(r.run_id)??[];
     if(group.some(x=>x.head_sha!==r.head_sha||x.event!==r.event))refuse('run source/event changed across attempts');
     group.push(r);groups.set(r.run_id,group);
-    const scopeKey=`${r.event}/${r.scope_sha256??'unknown'}`;const scope=scopes.get(scopeKey)??{event:r.event,scope_sha256:r.scope_sha256,attempts:0,first_attempts:0,first_attempt_passes:0,tests:0,first_execution_passes:0,flaky_tests:0,retries:0};
+    const scopeKey=`${r.event}/${r.scope_sha256??'unknown'}`;const scope=scopes.get(scopeKey)??{event:r.event,scope_sha256:r.scope_sha256,sources:[],attempts:0,first_attempts:0,first_attempt_passes:0,tests:0,first_execution_passes:0,flaky_tests:0,retries:0};
+    if(r.source&&!scope.sources.some(s=>s.commit===r.source.commit&&s.tree===r.source.tree))scope.sources.push({commit:r.source.commit,tree:r.source.tree});
+    scope.sources.sort((a,b)=>a.commit.localeCompare(b.commit,'en')||a.tree.localeCompare(b.tree,'en'));
     scope.attempts++;if(r.attempt===1){scope.first_attempts++;scope.first_attempt_passes+=Number(r.first_attempt_passed);if(r.report){scope.tests+=r.report.counts.tests;scope.first_execution_passes+=r.report.counts.firstAttemptPassed;scope.flaky_tests+=r.report.counts.flaky;scope.retries+=r.report.counts.retries;}}
     scopes.set(scopeKey,scope);
   }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {existsSync,mkdtempSync,mkdirSync,readFileSync,readdirSync,writeFileSync,rmSync} from 'node:fs';
+import {existsSync,mkdtempSync,mkdirSync,readFileSync,readdirSync,writeFileSync,rmSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
@@ -22,7 +22,7 @@ function fixture(t){
  const config={'Cargo.lock':'version = 4\n','Cargo.toml':'[workspace]\n','rust-toolchain.toml':'[toolchain]\nchannel = "1.88.0"\n','.config/nextest.toml':'[profile.ci]\nretries = 1\nflaky-result = "fail"\n[profile.ci.junit]\npath = "junit.xml"\nflaky-fail-status = "failure"\n','.github/workflows/ci.yml':'name: CI\n','.node-version':'24.22.0\n'};
  const blobs=new Map(Object.values(config).map(text=>{const b=Buffer.from(text);return [blobHash(b),{encoding:'base64',sha:blobHash(b),size:b.length,content:b.toString('base64')}];}));
  const tree={sha:'b'.repeat(40),truncated:false,tree:[...Object.entries(config).map(([path,text])=>({path,type:'blob',mode:'100644',sha:blobHash(Buffer.from(text)),size:Buffer.byteLength(text)})),{path:'src/lib.rs',type:'blob',mode:'100644',sha:'c'.repeat(40),size:20}]};
- const log=`[command]/usr/bin/git log -1 --format=%H\n${run.head_sha}\n##[group]Runner Image\nImage: ubuntu-24.04\nVersion: 20261101.360.1\nrustc 1.88.0 (synthetic tooling fixture)\nhost: x86_64-unknown-linux-gnu\ncargo-nextest 0.9.143 (synthetic tooling fixture)\ncargo nextest run --locked --workspace --profile ci\nNextest run ID ${uuid} with nextest profile: ci\nSummary [ 1s ] 1 tests run: 1 passed, 0 skipped\n`;
+ const log=`[command]/usr/bin/git log -1 --format=%H\n${run.head_sha}\n##[group]Runner Image\nImage: ubuntu-24.04\nVersion: 20261101.360.1\nrustc 1.88.0 (synthetic tooling fixture)\nhost: x86_64-unknown-linux-gnu\ncargo-nextest 0.9.143 (synthetic tooling fixture)\n##[group]Run cargo nextest run --locked --workspace --profile ci\ncargo nextest run --locked --workspace --profile ci\nNextest run ID ${uuid} with nextest profile: ci\nSummary [ 1s ] 1 tests run: 1 passed, 0 skipped\n`;
  const f={root,archive:join(root,'archive'),run,jobs:[job],artifacts:[artifact],zip:bytes,log,tree,blobs,afterChanged:false,reads:0};
  f.read=ep=>{let v;
   if(ep.includes('/jobs?'))v={total_count:f.jobs.length,jobs:f.jobs};
@@ -63,7 +63,11 @@ test('coherent record and index tampering cannot manufacture first-attempt succe
  assert.throws(()=>summarizeNextestArchive(f.archive));
 });
 test('conflicting immutable identity preserves the original canonical bytes',async t=>{
- const{collectNextestAttempt}=await implementation();const f=fixture(t);collectNextestAttempt(42,1,f.archive,f.read);const p=join(f.archive,'42/1/record.json'),before=readFileSync(p);f.log+='retained differing bytes\n';assert.throws(()=>collectNextestAttempt(42,1,f.archive,f.read));assert.deepEqual(readFileSync(p),before);
+ const{collectNextestAttempt,summarizeNextestArchive}=await implementation();const f=fixture(t);collectNextestAttempt(42,1,f.archive,f.read);const p=join(f.archive,'42/1/record.json'),before=readFileSync(p);f.log+='retained differing bytes\n';assert.throws(()=>collectNextestAttempt(42,1,f.archive,f.read));assert.deepEqual(readFileSync(p),before);assert.equal(summarizeNextestArchive(f.archive).first_attempt_passes,1);assert.equal(summarizeNextestArchive(f.archive).incomplete_collections,1);
+});
+test('a run-directory symlink cannot publish an attempt outside the dedicated archive',async t=>{
+ const{collectNextestAttempt}=await implementation();const f=fixture(t);f.artifacts=[];const outside=join(f.root,'outside');mkdirSync(outside);mkdirSync(f.archive);writeFileSync(join(f.archive,'profile.json'),JSON.stringify({schema_version:'opencoven.threads-nextest-archive/v1',profile:'core-nextest-ci',repository:'OpenCoven/coven-threads'}));symlinkSync(outside,join(f.archive,'42'));
+ assert.throws(()=>collectNextestAttempt(42,1,f.archive,f.read));assert.deepEqual(readdirSync(outside),[]);
 });
 test('core ingestion refuses a nonempty unmarked or native archive before writing',async t=>{
  const{collectNextestAttempt}=await implementation();const f=fixture(t);mkdirSync(f.archive);writeFileSync(join(f.archive,'native-record.json'),'original');const before=readdirSync(f.archive);assert.throws(()=>collectNextestAttempt(42,1,f.archive,f.read));assert.deepEqual(readdirSync(f.archive),before);
