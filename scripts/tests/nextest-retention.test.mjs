@@ -35,8 +35,10 @@ for(const [label,change]of[
  ['nested report',x=>x.replace('<testcase','<testsuite><testcase').replace('/></testsuite>','/></testsuite></testsuite>')],
  ['unknown outcome',x=>x.replace('/>','><surprise/></testcase>')],['mixed terminal',()=>report('<testcase name="a" classname="core"><skipped/><failure/></testcase>')],
  ['entity',x=>'<!DOCTYPE testsuites [<!ENTITY example "value">]>'+x],['missing UUID',x=>x.replace(`uuid="${uuid}"`,'')],['invalid timestamp',x=>x.replace(at,'tomorrow')],
+ ['hidden testcase',x=>x.replace('</testcase>','</testcase>').replace('<testcase','<properties><testcase name="hidden" classname="core"/></properties><testcase')],
  ['unknown retry',()=>report('<testcase name="a" classname="core"><rerunFailure/></testcase>')],
 ])test(`JUnit refuses ${label}`,async()=>{const{parseNextestJunit}=await implementation();assert.throws(()=>parseNextestJunit(Buffer.from(change(pass))));});
+test('UTF-16 XML entities cannot bypass the declaration guard',async()=>{const{parseNextestJunit}=await implementation();assert.throws(()=>parseNextestJunit(Buffer.from('<!DOCTYPE testsuites [<!ENTITY hidden "data">]>'+pass,'utf16le')));});
 
 export function metadataFixture() {
  const run={id:42,run_attempt:1,head_sha:'a'.repeat(40),status:'completed',conclusion:'success',event:'push',path:'.github/workflows/ci.yml',created_at:'2026-11-08T07:00:00Z',run_started_at:'2026-11-08T07:01:00Z',repository:{full_name:'OpenCoven/coven-threads'}};

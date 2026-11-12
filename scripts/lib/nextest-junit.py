@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 
 def parse(data):
-    if not data or len(data) > 64 * 1024 * 1024 or re.search(br"<!\s*(DOCTYPE|ENTITY)", data, re.I):
+    if not data or b'\0' in data or len(data) > 64 * 1024 * 1024 or re.search(br"<!\s*(DOCTYPE|ENTITY)", data, re.I):
         raise ValueError("unsupported XML input")
     root = ET.fromstring(data)
     if root.tag != 'testsuites' or not re.fullmatch(r'[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}', root.get('uuid', '')):
@@ -39,6 +39,11 @@ def parse(data):
         local = dict.fromkeys(counts, 0)
         for case in suite:
             if case.tag in ['system-out', 'system-err', 'properties']:
+                if case.tag == 'properties':
+                    if any(p.tag != 'property' or len(p) for p in case):
+                        raise ValueError('unsupported suite properties')
+                elif len(case):
+                    raise ValueError('nested suite output')
                 continue
             identity = (name, case.get('classname'), case.get('name'))
             if case.tag != 'testcase' or not all(identity) or identity in identities:
@@ -56,6 +61,8 @@ def parse(data):
             if (flaky and reruns) or (reruns and terminals not in [['failure'], ['error']]) or (terminals == ['skipped'] and flaky):
                 raise ValueError('contradictory retry outcomes')
             for child in case:
+                if child.tag == 'properties' and any(p.tag != 'property' or len(p) for p in child):
+                    raise ValueError('unsupported testcase properties')
                 if child.tag != 'properties' and any(c.tag not in ['system-out', 'system-err'] or len(c) for c in child):
                     raise ValueError('unsupported nested testcase data')
             outcome = terminals[0] if terminals else 'passed'
