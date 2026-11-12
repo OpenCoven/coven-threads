@@ -1,83 +1,49 @@
-# Maintainer decisions — 2026-10-11
+# Maintainer decision proposal — 2026-10-11
 
-**Decided by:** Val (solo-maintainer policy, `specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md`)
-**Recorded by:** Echo, on Val's direction of 2026-10-11 to take the item 3, 4
-and 7 recommendations from the #13 coherence review
-**Takes effect:** when this record merges. Val's merge is the act of recording it.
-**Scope:** one contract clarification for #13 checklist item 4. It does not
-accept, reject or defer #13 (`threads-uqx.9`), and it does not touch the scoped
-freeze (#14, `threads-uqx.10`).
+**Proposed engineering reconciliation, 2026-11-12:** this remains an unadopted proposal. This revision preserves the canonical lifecycle requirement and records no narrowing of #13 checklist item 4, no human acceptance, and no freeze/reaffirmation.
 
-## Decision 5 — "no gap between open and close" covers census-reported windows, never fabricated closes
+**Original attribution:** Echo recorded the October 11 proposal as following Val's direction to take the item 3, 4 and 7 recommendations from the #13 coherence review. That attribution does not establish adoption of the proposed census-only interpretation.
 
-Numbering continues from the 2026-09-17 record.
+**Scope:** correct the proposal's inference from census classification to lifecycle completeness. It does not accept, reject or defer #13 (`threads-uqx.9`) and does not touch the scoped freeze (#14, `threads-uqx.10`). Any future contract narrowing requires Val's explicit decision against an identified revision under `specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md` section 4.
+
+## Decision 5 proposal — census observations do not replace terminal settlement
+
+Numbering continues from the 2026-09-17 record; no decision is adopted here.
 
 ### The criterion
 
 #13 checklist item 4, Audit completeness:
 
-> `proposal_submitted → window_opened → close(reason)` chain is present and no
-> gap exists between open and close. Close event has reason field.
+> `proposal_submitted → window_opened → close(reason)` chain is present and no gap exists between open and close. Close event has reason field.
 
-### Why a clarification is needed
+### Why the original proposal needs correction
 
-The coherence packet at Coven `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58`
-([record](2026-10-09-coherence-packet-226bfcc8.md#item-4--audit-completeness))
-found that an opened window can stay without a typed close. That happens when
-its claim is quarantined, its apply cannot be proven, or its artifacts are
-untrusted or gone. The daemon does not write a close in those cases, and the
-census reports them without repair.
+The coherence packet at Coven `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58` ([record](2026-10-09-coherence-packet-226bfcc8.md#item-4--audit-completeness)) found opened windows whose typed settlement could not be established, including quarantined claims, unprovable applies and untrusted or missing artifacts. The census reports those observations without repair. Reporting them does not supply a missing close or establish that a retained artifact represents a valid live window.
 
-Read literally, "no gap exists between open and close" would require a close row
-for every opened window. The only way to provide one in those cases is to invent
-a terminal the daemon cannot prove. The design forbids that: the core trigger
-rejects terminal events without typed close detail, and census tooling must never
-fabricate history (2026-09-17 Decision 1, and the #886 root's "explicit handling
-of inconsistent history"). Under policy section 4, a required criterion cannot be
-waived by naming the gap, so its meaning is clarified here instead.
+The canonical lifecycle requirement remains: every opened veto window receives exactly one typed terminal close at its permitted conclusion. A genuinely live window may remain pending while its governing conditions permit, but the census alone does not establish those conditions. Unknown or inconsistent history must remain explicit; neither a census category nor this record authorizes fabrication of a close reason.
 
-### The clarified meaning
+### What the census establishes
 
-"No gap exists between open and close" means that every `proposal_window_opened`
-row for a proposal is in exactly one of these states, as classified by
-`coven ward audit-census` (`crates/coven-cli/src/ward_audit_census.rs`,
-`classify`):
+`coven ward audit-census` (`crates/coven-cli/src/ward_audit_census.rs`, `classify`) reports these observations:
 
-1. **Closed.** It has exactly one typed terminal whose detail carries a normative
-   `WindowCloseReason` (`TypedTerminalRecorded`).
-2. **Still open.** Its window is live, with a pending or claimed artifact still
-   present (`OpenUnverified`). This is not a gap, because the window has not
-   ended.
-3. **Reported, never repaired.** The census reports it as `UnprovableApply`,
-   `QuarantinedOpening`, `UntrustedArtifacts`, `OrphanedOpening` or
-   `InconsistentHistory`. Nothing writes a close for it. A window in this state on
-   a deployed profile is a defect to investigate, as Decision 1 already provides.
-   It does not reopen a closed root.
+1. **Typed terminal observed (`TypedTerminalRecorded`).** The census observed one opening and one terminal carrying typed close detail, without the inconsistencies checked by the classifier. This is recorded-history evidence, not universal proof of every lifecycle obligation.
+2. **Unverified open artifact (`OpenUnverified`).** No typed terminal has been observed and at least one pending or claimed artifact name is present. The classifier does not establish that the artifact decodes to a valid proposal, that a worker owns it, that its window remains live, or that it will close. Owner-local validation and investigation remain necessary; this category does not prove that no required close is missing.
+3. **Unresolved history reported (`UnprovableApply`, `QuarantinedOpening`, `UntrustedArtifacts`, `OrphanedOpening` or `InconsistentHistory`).** These categories identify observations requiring investigation. They do not satisfy a missing terminal obligation, authorize a fabricated close, or independently reopen a root accepted within a finite historical scope.
 
-A **gap** is therefore an opened window in none of these states: one that has a
-terminal without typed close detail, or one that the census cannot see. The first
-is rejected by the `ward_audit` triggers. The second would be a census defect.
+A complete classification of observed openings is not complete lifecycle settlement. A missing or unprovable required close remains unresolved even when the census reports it. The classifier's coverage cannot establish timely settlement, and its omission of proposals without an opening cannot establish submission-to-opening completeness.
+
+The [original classifier at `226bfcc8`](https://github.com/OpenCoven/coven/blob/226bfcc89ff6cad4bc9cc9618dad6fea970ecf58/crates/coven-cli/src/ward_audit_census.rs#L312-L394) uses pending/claim artifact counts for `OpenUnverified`. The [regression at surveyed November 8 source `daace730`](https://github.com/OpenCoven/coven/blob/daace730cb1383c9af91ee9248317a02c5209073/crates/coven-cli/src/ward_audit_census.rs#L916-L937) deliberately writes invalid proposal text into a claim filename and expects that classification. This is inspection of existing source, not a newly executed regression or a demonstrated production failure.
 
 ### What this does not change
 
 - No code, schema, trigger or test changes.
-- It does not relax "Close event has reason field". Every terminal still requires
-  a typed close with a normative reason.
-- It does not cover the interval between `proposal_submitted` and
-  `proposal_window_opened`. The opening row is written at the first scheduler pass
-  or at decision time, and the criterion's "no gap" is between open and close.
-- It does not add enforcement that `proposal_submitted` precedes
-  `proposal_window_opened`. Tests assert that order; SQL does not enforce it. That
-  is recorded as a residual risk on #13, not resolved here.
+- Every required terminal still carries a typed close with a normative reason.
+- Submission-to-opening completeness remains a separate unproved obligation; the original criterion's chain is not narrowed by this record.
+- At the cited historical revision, SQL does not enforce `proposal_submitted` before `proposal_window_opened`; runtime assertions and tests do not become a SQL constraint.
+- The finite September 15 workstation-profile census, September 17 root disposition and accepted engineering dossiers retain their exact historical scope.
 
 ### Effect on #13
 
-With this clarification, the packet's item 4 evidence supports the criterion as
-clarified:
+Criterion 4 remains **partial on the cited historical evidence; current-source completeness is unknown without the applicable source-scoped lifecycle and recovery proof**. Trigger enforcement of terminal shape, total census classification and the September 15 census of zero opened windows do not together establish every opened window's valid liveness and eventual typed settlement.
 
-- the triggers that enforce one typed terminal with a valid reason;
-- the census classifications above;
-- the tests named in the packet;
-- the 2026-09-15 census of the workstation profile, which found 0 opened windows.
-
-Whether to accept item 4 on that basis remains part of Val's #13 decision.
+The engineering recommendation is to preserve the original lifecycle requirement and obtain the missing owner-local evidence or production repair where needed. This record selects no human criterion disposition. Val's explicit #13 coherence decision and subsequent #14 freeze/reaffirmation remain separate; any proposal to narrow the criterion requires its own explicit contract decision first.
