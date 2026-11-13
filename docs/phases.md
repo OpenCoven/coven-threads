@@ -1,5 +1,7 @@
 # Phases
 
+**Additive observation, 2026-11-08, after delivery:** the [approval-tier load supplement](reviews/2026-11-08-approval-tier-load-supplement.md) records authorized #120 delivery, the subsequent native-source handoff, 17 supplemental macOS probes and the proposed permanent daemon regressions in Coven #1695. The initial allocation blocker was resolved; local workspace and current-pair daemon proof now exist, with original failures and source limits retained. Hosted verification, review and delivery remain separate, criterion-4/6 qualifications persist, and no fully qualified coherence prerequisite is transferred to the later freeze gate.
+
 **Additive observation, 2026-11-08:** the [source and release addendum](reviews/2026-11-08-coherence-addendum.md) records Cave v0.5.20, later lifecycle/probe source changes with unchanged producer pins, and Coven's macOS CI routing change. Earlier execution and acceptance limits, all eight human criteria, four accepted dossiers and the approved native source hold remain explicit. Val's coherence and subsequent freeze decisions remain outstanding.
 
 **Additive observation, 2026-11-06:** the [coherence evidence addendum](reviews/2026-11-06-coherence-addendum.md) records the later Coven #1643/#1622 durability repairs, current source/release limits, older-pin native pilot and prospective reliability window. It preserves the immutable October handoff and all eight unselected human criterion dispositions. Val's coherence and subsequent freeze/reaffirmation decisions remain outstanding.
