@@ -4,7 +4,16 @@ This dated source observation supplements the [November 8 addendum](2026-11-08-c
 
 ## Threads: #123 batch delivery
 
-Threads main advanced from `aba2e226c6809b823f39e0a838342e9ea330f59b` to `6d6f59abf2ed2a1c7d15dd4139c469fcaadeaf8d`, tree `5f7ef961d121027f670464ebac1c4ea80c8d3bb7`, through the normal merge of [PR #123](https://github.com/OpenCoven/coven-threads/pull/123) at 2026-11-13T04:37:09Z. Its parents are `aba2e226` and integration head `1a342d01c17739c3c7c8ce8b263063cecda210b8`, whose tree is the merged tree. The batch carries five reviewed heads with their original commits: #122 core Nextest retention (`99294ab6`), #121 approval-tier load supplement (`ae2968b8`), #103 authority-model pilot (`fc5b3fe9`), #86 corrected lifecycle/census wording (`5d0beb02`) and #100 Set C packet (`a1e9d8a6`). Val's [scoped source-hold exception](https://github.com/OpenCoven/coven-threads/issues/111#issuecomment-6843641054) authorized this exact batch after required checks and states that it does not accept Phase 5.
+Threads main advanced from `aba2e226c6809b823f39e0a838342e9ea330f59b` to `6d6f59abf2ed2a1c7d15dd4139c469fcaadeaf8d`, tree `5f7ef961d121027f670464ebac1c4ea80c8d3bb7`, through the normal merge of [PR #123](https://github.com/OpenCoven/coven-threads/pull/123) at 2026-11-13T04:37:09Z. Its parents are `aba2e226c6809b823f39e0a838342e9ea330f59b` and integration head `1a342d01c17739c3c7c8ce8b263063cecda210b8`, whose tree is the merged tree. GitHub reports 26 changed paths, 4,441 additions, 2 deletions and 33 commits for the integration. The batch carries five reviewed heads with their original commits:
+
+| PR | Content | Reviewed head |
+| --- | --- | --- |
+| #122 | Core Nextest retention | `99294ab6e53655c229f8aa9007a9b076499f8a8c` |
+| #121 | Approval-tier load supplement | `ae2968b81b83c71a40c252e0629ae9a72fc042a2` |
+| #103 | Authority-model pilot | `fc5b3fe938928a87e640549734e75ff362b5f4cc` |
+| #86 | Corrected lifecycle/census wording | `5d0beb02b61e8b7c1cf7554ec349d4d6b3df4127` |
+| #100 | Set C packet | `a1e9d8a6e01e65e8e17e22e62f3e0866aa0438a7` |
+ Val's [scoped source-hold exception](https://github.com/OpenCoven/coven-threads/issues/111#issuecomment-6843641054) authorized this exact batch after required checks and states that it does not accept Phase 5.
 
 Post-merge main CI at `6d6f59ab` completed successfully: CI run [43366702421](https://github.com/OpenCoven/coven-threads/actions/runs/43366702421), daemon compatibility run [43366702418](https://github.com/OpenCoven/coven-threads/actions/runs/43366702418) and the dynamic CodeQL run [43366701119](https://github.com/OpenCoven/coven-threads/actions/runs/43366701119), with 13 of 13 check runs successful. The required compatibility pin is unchanged: Coven `226bfcc89ff6cad4bc9cc9618dad6fea970ecf58` with committed core `0021fd2662d0b82328371ee3a6957d645f776fda`. The integration's pinned-daemon artifact, recorded in the #123 description, verifies targets 104/44/38/33 and 112 journey/JUnit pairs at its tested merge; that result stays bound to its own tree.
 
@@ -63,7 +72,18 @@ Cave was not refreshed for this addendum. The last #13-observed Cave head remain
 
 ## Unchanged evidence and human scope
 
-All eight criterion mappings and the four accepted September dossiers remain as listed in the November 6 addendum. The July refusal, power-loss-in-scope ruling, historical freeze and October 30 unintended-close correction remain preserved.
+All eight criterion mappings remain as recorded in the November 6 addendum, each still without a human disposition:
+
+1. RFC round-trip.
+2. Every ApprovalPath revalidates at Gate 4.
+3. Descriptor is not authority.
+4. Audit completeness and typed reason.
+5. Replay hash present and enforced.
+6. Minimum visibility and reachable pending state.
+7. Load-time label/variant mapping.
+8. Advisory probes separated and Gate-3 only.
+
+The four accepted September dossiers remain [identity #885](https://github.com/OpenCoven/coven/issues/885), [historical audit #886](https://github.com/OpenCoven/coven/issues/886), [protected routes #887](https://github.com/OpenCoven/coven/issues/887) and [retired corpus #888](https://github.com/OpenCoven/coven/issues/888), within the October 30 handoff's §5 boundaries. The observations above change none of these mappings, dossiers or residuals. The July refusal, power-loss-in-scope ruling, historical freeze and October 30 unintended-close correction remain preserved.
 
 Val's [November 8 approval instruction](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-6718700413) remains recorded. Its engineering qualification still applies: approval supplies no missing execution proof, and the criterion-4, 6 and 7 limits named there remain. The source-scoped coherence record under the [adopted policy template](../../specs/PHASE-5-SOLO-MAINTAINER-REVIEW.md#5-decision-records-you-can-use) is still outstanding. It needs exact Threads, Coven and applicable Cave SHAs, all eight criterion and four dossier dispositions, wording and residual treatment, rationale and the self-review acknowledgment. Val selects those; agents supply engineering evidence only. #14 receives no prerequisite from this observation, and no passing check, release or issue state supplies one.
 
