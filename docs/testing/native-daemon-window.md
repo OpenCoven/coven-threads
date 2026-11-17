@@ -28,6 +28,8 @@ The local declaration file contains those same contract fields plus `declared_at
 
 Obtain initial native pilot receipts before selecting the window so those profiles can be reviewed. Later source series require an explicit accepted entry and retain separate accounting; they never inherit an earlier head's acceptance. The predeclared date range, metric, target, schedule and inventory cannot change. Accepting a later series does not remove any failed or unsupported opportunity. Overlapping profile aliases are ambiguous and cannot qualify a row. The declaration file and its complete digest are retained with every ledger.
 
+The `macos-15` key is the logical macOS 15 opportunity, not an implicit architecture default. The candidate workflow selects physical runner `macos-15-intel`; its retained job labels must bind an `x64` report before the exact source profile can qualify. Historical physical `macos-15` receipts require `arm64`. Accepted profiles must use the architecture actually observed in the selected pilot. Both map to one macOS opportunity per day; ARM and Intel results cannot substitute for each other's accepted profile. See the [runner decision packet](../reviews/2026-11-05-macos-runner-viability.md).
+
 ## Collect and replay
 
 With Node 24.22.0, Python 3.11+ and an authenticated `gh` CLI, retain completed native attempts using the [existing collector](daemon-evidence-retention.md), then run:

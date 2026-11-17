@@ -54,6 +54,17 @@ export function qualifyReport(row, report, observation) {
   const status = first ? "passed" : "retry-passed";
   const expectedPlatform = { linux: "linux", macos: "darwin", windows: "win32" }[row.platform];
   const expectedRunner = { linux: "Linux", macos: "macOS", windows: "Windows" }[row.platform];
+  // The macos-15 evidence slot may contain historical ARM or candidate Intel
+  // jobs. Bind the report architecture to the authoritative physical label;
+  // never transfer qualification between architectures or accept both labels.
+  if (row.platform === "macos") {
+    const architectures = { "macos-15": "arm64", "macos-15-intel": "x64" };
+    const labels = row.job?.labels;
+    if (!Array.isArray(labels) || labels.length !== 1 || !Object.hasOwn(architectures, labels[0]) ||
+        report?.arch !== architectures[labels[0]]) {
+      throw new Error("macOS runner label and report architecture must agree");
+    }
+  }
   if (report?.schema_version !== "opencoven.threads-native-reliability/v1" || report.status !== status ||
       report.run_id !== String(row.run_id) || report.run_attempt !== String(row.attempt) ||
       report.event !== row.event || report.threads_sha !== row.threads_sha || report.coven_sha !== pin ||

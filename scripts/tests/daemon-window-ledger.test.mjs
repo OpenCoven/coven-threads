@@ -51,3 +51,14 @@ test("declaration cannot change the metric, target, inventory, day count or inva
     const f=fixture();f.declaration[key]=value;assert.throws(()=>validateWindowDeclaration(f.declaration));
   }
 });
+
+test("Intel and ARM macOS profiles cannot substitute or change 90 opportunities", () => {
+  const f=fixture();
+  f.declaration=structuredClone(f.declaration);
+  f.declaration.accepted_series[0].profiles['macos-15'].arch='arm64';
+  const ledger=buildWindowLedger(f.declaration,f.runs,f.records,'2026-02-01T00:00:00Z');
+  assert.equal(ledger.expected_os_observations,90);
+  assert.equal(ledger.qualified_os_observations,60);
+  assert.equal(ledger.rows.filter(r=>r.os==='macos-15' && r.state==='unaccepted_or_ambiguous_source_profile').length,30);
+  assert.equal(ledger.window_qualified,false);
+});
