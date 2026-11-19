@@ -12,7 +12,7 @@ If you are new here, read [concepts.md](concepts.md) first. Everything else assu
 
 The [October 30 decision handoff](reviews/2026-10-30-coherence-decision-handoff.md) consolidates all eight criteria, #100/#86 wording and residual decisions, later native durability evidence and the newer Cave repin limits. It prepares Val’s review without adopting the proposed wording or accepting #13/#14.
 
-## Historical status checkpoint (2026-09-13 UTC)
+## Historical status checkpoint (2026-10-01 UTC)
 
 - **Phase 0 (design) — `[FROZEN]`.** The design doc `specs/PHASE-0-DESIGN.md` is frozen at v0.2 (2026-07-14, tag `v0.2-phase0-design`), with Nova sign-off and an RFC-0001 §5 round-trip verified.
 - **Phases 1–2: `[FROZEN; IN RELEASE TAG]`; Phase 3: `[ENGINEERING FROZEN]`.** Coven `v0.4.3` included the daemon integration at Threads `c102844`; the latest published release, `v0.4.4`, pins `0021fd2`. This is release-source provenance, not verification of deployed configuration or current-checkout compatibility. Phase 3 retains the decided `.weave` envelope and lossy one-way `.af` export semantics.
