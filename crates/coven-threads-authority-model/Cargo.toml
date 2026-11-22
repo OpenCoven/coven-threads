@@ -1,0 +1,24 @@
+[package]
+name = "coven-threads-authority-model"
+description = "Bounded verification pilot for the automation-authority transitions (coven-threads#95): a small pure model, an exhaustive explorer, a Kani harness, and a model-to-implementation differential"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+# The workspace lints, plus `cfg(kani)`, which `cargo kani` sets. A package
+# cannot extend inherited lints, so they are restated here.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
+
+[dependencies]
+
+[dev-dependencies]
+coven-threads-core = { path = "../coven-threads-core" }
+serde_json.workspace = true
+ring.workspace = true

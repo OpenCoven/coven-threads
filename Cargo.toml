@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/coven-threads-core"]
+members = [
+    "crates/coven-threads-core",
+    "crates/coven-threads-authority-model",
+]
 
 [workspace.package]
 version = "0.2.0"
