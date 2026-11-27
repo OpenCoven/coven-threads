@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked, Renderer } from 'marked';
 import GithubSlugger from 'github-slugger';
+import { headingText } from './heading-text.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
 const out = path.join(here, 'dist');
@@ -41,7 +42,7 @@ for (const p of pages) {
   }
   parser.use({renderer:{
     heading({tokens,depth}) {
-      const html = this.parser.parseInline(tokens); const text = html.replace(/<[^>]*>/g,''); const id=slugger.slug(text.replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+      const html = this.parser.parseInline(tokens); const text = headingText(tokens); const id=slugger.slug(text);
       if(depth===2 || depth===3) toc.push({id,text,level:depth});
       return `<h${depth} id="${escape(id)}"><a class="heading-anchor" href="#${escape(id)}">${html}</a></h${depth}>`;
     },

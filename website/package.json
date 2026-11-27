@@ -5,7 +5,8 @@
   "scripts": {
     "build": "node build.mjs",
     "check": "node check.mjs",
-    "preview": "node serve.mjs"
+    "preview": "node serve.mjs",
+    "test": "node --test heading-text.test.mjs"
   },
   "engines": {
     "node": ">=22"
