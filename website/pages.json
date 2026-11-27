@@ -1,0 +1,12 @@
+[
+  {"file":"docs/concepts.md","slug":"concepts","title":"Concepts","group":"Start here"},
+  {"file":"docs/architecture.md","slug":"architecture","title":"Architecture","group":"Start here"},
+  {"file":"docs/authority-model.md","slug":"authority-model","title":"Authority model","group":"Contracts"},
+  {"file":"docs/channels-and-strands.md","slug":"channels-and-strands","title":"Channels & strands","group":"Contracts"},
+  {"file":"docs/automation-authority-profile.md","slug":"automation-authority-profile","title":"Automation authority","group":"Contracts"},
+  {"file":"docs/testing/e2e-contract.md","slug":"testing/e2e-contract","title":"E2E evidence contract","group":"Contribute"},
+  {"file":"docs/phases.md","slug":"phases","title":"Delivery ledger","group":"Contribute"},
+  {"file":"docs/strategy.md","slug":"strategy","title":"Delivery strategy","group":"Contribute"},
+  {"file":"docs/faq.md","slug":"faq","title":"FAQ","group":"Resources"},
+  {"file":"docs/glossary.md","slug":"glossary","title":"Glossary","group":"Resources"}
+]
