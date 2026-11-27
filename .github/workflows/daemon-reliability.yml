@@ -19,7 +19,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2022]
-    runs-on: ${{ matrix.os }}
+        # Preserve the macOS evidence slot; actual runner labels and arch
+        # remain bound by the retained GitHub job and native report.
+        include:
+          - os: macos-15
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner || matrix.os }}
     timeout-minutes: 90
     defaults:
       run:

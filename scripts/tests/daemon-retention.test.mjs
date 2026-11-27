@@ -118,9 +118,20 @@ test("passing report bindings require all four actual nonzero target results", a
       executables: [{ target, sha256: "d".repeat(64), file: target }, { target: "coven", sha256: "e".repeat(64), file: "coven" }] })) };
   assert.equal(qualifyReport(row, report, observation).first_attempt_qualified, true);
   for (const [index, nodePlatform, runnerOs] of [[1, "darwin", "macOS"], [2, "win32", "Windows"]]) {
-    const platformReport = { ...report, platform: nodePlatform, runner_os: runnerOs };
-    assert.equal(qualifyReport(classifyMetadata(fixture()).rows[index], platformReport, observation).first_attempt_qualified, true);
+    const platformReport = { ...report, platform: nodePlatform, runner_os: runnerOs, arch: index === 1 ? "arm64" : "x64" };
+    const fixtureRow = classifyMetadata(fixture()).rows[index];
+    if (index === 1) fixtureRow.job.labels = ["macos-15"];
+    assert.equal(qualifyReport(fixtureRow, platformReport, observation).first_attempt_qualified, true);
   }
+  const macRow = classifyMetadata(fixture()).rows[1];
+  const macReport = { ...report, platform: "darwin", runner_os: "macOS", arch: "x64" };
+  macRow.job.labels = ["macos-15-intel"];
+  assert.equal(qualifyReport(macRow, macReport, observation).source_series.arch, "x64");
+  for (const labels of [undefined, [], ["macos-15"], ["macos-26-intel"], ["macos-15", "macos-15-intel"], ["macos-15-intel", "macos-26-intel"], ["self-hosted", "macos-15-intel"]]) {
+    const wrong = structuredClone(macRow); wrong.job.labels = labels;
+    assert.throws(() => qualifyReport(wrong, macReport, observation), /runner|platform/);
+  }
+  assert.throws(() => qualifyReport(macRow, { ...macReport, arch: "arm64" }, observation), /runner|platform/);
   assert.throws(() => qualifyReport(row, report, { ...observation, run_attempt: "2" }));
   for (const mutate of [r => { r.target_runs.pop(); }, r => { r.target_runs[0].counts.passed = 0; },
     r => { r.target_runs[0].counts.filtered = 1; }, r => { r.target_runs[0].process.exit_code = 7; },
