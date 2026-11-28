@@ -1,9 +1,24 @@
 # Delivery strategy
 
-**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+**November 28, 2026.** Phases 0–4 remain frozen. Val deferred Phase 5 on November 26–27. Seven coherence criteria have acceptances limited to specific revisions. Audit completeness remains unresolved, and all eight criteria need evidence on one common set of revisions before Val can reconsider coherence and then freeze. [Coherence decision](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591) · [Freeze decision](https://github.com/OpenCoven/coven-threads/issues/14#issuecomment-7214040820)
 
-Finish the real-daemon authority boundary before declaring Phase 5 complete
-or expanding its authority claims.
+## Work remaining for Phase 5
+
+The [November 28 evidence packet](reviews/2026-11-28-coherence-evidence.md) records which criteria the held #1716 candidate can support, including a replay of the original audit records.
+
+1. **Qualify the audit lifecycle in Coven.** Echo rebased the November 10 tests onto Coven main, signed candidate `da5d0743` and ran the four daemon targets against Threads `4955cf8d`. The linked packet preserves the original review and the new 253-test result. Finish protected delivery on #1716 and use the surviving histories to scope the recovery and ordering questions. Cover a live window, deadline and restart, malformed pending or claim data, stale claims, an orphaned opening and an unprovable apply. Preserve the before/after filesystem, pending state and ordered SQLite audit evidence. Record which cases prove exactly one typed terminal close, which establish only a read-only census classification, and where chain ordering or loss remains unproven. Bring unresolved histories back to the contract owner. The local candidate reported no production defect. If a defect is observed, retain the failing journey and verify the repair through the same boundary. [Coven #1716 owner checkpoint](https://github.com/OpenCoven/coven/issues/1716#issuecomment-7160042048)
+2. **Assemble one eight-row coherence packet on #91.** Record the full Coven and Threads revisions, the compiled core and lockfile, and the Cave revision and producer binary used for visibility. On that same combination, demonstrate RFC round-trip (1), Gate-4 revalidation by reachable approval path (2), descriptor and writer authority (3), typed terminal history (4), replay-hash enforcement (5), visible and reachable pending state through live Cave (6), load-time tier refusal (7), and advisory-only probe separation (8). Link each row to its command, original result and limits. Identify any unreachable route or missing observation explicitly. Keep the four accepted September dossiers and each prior criterion disposition at the revisions Val named. [Evidence tracker #91](https://github.com/OpenCoven/coven-threads/issues/91) · [Decision and prior scopes](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591)
+3. **Return the packet to Val.** On #13, Val can assess whether criterion 4 and the common-revision requirement are satisfied. An affirmative coherence record supplies the prerequisite for Val to consider the six freeze criteria on #14. The November freeze decision leaves criteria 2–6 undispositioned. [Coherence #13](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591) · [Freeze #14](https://github.com/OpenCoven/coven-threads/issues/14#issuecomment-7214040820)
+
+### Reliability and other open work
+
+| Work | Owner and finish line |
+| --- | --- |
+| Scheduled native reliability | The designated [#111 collector](https://github.com/OpenCoven/coven-threads/issues/111) owes a separate final ledger for each declaration after its 30 complete UTC days. Keep the 90 first-attempt OS opportunities, original failures and source discontinuities in each ledger. The three-OS cadence requires 90/90 to meet 99.5%. The maintainer owns the ARM capacity decision on [#116](https://github.com/OpenCoven/coven-threads/issues/116). |
+| Matrix, measurement and retention | The maintainer can disposition the delivered matrix (#107), measured baseline and proposed floors (#109), and native/core evidence retention (#110) against their individual criteria. Coverage enforcement is a separate decision. [Engineering dispositions](reviews/2026-11-12-retention-and-engineering-dispositions.md) · [Merged batch](https://github.com/OpenCoven/coven-threads/pull/123) |
+| Automation authority | The profile owner can add the consume-on-empty-chain vector and verify JS/Rust agreement. The model owner can separately decide whether to run or retire the unexecuted Kani harnesses. These follow-ups have their own completion criteria. [Vector #124](https://github.com/OpenCoven/coven-threads/issues/124) · [Kani #125](https://github.com/OpenCoven/coven-threads/issues/125) |
+
+## Historical delivery sequence
 
 **Planning baseline: 2026-09-11; repository rollout updated 2026-09-13 (UTC).**
 **Native reliability checkpoint: 2026-09-14 (UTC).**
@@ -81,7 +96,7 @@ changes to the checker or calling workflow.
 
 ### 2. Preserve accepted root scope and refresh evidence
 
-**Current disposition:** All four roots are closed within their accepted scope. Val closed #886 on the September 15 workstation census with zero opened windows; that is not global deployed-history closure. #1305 repaired the later power-loss defect and Cave #5256 completed its qualified window. Use the [October 28 ledger](reviews/2026-10-28-current-coherence.md) for current work. The dated sequence below preserves historical engineering plans; stale open-work descriptions do not authorize duplicate implementation.
+**Current disposition:** All four roots are closed within their accepted scope. Val closed #886 on the September 15 workstation census with zero opened windows; that is not global deployed-history closure. #1305 repaired the later power-loss defect and Cave #5256 completed its qualified window. Use the [October 28 ledger](reviews/2026-10-28-current-coherence.md) for the October evidence. The dated sequence below preserves historical engineering plans; stale open-work descriptions do not authorize duplicate implementation.
 
 **Owners:** daemon integration lane and Cody for implementation; Echo for
 predicate/audit/replay review; Sage for evidence mapping.
