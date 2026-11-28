@@ -8,7 +8,87 @@ retained daemon-boundary execution and records, criterion by criterion, what
 is shown there, what is not, and why. Earlier acceptances do not transfer to
 this tuple, and evidence for this tuple does not transfer back.
 
-## The candidate tuple, T-NOW
+Two tuples are recorded:
+
+- **T-REL**, the recommended common tuple. This is Coven release `v0.5.1` with the Threads core it pins. It needs no override and no decision about whether two tuples are equivalent.
+- **T-NOW**, the same Coven with Threads main compiled in through the local override. Its sections follow T-REL's and supply supporting evidence.
+
+## Recommended common tuple: T-REL
+
+| Element | Value |
+| --- | --- |
+| Coven | `9415c3098f9635963db593970b8943370e90bf81`, tag `v0.5.1` (`git tag --points-at`) |
+| Threads core compiled | `7b5a9e688bff46bf9093e6065820921d119c4747`, from Coven's own pin (`crates/coven-cli/Cargo.toml:77`, `Cargo.lock`). No override: `local_threads_override_active: false` in all 108 retained manifests. |
+| Cave / producer | **None at this producer.** The Cave harness pins producer `b07935f0` (T-CAVE2). T-CAVE2 and T-LOAD compile the same core, `7b5a9e68`, as T-REL. |
+
+**Core distance from Threads main.** `7b5a9e68` is an ancestor of `4955cf8d`. The only core code between them is `automation_authority/*` and its examples (`git diff --stat 7b5a9e68 4955cf8d -- crates/coven-threads-core`). `approval.rs`, `audit.rs`, `surface_regions.rs` and `identity_invariants.rs` are byte-identical.
+
+### Execution at T-REL
+
+**Daemon boundary.** Coven's required CI push run [`45540814558`](https://github.com/OpenCoven/coven/actions/runs/45540814558) (2026-11-25, success) runs `cargo test --locked -p coven-cli --test threads_e2e --features threads-test-clock --test threads_identity_invariants --test threads_protected_intake --test threads_terminal_recovery` (`.github/workflows/ci.yml:403`, `518`, `607`) on all three platforms. Counts are taken from the job logs:
+
+| Platform (job) | `threads_e2e` | `threads_identity_invariants` | `threads_protected_intake` | `threads_terminal_recovery` |
+| --- | --- | --- | --- | --- |
+| Linux (`138958660149`) | 129 | 45 | 39 | 34 |
+| macOS (`138958660031`) | 128 | 45 | 39 | 34 |
+| Windows (`138958659986`) | 106 | 44 | 35 | 33 |
+
+- All counts have 0 failed and 0 ignored. The isolated Threads-clock step passed 249, 249 and 240 tests.
+- Each platform's counts are listed in run order. The macOS log's `Running` labels are offset by one line.
+- The Windows counts are lower because the platform gates some cases; I did not enumerate them.
+
+**Retained daemon state.** The Windows evidence artifact is `threads-daemon-windows-feature-9415c309…-45540814558-1` (artifact `14989338370`, SHA-256 `2b2fee17b52ed37ba50258402616ebc49e688bb61985a936e0d6e46b14e8d82b` as downloaded; retained until 2026-12-09). I replayed it offline with the same `python3 -I` scripts used for T-NOW:
+
+- 108/108 journeys passed. Every manifest names `9415c309`/`7b5a9e68` with `coven_dirty: false`.
+- 51 opened windows, all `typed_terminal_recorded`, 0 unresolved. Closes: 13 `applied`, 2 `vetoed`, 20 `evidence_diverged`, 15 `revalidation_failed`, 1 `superseded`. Paths: 20 `auto`, 31 `familiar_review`.
+- Hash binding and close rule hold for 51/51. 13/13 applied closes follow an apply intent with before-images and a recovery commitment.
+- 17 tier-load cases: the 4 valid configurations return 200; the unknown tier and 12 mismatches return 500 `ward_config_invalid`.
+- `threads_dirty: true` in every manifest. The harness computes it with `git status --untracked-files=all` in the directory holding the resolved Threads manifest (`tests/threads_e2e.rs:2332`, `3617-3618`), which here is Cargo's git checkout. *(inference)* Cargo's own marker files in that checkout produce the flag, not a source change. The recorded commit equals the lock pin.
+
+**Core at the pinned rev.** I ran `git archive 7b5a9e68` into a scratch directory, then `cargo test --offline --locked -p coven-threads-core` with rustc 1.99.1:
+
+- `rfc0001_s5_conformance` 14/14, `c7_roundtrip` 17/17, `phase5_retired_ward_corpus` 4/4.
+- 229/229 library tests, including the nine criterion-1 covering tests from the T-SEP packet: `highest_ceremony_wins`, `cross_variant_highest_merges_the_losing_paths_veto_window`, `human_paths_drop_lower_windows_by_design`, `proposal_classification_roundtrips_json`, `window_close_reason_tags_are_stable`, `missing_candidate_extraction_fails_closed`, `stale_candidate_fact_extraction_fails_closed`, `compiler_requires_name_and_person` and `retired_invariant_declarations_compile_with_full_fidelity`.
+
+### Per-criterion status at T-REL
+
+Each status uses the criterion's own wording in #13. "Shown" is engineering evidence only; acceptance is Val's.
+
+| # | Criterion (#13 wording, abridged) | Evidence at T-REL | Status |
+| --- | --- | --- | --- |
+| 1 | Every §6 decision maps to a type or predicate; none orphaned or contradicted | [Criterion 1 mapping](#criterion-1-mapping-at-t-rel); core suites and covering tests above | **Shown**, with the T-SEP bounds: the forward-only rule of decision 3 is vacuous (no promotion code), and decision 5 is an external process decision |
+| 2 | Every `ApprovalPath` ends in daemon re-materialization; no apply without live revalidation at the deadline | [Code trace](#code-trace-for-criteria-2-and-5) (the Coven source is T-NOW's); the scheduler makes vetoable paths due only at `now >= veto_deadline` and never makes human paths due on its own (`api.rs:11790-11798`); four targets on three platforms; 51/51 typed closes | **Shown**, without route-by-route execution |
+| 3 | No Cave or client surface is enforced on; every enforcement point is daemon-owned | [Census](#criterion-3-census-at-9415c309) (the Coven source is T-NOW's) | **Not shown**: Castle sync (`/host/*`) needs Val's classification |
+| 4 | `submitted → opened → close(reason)` with no gap | Supported intake 51/51; `threads_terminal_recovery` passes on three platforms | **Not met**: damaged histories have no close path; see the [options memo](2026-11-29-criterion-4-options.md) |
+| 5 | `evidence_replay_hash` on `ProposalClassification` and enforced at deadline revalidation | Field at `approval.rs:428`; re-derived at every load (`proposal_scheduler.rs:86-88`); live-byte and final-byte checks (code trace); 51/51 retained bindings; divergence journeys pass on three platforms | **Shown**; byte values were not retained for replay |
+| 6 | `min_visible` enforced on `VetoWindow`; pending state reachable before the deadline. Val accepted it only on qualified Cave runs, at T-CAVE and T-CAVE2. | Daemon side as at T-NOW | **Not shown**: no Cave journey at this producer; needs a Cave harness repin to `9415c309` and a dispatch |
+| 7 | Load-time label/variant mapping | 17/17 tier-load cases retained (Windows); same targets pass on Linux and macOS | **Shown**, within the T-LOAD bound |
+| 8 | Advisory probes separated, Gate-3 only | Same journeys as T-NOW | **Shown** as separation only |
+
+**Summary at T-REL:**
+
+- Shown: 1, 2, 5, 7 and 8.
+- Not shown: 3, pending Val's Castle-sync classification, and 6, pending the Cave repin and dispatch.
+- Not met: 4.
+
+### Criterion 1 mapping at T-REL
+
+The §6 decisions come from `specs/PHASE-5-APPROVAL-SEMANTICS.md:326-402` on Threads main. Each symbol from the T-SEP mapping was relocated at Threads `4955cf8d`, whose files listed below are identical at `7b5a9e68`, and at Coven `9415c309`.
+
+| §6 decision | Type / predicate / call site at T-REL | Change since T-SEP |
+| --- | --- | --- |
+| 1. `ApprovalPath` separate from `Channel` | `enum ApprovalPath` (`approval.rs:82`); `ProposalClassification` carries both (`approval.rs:405`); `ApprovalPath::highest` (`approval.rs:158`); the daemon derives the path from region bindings: `WardConfig::compiled_approval_tiers` (`coven ward.rs:589`), `revalidate_scheduled_approval_policy` (`api.rs:8176`) | Threads file unchanged; Coven functions relocated |
+| 2. Delayed apply only; close reason field | `WindowCloseReason` (`approval.rs:471`), `ProposalWindowCloseAuditDetail` (`approval.rs:537`), `ProposalApprovalAuditDetail` (`approval.rs:553`); due rule (`api.rs:11790-11798`); `proposal_decision_semantics` (`api.rs:7995`) refuses early approval (`proposal-minimum-visibility-open`, `proposal-veto-window-open`) | No provisional-apply path found |
+| 3. Classify regions first; forward-only promotion | `affected_regions` on `ProposalClassification`; `SurfaceRegionRegistry::classify_all` (`surface_regions.rs:627`) and `path_tier_floor` (`641`); `validate_region_evidence` (`proposal_scheduler.rs:270`) | Promotion code still absent; vacuous |
+| 4. Deterministic where possible; ambiguity fails closed | `IdentityInvariantSet::compile` (`identity_invariants.rs:211`), `evaluate` (`263`), `IdentityAwarePattern` (`327`), `AdvisoryProbes` separate (`885`); daemon `enum ProbeId` (`coven ward.rs:254`) | Threads file unchanged |
+| 5. Upstream RFC amendments before freeze | Process decision; external repository not inspected | Same bound as T-SEP |
+| 6. Daemon contract before Cave | `ApprovalPathWireEnvelope` (`approval.rs:572`) emitted by `ApprovalPathWireEnvelope::from_classification` (`api.rs:7856`) in `threads_proposals_response` (`api.rs:7617`) | Coven relocated; the Cave side is not re-inspected at this producer |
+| 7. Display labels as a daemon wire contract | Criterion 7 row | — |
+| 8. `proposal_window_opened` audit event | `AuditEventType::ProposalWindowOpened` (`audit.rs:148`), detail validated in `validate_event_detail` (`audit.rs:472`), written by `ensure_proposal_window_opened_audit_with_conn` (`api.rs:12167`) | Since T-SEP, `audit.rs` gained only `for_ward_updated` and memory-admission channel recording (four commits, `0021fd26..4955cf8d`), neither of which touches decisions 2 or 8 |
+
+No §6 decision is contradicted at T-REL. Decision 3's forward-only rule and decision 5 keep their T-SEP bounds.
+
+## Supporting tuple, T-NOW
 
 | Element | Value |
 | --- | --- |
@@ -63,7 +143,13 @@ It is still a different Coven revision. Whether a delta confined to test support
 
 ## What this means for #13
 
-T-NOW cannot yet carry all eight criteria.
+**T-REL (Coven `v0.5.1` + pinned core `7b5a9e68`) is the recommended common tuple.**
+
+- It shows criteria 1, 2, 5, 7 and 8.
+- It does not show criterion 3, which waits on Val's Castle-sync classification, or criterion 6, which needs a Cave repin and dispatch.
+- It does not meet criterion 4, which needs Val's options decision and then Coven implementation.
+
+Under T-NOW, the override tuple, the list below still applies.
 
 - **Criterion 4** is not met at any tuple. This is now a design question; see the options memo.
 - **Criterion 3** has a rerun dispatch census and file classification at this Coven. The one open item is Val's classification of the `/host/*` Castle sync path.
