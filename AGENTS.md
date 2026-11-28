@@ -174,6 +174,24 @@ available, but:
 Phase gates matter. Phase N+1 does not silently bypass an unresolved freeze or
 sign-off gate.
 
+## Before any merge to main
+
+A declared native-reliability window binds its measurements to one source
+revision of `main`, so any merge, documentation included, starts a new source
+series. Before merging, read the latest source-hold, exception and handoff
+comments on the open native-reliability ledger issue (currently #111). During
+a declared window, a merge needs Val's recorded exception for that exact head;
+after it lands, post the verified new SHA and tree for the designated
+collector. Never collect, checkpoint or declare on the collector's behalf.
+
+## Documentation website
+
+`website/` renders the Markdown pages listed in `website/pages.json` and pins
+every other repository link to the build revision. The Markdown under `docs/`
+stays the only source of the words. A change that renames a heading, moves a
+listed page or edits `pages.json` must pass the website steps of the gate
+(`npm test`, `npm run build`, `npm run check` under `website/`).
+
 ## Completion evidence
 
 Every authority-relevant pull request must state:

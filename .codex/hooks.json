@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "bd codex-hook PostCompact",
+            "command": "if command -v bd >/dev/null 2>&1; then bd codex-hook PostCompact; fi",
             "statusMessage": "Scheduling Beads context refresh",
             "type": "command"
           }
@@ -16,7 +16,7 @@
       {
         "hooks": [
           {
-            "command": "bd codex-hook PreCompact",
+            "command": "if command -v bd >/dev/null 2>&1; then bd codex-hook PreCompact; fi",
             "statusMessage": "Checking Beads context",
             "type": "command"
           }
@@ -28,7 +28,7 @@
       {
         "hooks": [
           {
-            "command": "bd codex-hook SessionStart",
+            "command": "if command -v bd >/dev/null 2>&1; then bd codex-hook SessionStart; fi",
             "statusMessage": "Loading Beads context",
             "type": "command"
           }
@@ -40,7 +40,7 @@
       {
         "hooks": [
           {
-            "command": "bd codex-hook UserPromptSubmit",
+            "command": "if command -v bd >/dev/null 2>&1; then bd codex-hook UserPromptSubmit; fi",
             "statusMessage": "Refreshing Beads context",
             "type": "command"
           }

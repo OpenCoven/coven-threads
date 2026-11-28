@@ -52,6 +52,19 @@ fi
 node scripts/check-ci-pins.mjs "$toolchain_pin"
 node --test scripts/tests/*.test.mjs
 
+# The documentation website renders selected docs/ Markdown, so a renamed
+# heading or moved page can break its links. Its dependencies come from
+# bootstrap (network_policy is bootstrap-only); without them, say so. CI job
+# "Documentation website" installs them and runs the same three steps.
+if [[ -d website/node_modules ]]; then
+  npm test --prefix website
+  npm run build --prefix website
+  npm run check --prefix website
+else
+  echo "notice: website/node_modules is absent; skipping the documentation website" >&2
+  echo "        checks. Run bash scripts/agent-bootstrap.sh (or npm ci --prefix website)." >&2
+fi
+
 # Required-check parity. "Privacy policy guard" and "Secret scanning" gate main
 # through the repository ruleset, so the documented local gate must be able to
 # reproduce their failures rather than passing and deferring the red run to CI.
