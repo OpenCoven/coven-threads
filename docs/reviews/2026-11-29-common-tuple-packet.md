@@ -124,14 +124,14 @@ This is a static trace of `crates/coven-cli/src` at Coven `9415c309`, read with 
 
 1. **The stored hash is re-derived at every load.** `ScheduledProposal::from_persisted_parts` recomputes `evidence_replay_hash(materialized_diff, region_evidence)`. It refuses the load if the result differs from `classification.evidence_replay_hash`, with "classification replay hash does not commit the materialized evidence" (`proposal_scheduler.rs:86-88`). The persisted envelope is decoded through this function (`api/proposal_document.rs`). Before re-deriving, it also refuses a path tier floor of 0 (protected Tier-0) and reviewed Tier-1 on `AutoRegression` (`proposal_scheduler.rs:66-79`).
 2. **Live bytes are compared at the close-time decision.** In `decide_threads_proposal_inner`, every scheduled proposal with no applying state runs these checks, in this order, whatever its `ApprovalPath`:
-   - identity revalidation (`api.rs:10527-10544`);
+   - identity revalidation (`api.rs:10528-10544`);
    - `revalidate_auto_regression`;
    - live tier escalation;
    - `revalidate_scheduled_materialized_before` (`api.rs:8145-8172`), which compares each surface's committed `before` bytes, or its absence, with the live file;
    - `revalidate_scheduled_approval_policy` (`api.rs:10615-10640`).
 
    A difference becomes a typed rejection with `replay_hash_matched: Some(false)`: `evidence_diverged` for byte divergence, `revalidation_failed` otherwise.
-3. **The decision.** `Applied` with `Some(true)` is assigned only after those checks (`proposal_decision_semantics`, `api.rs:8113-8121`). Each path's own preconditions are enforced in the same function (`api.rs:8044-8105`):
+3. **The decision.** `Applied` with `Some(true)` is assigned only after those checks (`proposal_decision_semantics`, `api.rs:8114-8121`). Each path's own preconditions are enforced in the same function (`api.rs:8044-8105`):
    - `FamiliarCoherence` and vetoable `AutoRegression` need minimum visibility and an elapsed deadline before approval.
    - `HumanApprovalWithRationale` needs a non-empty rationale.
    - Non-vetoable `AutoRegression` cannot be rejected by a human.
@@ -142,7 +142,7 @@ This is a static trace of `crates/coven-cli/src` at Coven `9415c309`, read with 
    - a recomputed recovery commitment that differs from the intent's;
    - an auto-regression check that no longer passes.
 
-   On drift, the apply rolls back and the window gets one typed `revalidation_failed` close (`append_open_window_revalidation_failure`, `api.rs:11186-11206`). Recovery-mode applies (`api.rs:10761`, `10857`) re-check the Ward config first (`api.rs:10711`).
+   On drift, the apply rolls back and the window gets one typed `revalidation_failed` close (`append_open_window_revalidation_failure`, `api.rs:11191`). Recovery-mode applies (`api.rs:10761`, `10857`) re-check the Ward config first (`api.rs:10711`).
 5. **Final bytes.** `finalize_approved_proposal` (`api.rs:14855`) writes the apply audit and advances each gated surface's baseline in one durable transaction. `advance_surface_baseline_from_bytes` refuses if the bytes on disk differ from the approved bytes: "changed after approved apply; baseline not advanced" (`threads_gate.rs:951-953`).
 
 The retained journeys that drive these checks include:
