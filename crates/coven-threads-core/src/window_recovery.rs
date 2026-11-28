@@ -238,15 +238,33 @@ pub fn recovery_disposition(facts: &WindowRecoveryFacts) -> TerminalDisposition 
     use RecoveryHold as H;
     use TerminalDisposition as D;
 
-    if facts.openings != 1 || facts.typed_terminals > 1 || facts.terminal_precedes_opening {
+    // Rule 1: appending cannot repair a malformed history, and an untyped
+    // legacy terminal is not a typed close.
+    if facts.openings != 1
+        || facts.typed_terminals > 1
+        || facts.untyped_terminals > 0
+        || facts.history_issues
+        || facts.terminal_precedes_opening
+    {
         return D::Hold(H::InconsistentHistory);
     }
+    // Rule 2.
     if facts.typed_terminals == 1 {
         return D::AlreadyClosed;
     }
+    // Rule 3.
     if facts.retained == RetainedProposal::Active {
         return D::Ordinary;
     }
+    // Rule 4: any sign that a write may have started.
+    if facts.applying_state_retained {
+        return D::Hold(match facts.apply_intent {
+            // Durable intents are committed before any sidecar is written.
+            ApplyIntentEvidence::AbsentDurable => H::ContradictoryFacts,
+            _ => H::InterruptedApply,
+        });
+    }
+    // Rule 5: only durable absence of an apply intent proves no write.
     match facts.apply_intent {
         ApplyIntentEvidence::AbsentDurable => {}
         ApplyIntentEvidence::AbsentUnproven => return D::Hold(H::NoWriteUnproven),
@@ -254,6 +272,11 @@ pub fn recovery_disposition(facts: &WindowRecoveryFacts) -> TerminalDisposition 
             return D::Hold(H::InterruptedApply)
         }
     }
+    // Rule 6.
+    if !facts.submission_receipt_matches {
+        return D::Hold(H::UnprovenOpening);
+    }
+    // Rule 7.
     if !facts.deadline_reached {
         return D::Hold(H::AwaitDeadline);
     }
