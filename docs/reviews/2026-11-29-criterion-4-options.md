@@ -270,13 +270,15 @@ cargo doc --locked -p coven-threads-core --no-deps                no warnings
    `AbsentDurable`. Plus a fact for retained applying sidecars and a
    census-issue fact taken from the existing classifier.
 3. Quarantined artifacts preserved after the close, for investigation.
-4. Daemon-boundary regressions, red to green. The six #1716 journey families
-   change expectation:
+4. Daemon-boundary regressions, red to green. The #1716 lifecycle journeys
+   (eight at the rebased candidate `da5d0743`) change expectation:
 
    | Journey | Expected after A |
    | --- | --- |
    | Orphaned opening | One `revalidation_failed` after the deadline |
    | Malformed pending (no intent) | One `revalidation_failed` or `evidence_diverged` |
+   | Malformed claim (quarantined) | *(inference)* Held, `InterruptedApply`: an unparseable claim cannot show that it carried no applying state, so `applying_state_retained` stays true |
+   | Expired claim-name control (quarantined) | *(inference)* Held, as for a malformed claim, unless the reconciler parses the claim and shows no applying state. Then it is handled as malformed pending. |
    | Synthetic intent | Held, `InterruptedApply` |
    | Interrupted claim with Ward intact | Unchanged: applied once |
    | Interrupted claim with Ward removed | Held, `InterruptedApply` |
