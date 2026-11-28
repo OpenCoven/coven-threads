@@ -653,7 +653,7 @@ impl WardAuditRecord {
     }
 }
 
-fn validate_window_close_detail(
+pub(crate) fn validate_window_close_detail(
     event_type: &AuditEventType,
     detail: &ProposalWindowCloseAuditDetail,
 ) -> Result<(), String> {
