@@ -2,7 +2,20 @@
 
 The November 28 replay reproduced eight audit journeys and 25 read-only census observations. Two journeys reached an applied terminal. Six ended with an opening and no recorded terminal. Those six include deliberately damaged synthetic histories. They explain why a successful diagnostic suite still leaves the universal close requirement unresolved. [November 10 experiment and case descriptions](2026-11-10-audit-census-evidence.md) · [Val’s criterion dispositions](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591)
 
-## Revisions and method
+## Rebased candidate on current Threads
+
+The next qualification ran signed Coven candidate `da5d07437e149416f1a5e058c577dfe20332f3ee` (tree `b025845a6bbf4052f21e18e62fb4d8832644ba31`, based on `9415c3098f9635963db593970b8943370e90bf81`) with Threads `4955cf8dc97e7fde07adf4e233fd6e060ee584e4`. Cargo metadata confirmed the local core dependency before and after execution. The only change in the resolved lock was the core source overlay. Its SHA-256 was `67dc2a9b734060df9da77b1d077683fa07753dad2b66185d694d9f24228fe1d6`. The macOS ARM64 daemon SHA-256 was `74b563d7054a01060c5bc087a1b2d69db6bf10e06aebe0cde35132a61033e34d`. All five executable hashes remained stable during execution. [Candidate handoff](https://github.com/OpenCoven/coven/issues/1716#issuecomment-7237264162)
+
+| Current-pair check | Result |
+| --- | --- |
+| Four real-daemon test targets | `threads_e2e` 135, `threads_identity_invariants` 45, `threads_protected_intake` 39, `threads_terminal_recovery` 34. All passed with zero ignored. |
+| Lifecycle and read-only census | Eight journeys, 25 read-only comparisons, 24 owned daemon exits and two deliberate interruptions. The same two cases settled and the same six remained unresolved as on the original pair. Matrix SHA-256 `f835576763d49f657fd1e7601c835e552ca85a4432c57fe3bfc86560d7ff495f`. |
+| Tier mapping | Exact-pair manifests and responses showed four HTTP 200 successes and thirteen `ward_config_invalid` refusals. |
+| Core checks on Rust 1.88.0 | All 14 RFC §5, 17 C7 and 11 advisory-probe tests passed. |
+
+The eight-row table below retains its original November 10 evidence. On the rebased candidate, the new receipts support the bounded checks above. A current-pair Cave visibility run, global audit ordering and loss evidence, and terminal histories for the six unresolved cases remain open. The [coherence decision](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591) governs acceptance.
+
+## Original candidate revisions and method
 
 The producer was the held Coven test candidate `8edeb939d35cd40c49a58f56153fd3326864087f` with the local Threads core at `aba2e226c6809b823f39e0a838342e9ea330f59b`. Its resolved lockfile SHA-256 was `fb6b254620308c5e1be11c1eaf697723a18223d3a3780bf8ff1807a3b0800a3e`. The retained macOS ARM64 daemon SHA-256 was `68459a80d149d9d80e77c7224dcfc26329c4af58c502d3f651940d92c2e0b3bb`. All five retained executable digests matched the original run record. The original four test targets passed 131/45/39/34. The candidate is an engineering reference pair. Selection of a release or common acceptance revision remains open. [Coven checkpoint](https://github.com/OpenCoven/coven/issues/1716#issuecomment-6767028202)
 
@@ -30,4 +43,4 @@ python3 qualify-lifecycle.py "$scratch"
 cmp "$scratch/matrix-qualified.json" "$original/matrix-qualified.json"
 ```
 
-At Coven main `9415c3098f9635963db593970b8943370e90bf81`, the two-file candidate diff passed an applicability check. The shared allocator refused a thirteenth task worktree under its limit of twelve. The new base still needs the signed candidate, full local gates, Policy guard and a new real-daemon run. The #1716 owner can resume when an owned slot is available. #91 holds the evidence packet for eventual review on #13. [Coven owner checkpoint](https://github.com/OpenCoven/coven/issues/1716#issuecomment-7160042048) · [Freeze deferral](https://github.com/OpenCoven/coven-threads/issues/14#issuecomment-7214040820)
+At the initial November 28 allocation attempt on Coven main `9415c3098f9635963db593970b8943370e90bf81`, the two-file candidate diff passed an applicability check. The shared allocator refused a thirteenth task worktree under its limit of twelve. Echo subsequently retired its clean reviewed-producer checkout with approval, preserved the branch and recovery bundle, acquired the #1716 slot and qualified the signed candidate as recorded above. #91 holds the evidence packet for eventual review on #13. [Coven owner checkpoint](https://github.com/OpenCoven/coven/issues/1716#issuecomment-7160042048) · [Freeze deferral](https://github.com/OpenCoven/coven-threads/issues/14#issuecomment-7214040820)
