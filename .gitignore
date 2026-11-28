@@ -33,3 +33,6 @@ __pycache__/
 *.bak-*
 /.playwright-cli
 /.psyche
+
+# Bootstrap-provisioned tools (pinned gitleaks)
+/.tooling/
