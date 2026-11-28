@@ -15,34 +15,47 @@
 //!
 //! Rules, in order:
 //!
-//! 1. An inconsistent history (not exactly one opening, more than one
-//!    terminal, or a terminal before its opening) cannot be repaired by
-//!    appending. It is held as an integrity incident.
-//! 2. A window that already has its one terminal needs nothing.
+//! 1. An inconsistent history cannot be repaired by appending. That means not
+//!    exactly one opening, more than one typed terminal, any untyped or legacy
+//!    terminal, any census issue (invalid record, scope mismatch, intent
+//!    order), or a terminal before its opening. It is held as an integrity
+//!    incident.
+//! 2. A window that already has its one typed terminal needs nothing.
 //! 3. An active pending item or decision claim belongs to the ordinary
 //!    scheduler and decision paths, which already write typed closes.
-//! 4. If an apply intent exists, a write may have started. The current bytes
-//!    can match the before-images even when a landed write was later
-//!    reverted, so recovery never asserts a rejection here. It holds.
-//! 5. A missing intent proves that no write happened only when the daemon
-//!    that opened the window committed every apply intent durably before any
-//!    target write. Otherwise recovery holds.
-//! 6. Automatic closes wait for the deadline, which preserves minimum
+//! 4. Any retained applying state (a claim sidecar) or apply intent means a
+//!    write may have started. The current bytes can match the before-images
+//!    even when a landed write was later reverted, so recovery never asserts a
+//!    rejection here. It holds.
+//! 5. A missing intent proves that no write happened only when the proposal
+//!    was staged by a daemon that commits every apply intent durably before
+//!    any target write. Otherwise recovery holds.
+//! 6. The proposal's own submission receipt must match the opening, or the
+//!    opening is unprovable and recovery holds.
+//! 7. Automatic closes wait for the deadline, which preserves minimum
 //!    visibility.
-//! 7. A transient authority failure is retried, never treated as proof.
-//! 8. A quarantined proposal whose evidence still replays can be restored by
-//!    its owner, so it is held rather than closed.
-//! 9. Otherwise the close is `proposal_rejected`, either with
-//!    `evidence_diverged` (replay ran and differed) or with
-//!    `revalidation_failed` (authoritative evidence cannot be produced,
-//!    including because the staged bytes are gone). Both reasons already
-//!    exist; no schema change is needed.
+//! 8. A transient authority failure is retried, never treated as proof.
+//! 9. A quarantined proposal whose evidence still replays is held rather than
+//!    closed.
+//! 10. Otherwise the close is `proposal_rejected`, either with
+//!     `evidence_diverged` (replay ran and differed) or with
+//!     `revalidation_failed` (authoritative evidence cannot be produced). Both
+//!     reasons already exist; no schema change is needed.
 //!
 //! Recovery never produces `proposal_approved` or `proposal_vetoed`: it never
-//! asserts an apply or a principal act.
+//! asserts an apply or a principal act. Contradictory inputs fail closed.
 //!
-//! Contradictory inputs fail closed. Example: a replay outcome reported for a
-//! proposal whose staged bytes are absent.
+//! # Caller obligations
+//!
+//! - Gather the facts under the daemon's single Ward write lock, and append any
+//!   returned close in the same durable transaction that re-checks for an
+//!   existing terminal. Filename observations are otherwise non-atomic.
+//! - Start from [`WindowRecoveryFacts::conservative`]. Every field defaults to
+//!   the value that cannot produce a close, so a field added later fails
+//!   closed for callers that do not set it.
+//! - [`TerminalDisposition`] and [`RecoveryHold`] are `#[non_exhaustive]`. A
+//!   wildcard match arm must hold, never close.
+//! - Preserve every retained artifact after a close, for investigation.
 
 use crate::approval::{ProposalWindowCloseAuditDetail, WindowCloseReason};
 use crate::audit::AuditEventType;
@@ -51,11 +64,16 @@ use crate::audit::AuditEventType;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApplyIntentEvidence {
-    /// No apply-intent row. The daemon that opened the window committed every
-    /// apply intent durably (power-loss safe) before any target write, so the
-    /// absence proves that no write started.
+    /// No apply-intent row, and the proposal was **staged** by a daemon that
+    /// commits every apply intent durably (power-loss safe) before any target
+    /// write, so the absence proves that no write started.
+    ///
+    /// Establish this from a durable store marker that such a daemon wrote
+    /// before staging the proposal. Do not use row timestamps or the opening
+    /// row: a later daemon can write an opening lazily for a proposal an
+    /// earlier daemon staged.
     AbsentDurable,
-    /// No apply-intent row, but intent durability at the time of the opening
+    /// No apply-intent row, but intent durability when the proposal was staged
     /// is unknown or was not guaranteed. Legacy histories fall here.
     AbsentUnproven,
     /// A valid apply-intent row exists, so a write may have started.
@@ -74,14 +92,21 @@ pub enum RetainedProposal {
     Active,
     /// The pending item or claim was moved to quarantine.
     Quarantined,
-    /// Only unrecognized artifacts remain, for example an interrupted staging
-    /// file.
+    /// Only artifacts that are never authoritative by policy remain, for
+    /// example an unknown suffix or an interrupted staging file, even when the
+    /// file holds a complete body.
     Untrusted,
     /// No retained artifact matches the proposal.
     Absent,
 }
 
 /// The outcome of re-deriving the proposal's authoritative evidence now.
+///
+/// With several retained copies, apply these in order: any copy that
+/// re-derives to the opening's hash gives `Matched`; otherwise any transient
+/// failure gives `Transient`; otherwise any copy that re-derived to a
+/// different hash gives `Diverged`; otherwise `NotProducible`. Untrusted or
+/// absent artifacts are never replayed, so they give `NotProducible`.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayOutcome {
@@ -89,9 +114,8 @@ pub enum ReplayOutcome {
     Matched,
     /// The evidence was re-derived and its hash differs.
     Diverged,
-    /// Authoritative evidence cannot be produced. Examples: the staged bytes
-    /// are gone, or the retained proposal is invalid. This is a permanent,
-    /// proven condition, not an I/O failure.
+    /// Authoritative evidence cannot be produced. This is a permanent, proven
+    /// condition, not an I/O failure.
     NotProducible,
     /// A transient failure, such as an I/O error or a temporarily unavailable
     /// authority. Not proof of anything.
@@ -101,32 +125,67 @@ pub enum ReplayOutcome {
 /// Facts a recovery pass gathers for one proposal with an opened window.
 ///
 /// The daemon owns gathering these from its store and filesystem. Threads
-/// owns what they permit.
+/// owns what they permit. Construct with [`WindowRecoveryFacts::conservative`]
+/// and set each field the daemon has established.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowRecoveryFacts {
     /// Number of `proposal_window_opened` rows for the proposal.
     pub openings: u32,
-    /// Number of terminal rows (`proposal_approved`, `proposal_rejected`,
-    /// `proposal_vetoed`, or any legacy terminal) for the proposal.
-    pub terminals: u32,
+    /// Number of typed terminal rows (`proposal_approved`,
+    /// `proposal_rejected`, `proposal_vetoed`) for the proposal.
+    pub typed_terminals: u32,
+    /// Number of untyped or legacy terminal rows, for example
+    /// `proposal_expired`, or a terminal without its window-close detail.
+    pub untyped_terminals: u32,
+    /// Whether the history has any other census issue: an invalid record,
+    /// familiar, target or channel scope mismatch, or an apply intent outside
+    /// its opening-to-terminal interval.
+    pub history_issues: bool,
     /// Whether any terminal row precedes the opening.
     pub terminal_precedes_opening: bool,
+    /// Whether the proposal's durable submission receipt exists and matches
+    /// the opening.
+    pub submission_receipt_matches: bool,
     /// Whether the window's deadline has been reached on the daemon clock.
     pub deadline_reached: bool,
     /// Apply-intent evidence for the proposal.
     pub apply_intent: ApplyIntentEvidence,
+    /// Whether any retained claim or sidecar, quarantined or not, carries an
+    /// applying state.
+    pub applying_state_retained: bool,
     /// What the daemon still retains for the proposal.
     pub retained: RetainedProposal,
     /// The result of re-deriving the evidence now.
     pub replay: ReplayOutcome,
 }
 
+impl WindowRecoveryFacts {
+    /// Facts that cannot produce a close. Callers set each field they have
+    /// established; anything left unset fails closed.
+    pub fn conservative() -> Self {
+        Self {
+            openings: 0,
+            typed_terminals: 0,
+            untyped_terminals: 0,
+            history_issues: true,
+            terminal_precedes_opening: true,
+            submission_receipt_matches: false,
+            deadline_reached: false,
+            apply_intent: ApplyIntentEvidence::AbsentUnproven,
+            applying_state_retained: true,
+            retained: RetainedProposal::Absent,
+            replay: ReplayOutcome::Transient,
+        }
+    }
+}
+
 /// Why recovery must not append a close yet, or at all.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecoveryHold {
-    /// The history violates the single-opening or single-terminal shape.
-    /// Appending cannot repair it. Treat it as a store-integrity incident.
+    /// The history is malformed (rule 1). Appending cannot repair it. Treat it
+    /// as a store-integrity incident.
     InconsistentHistory,
     /// The deadline has not been reached. Minimum visibility is preserved.
     AwaitDeadline,
@@ -137,14 +196,17 @@ pub enum RecoveryHold {
     /// A write may have started. No existing close reason is truthful without
     /// a completed, verified apply.
     InterruptedApply,
-    /// Quarantined evidence still replays. Its owner can restore it, so it is
-    /// not closed automatically.
+    /// No matching submission receipt, so the opening itself is unprovable.
+    UnprovenOpening,
+    /// Quarantined evidence still replays. At Coven `9415c309` no path
+    /// restores from quarantine, so this hold can be indefinite.
     RestorableEvidence,
     /// The facts contradict each other. Fail closed.
     ContradictoryFacts,
 }
 
 /// A typed terminal close that recovery may append.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecoveryClose {
     /// Always [`AuditEventType::ProposalRejected`].
@@ -157,9 +219,10 @@ pub struct RecoveryClose {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TerminalDisposition {
-    /// The window already has its single terminal.
+    /// The window already has its single typed terminal.
     AlreadyClosed,
-    /// The ordinary scheduler or decision path owns the terminal.
+    /// The ordinary scheduler or decision path owns the terminal. That path can
+    /// itself be blocked; this answer does not certify that it will close.
     Ordinary,
     /// Append this close, durably, in one transaction with any consumption of
     /// retained state.
@@ -169,24 +232,21 @@ pub enum TerminalDisposition {
 }
 
 /// Decide what recovery may do for an opened window with damaged or missing
-/// retained state. See the module documentation for the rules.
+/// retained state. See the module documentation for the rules and the
+/// caller's obligations.
 pub fn recovery_disposition(facts: &WindowRecoveryFacts) -> TerminalDisposition {
     use RecoveryHold as H;
     use TerminalDisposition as D;
 
-    // Rule 1: appending cannot repair a malformed history.
-    if facts.openings != 1 || facts.terminals > 1 || facts.terminal_precedes_opening {
+    if facts.openings != 1 || facts.typed_terminals > 1 || facts.terminal_precedes_opening {
         return D::Hold(H::InconsistentHistory);
     }
-    // Rule 2.
-    if facts.terminals == 1 {
+    if facts.typed_terminals == 1 {
         return D::AlreadyClosed;
     }
-    // Rule 3.
     if facts.retained == RetainedProposal::Active {
         return D::Ordinary;
     }
-    // Rules 4 and 5: only durable absence of an apply intent proves no write.
     match facts.apply_intent {
         ApplyIntentEvidence::AbsentDurable => {}
         ApplyIntentEvidence::AbsentUnproven => return D::Hold(H::NoWriteUnproven),
@@ -194,11 +254,9 @@ pub fn recovery_disposition(facts: &WindowRecoveryFacts) -> TerminalDisposition 
             return D::Hold(H::InterruptedApply)
         }
     }
-    // Rule 6.
     if !facts.deadline_reached {
         return D::Hold(H::AwaitDeadline);
     }
-    // Rules 7 to 9.
     let reason = match (facts.retained, facts.replay) {
         (_, ReplayOutcome::Transient) => return D::Hold(H::TransientAuthority),
         (RetainedProposal::Quarantined, ReplayOutcome::Matched) => {
@@ -208,21 +266,15 @@ pub fn recovery_disposition(facts: &WindowRecoveryFacts) -> TerminalDisposition 
             WindowCloseReason::EvidenceDiverged
         }
         (_, ReplayOutcome::NotProducible) => WindowCloseReason::RevalidationFailed,
-        // Without staged bytes there is nothing to replay; a reported match or
-        // divergence contradicts the retained state.
         (RetainedProposal::Untrusted | RetainedProposal::Absent, _) => {
             return D::Hold(H::ContradictoryFacts)
         }
-        // Active was handled by rule 3.
         (RetainedProposal::Active, _) => return D::Ordinary,
     };
     D::Close(RecoveryClose {
         event_type: AuditEventType::ProposalRejected,
         detail: ProposalWindowCloseAuditDetail {
             reason,
-            // The core requires `Some(false)` for both reasons. For
-            // `revalidation_failed` it means "no authoritative match", which
-            // includes evidence that cannot be produced.
             replay_hash_matched: Some(false),
             rationale: None,
         },
@@ -251,37 +303,50 @@ mod tests {
         ReplayOutcome::NotProducible,
         ReplayOutcome::Transient,
     ];
+    const DAMAGED: [RetainedProposal; 3] = [
+        RetainedProposal::Quarantined,
+        RetainedProposal::Untrusted,
+        RetainedProposal::Absent,
+    ];
 
+    /// Facts for a consistent, unterminated, past-deadline window with durable
+    /// proof of no write, varied only by what is retained and the replay.
     fn damaged(retained: RetainedProposal, replay: ReplayOutcome) -> WindowRecoveryFacts {
-        WindowRecoveryFacts {
-            openings: 1,
-            terminals: 0,
-            terminal_precedes_opening: false,
-            deadline_reached: true,
-            apply_intent: ApplyIntentEvidence::AbsentDurable,
-            retained,
-            replay,
-        }
+        let mut facts = WindowRecoveryFacts::conservative();
+        facts.openings = 1;
+        facts.history_issues = false;
+        facts.terminal_precedes_opening = false;
+        facts.submission_receipt_matches = true;
+        facts.deadline_reached = true;
+        facts.apply_intent = ApplyIntentEvidence::AbsentDurable;
+        facts.applying_state_retained = false;
+        facts.retained = retained;
+        facts.replay = replay;
+        facts
     }
 
     fn all_facts() -> Vec<WindowRecoveryFacts> {
         let mut out = Vec::new();
         for openings in 0..=2 {
-            for terminals in 0..=2 {
-                for terminal_precedes_opening in [false, true] {
-                    for deadline_reached in [false, true] {
+            for typed_terminals in 0..=2 {
+                for untyped_terminals in 0..=1 {
+                    for bits in 0u8..32 {
                         for apply_intent in INTENTS {
                             for retained in RETAINED {
                                 for replay in REPLAYS {
-                                    out.push(WindowRecoveryFacts {
-                                        openings,
-                                        terminals,
-                                        terminal_precedes_opening,
-                                        deadline_reached,
-                                        apply_intent,
-                                        retained,
-                                        replay,
-                                    });
+                                    let mut facts = WindowRecoveryFacts::conservative();
+                                    facts.openings = openings;
+                                    facts.typed_terminals = typed_terminals;
+                                    facts.untyped_terminals = untyped_terminals;
+                                    facts.history_issues = bits & 1 != 0;
+                                    facts.terminal_precedes_opening = bits & 2 != 0;
+                                    facts.submission_receipt_matches = bits & 4 != 0;
+                                    facts.deadline_reached = bits & 8 != 0;
+                                    facts.applying_state_retained = bits & 16 != 0;
+                                    facts.apply_intent = apply_intent;
+                                    facts.retained = retained;
+                                    facts.replay = replay;
+                                    out.push(facts);
                                 }
                             }
                         }
@@ -309,26 +374,62 @@ mod tests {
 
     #[test]
     fn inconsistent_histories_are_held_not_repaired() {
-        for (openings, terminals, precedes) in
-            [(0, 0, false), (2, 0, false), (1, 2, false), (1, 1, true)]
-        {
-            let facts = WindowRecoveryFacts {
-                openings,
-                terminals,
-                terminal_precedes_opening: precedes,
-                ..damaged(RetainedProposal::Absent, ReplayOutcome::NotProducible)
-            };
+        let base = damaged(RetainedProposal::Absent, ReplayOutcome::NotProducible);
+        let mut cases = Vec::new();
+        for openings in [0, 2] {
+            cases.push(WindowRecoveryFacts { openings, ..base });
+        }
+        cases.push(WindowRecoveryFacts {
+            typed_terminals: 2,
+            ..base
+        });
+        cases.push(WindowRecoveryFacts {
+            typed_terminals: 1,
+            terminal_precedes_opening: true,
+            ..base
+        });
+        for facts in cases {
             assert_eq!(
                 recovery_disposition(&facts),
-                hold(RecoveryHold::InconsistentHistory)
+                hold(RecoveryHold::InconsistentHistory),
+                "{facts:?}"
             );
         }
     }
 
     #[test]
-    fn a_window_with_its_terminal_needs_nothing() {
+    fn a_legacy_untyped_terminal_is_not_a_typed_close() {
+        let base = damaged(RetainedProposal::Absent, ReplayOutcome::NotProducible);
+        for typed_terminals in [0, 1] {
+            let facts = WindowRecoveryFacts {
+                typed_terminals,
+                untyped_terminals: 1,
+                ..base
+            };
+            assert_eq!(
+                recovery_disposition(&facts),
+                hold(RecoveryHold::InconsistentHistory),
+                "{facts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn census_issues_are_held_as_inconsistent() {
         let facts = WindowRecoveryFacts {
-            terminals: 1,
+            history_issues: true,
+            ..damaged(RetainedProposal::Absent, ReplayOutcome::NotProducible)
+        };
+        assert_eq!(
+            recovery_disposition(&facts),
+            hold(RecoveryHold::InconsistentHistory)
+        );
+    }
+
+    #[test]
+    fn a_window_with_its_typed_terminal_needs_nothing() {
+        let facts = WindowRecoveryFacts {
+            typed_terminals: 1,
             ..damaged(RetainedProposal::Absent, ReplayOutcome::NotProducible)
         };
         assert_eq!(
@@ -351,11 +452,7 @@ mod tests {
             ApplyIntentEvidence::Present,
             ApplyIntentEvidence::Unverifiable,
         ] {
-            for retained in [
-                RetainedProposal::Quarantined,
-                RetainedProposal::Untrusted,
-                RetainedProposal::Absent,
-            ] {
+            for retained in DAMAGED {
                 for replay in REPLAYS {
                     let facts = WindowRecoveryFacts {
                         apply_intent: intent,
@@ -366,6 +463,37 @@ mod tests {
                         hold(RecoveryHold::InterruptedApply)
                     );
                 }
+            }
+        }
+    }
+
+    /// A pre-durability daemon can lose an intent row while the claim's
+    /// applying sidecar survives; a later daemon can then open the window
+    /// lazily and quarantine the claim.
+    #[test]
+    fn a_retained_applying_state_is_never_closed_as_a_rejection() {
+        for retained in DAMAGED {
+            for replay in REPLAYS {
+                let unproven = WindowRecoveryFacts {
+                    apply_intent: ApplyIntentEvidence::AbsentUnproven,
+                    applying_state_retained: true,
+                    ..damaged(retained, replay)
+                };
+                assert_eq!(
+                    recovery_disposition(&unproven),
+                    hold(RecoveryHold::InterruptedApply),
+                    "{unproven:?}"
+                );
+                // Under durable intents a sidecar always follows its intent row.
+                let durable = WindowRecoveryFacts {
+                    applying_state_retained: true,
+                    ..damaged(retained, replay)
+                };
+                assert_eq!(
+                    recovery_disposition(&durable),
+                    hold(RecoveryHold::ContradictoryFacts),
+                    "{durable:?}"
+                );
             }
         }
     }
@@ -383,6 +511,20 @@ mod tests {
     }
 
     #[test]
+    fn an_opening_without_its_submission_receipt_is_unproven() {
+        for retained in DAMAGED {
+            let facts = WindowRecoveryFacts {
+                submission_receipt_matches: false,
+                ..damaged(retained, ReplayOutcome::NotProducible)
+            };
+            assert_eq!(
+                recovery_disposition(&facts),
+                hold(RecoveryHold::UnprovenOpening)
+            );
+        }
+    }
+
+    #[test]
     fn automatic_closes_wait_for_the_deadline() {
         let facts = WindowRecoveryFacts {
             deadline_reached: false,
@@ -396,11 +538,7 @@ mod tests {
 
     #[test]
     fn transient_failures_are_retried() {
-        for retained in [
-            RetainedProposal::Quarantined,
-            RetainedProposal::Untrusted,
-            RetainedProposal::Absent,
-        ] {
+        for retained in DAMAGED {
             let facts = damaged(retained, ReplayOutcome::Transient);
             assert_eq!(
                 recovery_disposition(&facts),
@@ -445,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_reported_without_staged_bytes_fails_closed() {
+    fn replay_reported_for_unreplayable_artifacts_fails_closed() {
         for retained in [RetainedProposal::Untrusted, RetainedProposal::Absent] {
             for replay in [ReplayOutcome::Matched, ReplayOutcome::Diverged] {
                 assert_eq!(
@@ -456,10 +594,65 @@ mod tests {
         }
     }
 
-    /// Over every combination of facts: a close is only ever a rejection,
-    /// passes the core's own window-close validation, and appears only for a
-    /// consistent, unterminated, past-deadline window with durable proof of
-    /// no write and no active item.
+    /// The conservative starting point holds, and so does every fact set that
+    /// leaves any one close precondition at its conservative value.
+    #[test]
+    fn conservative_facts_never_close() {
+        assert!(matches!(
+            recovery_disposition(&WindowRecoveryFacts::conservative()),
+            TerminalDisposition::Hold(_)
+        ));
+        let closing = damaged(RetainedProposal::Absent, ReplayOutcome::NotProducible);
+        assert!(matches!(
+            recovery_disposition(&closing),
+            TerminalDisposition::Close(_)
+        ));
+        let conservative = WindowRecoveryFacts::conservative();
+        let one_field_reverted = [
+            WindowRecoveryFacts {
+                openings: conservative.openings,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                history_issues: conservative.history_issues,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                terminal_precedes_opening: conservative.terminal_precedes_opening,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                submission_receipt_matches: conservative.submission_receipt_matches,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                deadline_reached: conservative.deadline_reached,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                apply_intent: conservative.apply_intent,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                applying_state_retained: conservative.applying_state_retained,
+                ..closing
+            },
+            WindowRecoveryFacts {
+                replay: conservative.replay,
+                ..closing
+            },
+        ];
+        for facts in one_field_reverted {
+            assert!(
+                matches!(recovery_disposition(&facts), TerminalDisposition::Hold(_)),
+                "{facts:?}"
+            );
+        }
+    }
+
+    /// Over every combination of facts, a close is only ever a rejection,
+    /// passes the core's own window-close validation, and appears only when
+    /// every precondition holds.
     #[test]
     fn every_close_is_a_validated_rejection_under_its_preconditions() {
         let mut closes = 0;
@@ -474,14 +667,18 @@ mod tests {
                 crate::audit::validate_window_close_detail(&close.event_type, &close.detail)
                     .unwrap_or_else(|error| panic!("{facts:?}: {error}"));
                 assert_eq!(facts.openings, 1, "{facts:?}");
-                assert_eq!(facts.terminals, 0, "{facts:?}");
+                assert_eq!(facts.typed_terminals, 0, "{facts:?}");
+                assert_eq!(facts.untyped_terminals, 0, "{facts:?}");
+                assert!(!facts.history_issues, "{facts:?}");
                 assert!(!facts.terminal_precedes_opening, "{facts:?}");
+                assert!(facts.submission_receipt_matches, "{facts:?}");
                 assert!(facts.deadline_reached, "{facts:?}");
                 assert_eq!(
                     facts.apply_intent,
                     ApplyIntentEvidence::AbsentDurable,
                     "{facts:?}"
                 );
+                assert!(!facts.applying_state_retained, "{facts:?}");
                 assert_ne!(facts.retained, RetainedProposal::Active, "{facts:?}");
                 assert_ne!(facts.replay, ReplayOutcome::Transient, "{facts:?}");
                 assert_ne!(facts.replay, ReplayOutcome::Matched, "{facts:?}");
@@ -491,15 +688,19 @@ mod tests {
         assert_eq!(closes, 4);
     }
 
-    /// The disposition is a total function: every input yields exactly one
-    /// answer, and nothing outside rule 2 reports `AlreadyClosed`.
+    /// `AlreadyClosed` occurs, and only for one consistent typed terminal.
     #[test]
-    fn already_closed_requires_one_consistent_terminal() {
+    fn already_closed_requires_one_consistent_typed_terminal() {
+        let mut already_closed = 0;
         for facts in all_facts() {
             if recovery_disposition(&facts) == TerminalDisposition::AlreadyClosed {
-                assert_eq!((facts.openings, facts.terminals), (1, 1), "{facts:?}");
+                already_closed += 1;
+                assert_eq!((facts.openings, facts.typed_terminals), (1, 1), "{facts:?}");
+                assert_eq!(facts.untyped_terminals, 0, "{facts:?}");
+                assert!(!facts.history_issues, "{facts:?}");
                 assert!(!facts.terminal_precedes_opening, "{facts:?}");
             }
         }
+        assert!(already_closed > 0);
     }
 }
