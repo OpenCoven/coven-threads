@@ -170,8 +170,63 @@ pub enum TerminalDisposition {
 
 /// Decide what recovery may do for an opened window with damaged or missing
 /// retained state. See the module documentation for the rules.
-pub fn recovery_disposition(_facts: &WindowRecoveryFacts) -> TerminalDisposition {
-    TerminalDisposition::Hold(RecoveryHold::InconsistentHistory)
+pub fn recovery_disposition(facts: &WindowRecoveryFacts) -> TerminalDisposition {
+    use RecoveryHold as H;
+    use TerminalDisposition as D;
+
+    // Rule 1: appending cannot repair a malformed history.
+    if facts.openings != 1 || facts.terminals > 1 || facts.terminal_precedes_opening {
+        return D::Hold(H::InconsistentHistory);
+    }
+    // Rule 2.
+    if facts.terminals == 1 {
+        return D::AlreadyClosed;
+    }
+    // Rule 3.
+    if facts.retained == RetainedProposal::Active {
+        return D::Ordinary;
+    }
+    // Rules 4 and 5: only durable absence of an apply intent proves no write.
+    match facts.apply_intent {
+        ApplyIntentEvidence::AbsentDurable => {}
+        ApplyIntentEvidence::AbsentUnproven => return D::Hold(H::NoWriteUnproven),
+        ApplyIntentEvidence::Present | ApplyIntentEvidence::Unverifiable => {
+            return D::Hold(H::InterruptedApply)
+        }
+    }
+    // Rule 6.
+    if !facts.deadline_reached {
+        return D::Hold(H::AwaitDeadline);
+    }
+    // Rules 7 to 9.
+    let reason = match (facts.retained, facts.replay) {
+        (_, ReplayOutcome::Transient) => return D::Hold(H::TransientAuthority),
+        (RetainedProposal::Quarantined, ReplayOutcome::Matched) => {
+            return D::Hold(H::RestorableEvidence)
+        }
+        (RetainedProposal::Quarantined, ReplayOutcome::Diverged) => {
+            WindowCloseReason::EvidenceDiverged
+        }
+        (_, ReplayOutcome::NotProducible) => WindowCloseReason::RevalidationFailed,
+        // Without staged bytes there is nothing to replay; a reported match or
+        // divergence contradicts the retained state.
+        (RetainedProposal::Untrusted | RetainedProposal::Absent, _) => {
+            return D::Hold(H::ContradictoryFacts)
+        }
+        // Active was handled by rule 3.
+        (RetainedProposal::Active, _) => return D::Ordinary,
+    };
+    D::Close(RecoveryClose {
+        event_type: AuditEventType::ProposalRejected,
+        detail: ProposalWindowCloseAuditDetail {
+            reason,
+            // The core requires `Some(false)` for both reasons. For
+            // `revalidation_failed` it means "no authoritative match", which
+            // includes evidence that cannot be produced.
+            replay_hash_matched: Some(false),
+            rationale: None,
+        },
+    })
 }
 
 #[cfg(test)]
