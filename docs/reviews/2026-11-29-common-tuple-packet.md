@@ -1,0 +1,263 @@
+# Common-tuple status for the eight coherence criteria
+
+**Engineering evidence, 2026-11-28.** This packet supplies no human
+disposition. Val's [coherence decision](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591)
+accepts seven criteria, each at its own tuple, and asks for one common tuple
+that carries evidence for all eight. This packet takes the newest tuple with
+retained daemon-boundary execution and records, criterion by criterion, what
+is shown there, what is not, and why. Earlier acceptances do not transfer to
+this tuple, and evidence for this tuple does not transfer back.
+
+Two tuples are recorded:
+
+- **T-REL**, the recommended common tuple. This is Coven release `v0.5.1` with the Threads core it pins. It needs no override and no decision about whether two tuples are equivalent.
+- **T-NOW**, the same Coven with Threads main compiled in through the local override. Its sections follow T-REL's and supply supporting evidence.
+
+## Recommended common tuple: T-REL
+
+| Element | Value |
+| --- | --- |
+| Coven | `9415c3098f9635963db593970b8943370e90bf81`, tag `v0.5.1` (`git tag --points-at`) |
+| Threads core compiled | `7b5a9e688bff46bf9093e6065820921d119c4747`, from Coven's own pin (`crates/coven-cli/Cargo.toml:77`, `Cargo.lock`). No override: `local_threads_override_active: false` in all 108 retained manifests. |
+| Cave / producer | **None at this producer.** The Cave harness pins producer `b07935f0` (T-CAVE2). T-CAVE2 and T-LOAD compile the same core, `7b5a9e68`, as T-REL. |
+
+**Core distance from Threads main.** `7b5a9e68` is an ancestor of `4955cf8d`. The only core code between them is `automation_authority/*` and its examples (`git diff --stat 7b5a9e68 4955cf8d -- crates/coven-threads-core`). `approval.rs`, `audit.rs`, `surface_regions.rs` and `identity_invariants.rs` are byte-identical.
+
+### Execution at T-REL
+
+**Daemon boundary.** Coven's required CI push run [`45540814558`](https://github.com/OpenCoven/coven/actions/runs/45540814558) (2026-11-25, success) runs `cargo test --locked -p coven-cli --test threads_e2e --features threads-test-clock --test threads_identity_invariants --test threads_protected_intake --test threads_terminal_recovery` (`.github/workflows/ci.yml:403`, `518`, `607`) on all three platforms. Counts are taken from the job logs:
+
+| Platform (job) | `threads_e2e` | `threads_identity_invariants` | `threads_protected_intake` | `threads_terminal_recovery` |
+| --- | --- | --- | --- | --- |
+| Linux (`138958660149`) | 129 | 45 | 39 | 34 |
+| macOS (`138958660031`) | 128 | 45 | 39 | 34 |
+| Windows (`138958659986`) | 106 | 44 | 35 | 33 |
+
+- All counts have 0 failed and 0 ignored. The isolated Threads-clock step passed 249, 249 and 240 tests.
+- Each platform's counts are listed in run order. The macOS log's `Running` labels are offset by one line.
+- The Windows counts are lower because the platform gates some cases; I did not enumerate them.
+
+**Retained daemon state.** The Windows evidence artifact is `threads-daemon-windows-feature-9415c309…-45540814558-1` (artifact `14989338370`, SHA-256 `2b2fee17b52ed37ba50258402616ebc49e688bb61985a936e0d6e46b14e8d82b` as downloaded; retained until 2026-12-09). I replayed it offline with the same `python3 -I` scripts used for T-NOW:
+
+- 108/108 journeys passed. Every manifest names `9415c309`/`7b5a9e68` with `coven_dirty: false`.
+- 51 opened windows, all `typed_terminal_recorded`, 0 unresolved. Closes: 13 `applied`, 2 `vetoed`, 20 `evidence_diverged`, 15 `revalidation_failed`, 1 `superseded`. Paths: 20 `auto`, 31 `familiar_review`.
+- Hash binding and close rule hold for 51/51. 13/13 applied closes follow an apply intent with before-images and a recovery commitment.
+- 17 tier-load cases: the 4 valid configurations return 200; the unknown tier and 12 mismatches return 500 `ward_config_invalid`.
+- `threads_dirty: true` in every manifest. The harness computes it with `git status --untracked-files=all` in the directory holding the resolved Threads manifest (`tests/threads_e2e.rs:2332`, `3617-3618`), which here is Cargo's git checkout. *(inference)* Cargo's own marker files in that checkout produce the flag, not a source change. The recorded commit equals the lock pin.
+
+**Core at the pinned rev.** I ran `git archive 7b5a9e68` into a scratch directory, then `cargo test --offline --locked -p coven-threads-core` with rustc 1.99.1:
+
+- `rfc0001_s5_conformance` 14/14, `c7_roundtrip` 17/17, `phase5_retired_ward_corpus` 4/4.
+- 229/229 library tests, including the nine criterion-1 covering tests from the T-SEP packet: `highest_ceremony_wins`, `cross_variant_highest_merges_the_losing_paths_veto_window`, `human_paths_drop_lower_windows_by_design`, `proposal_classification_roundtrips_json`, `window_close_reason_tags_are_stable`, `missing_candidate_extraction_fails_closed`, `stale_candidate_fact_extraction_fails_closed`, `compiler_requires_name_and_person` and `retired_invariant_declarations_compile_with_full_fidelity`.
+
+### Per-criterion status at T-REL
+
+Each status uses the criterion's own wording in #13. "Shown" is engineering evidence only; acceptance is Val's.
+
+| # | Criterion (#13 wording, abridged) | Evidence at T-REL | Status |
+| --- | --- | --- | --- |
+| 1 | Every §6 decision maps to a type or predicate; none orphaned or contradicted | [Criterion 1 mapping](#criterion-1-mapping-at-t-rel); core suites and covering tests above | **Shown**, with the T-SEP bounds: the forward-only rule of decision 3 is vacuous (no promotion code), and decision 5 is an external process decision |
+| 2 | Every `ApprovalPath` ends in daemon re-materialization; no apply without live revalidation at the deadline | [Code trace](#code-trace-for-criteria-2-and-5) (the Coven source is T-NOW's); the scheduler makes vetoable paths due only at `now >= veto_deadline` and never makes human paths due on its own (`api.rs:11790-11798`); four targets on three platforms; 51/51 typed closes | **Shown**, without route-by-route execution |
+| 3 | No Cave or client surface is enforced on; every enforcement point is daemon-owned | [Census](#criterion-3-census-at-9415c309) (the Coven source is T-NOW's) | **Not shown**: Castle sync (`/host/*`) needs Val's classification |
+| 4 | `submitted → opened → close(reason)` with no gap | Supported intake 51/51; `threads_terminal_recovery` passes on three platforms | **Not met**: damaged histories have no close path; see the [options memo](2026-11-29-criterion-4-options.md) |
+| 5 | `evidence_replay_hash` on `ProposalClassification` and enforced at deadline revalidation | Field at `approval.rs:428`; re-derived at every load (`proposal_scheduler.rs:86-88`); live-byte and final-byte checks (code trace); 51/51 retained bindings; divergence journeys pass on three platforms | **Shown**; byte values were not retained for replay |
+| 6 | `min_visible` enforced on `VetoWindow`; pending state reachable before the deadline. Val accepted it only on qualified Cave runs, at T-CAVE and T-CAVE2. | Daemon side as at T-NOW | **Not shown**: no Cave journey at this producer; needs a Cave harness repin to `9415c309` and a dispatch |
+| 7 | Load-time label/variant mapping | 17/17 tier-load cases retained (Windows); same targets pass on Linux and macOS | **Shown**, within the T-LOAD bound |
+| 8 | Advisory probes separated, Gate-3 only | Same journeys as T-NOW | **Shown** as separation only |
+
+**Summary at T-REL:**
+
+- Shown: 1, 2, 5, 7 and 8.
+- Not shown: 3, pending Val's Castle-sync classification, and 6, pending the Cave repin and dispatch.
+- Not met: 4.
+
+### Criterion 1 mapping at T-REL
+
+The §6 decisions come from `specs/PHASE-5-APPROVAL-SEMANTICS.md:326-402` on Threads main. Each symbol from the T-SEP mapping was relocated at Threads `4955cf8d`, whose files listed below are identical at `7b5a9e68`, and at Coven `9415c309`.
+
+| §6 decision | Type / predicate / call site at T-REL | Change since T-SEP |
+| --- | --- | --- |
+| 1. `ApprovalPath` separate from `Channel` | `enum ApprovalPath` (`approval.rs:82`); `ProposalClassification` carries both (`approval.rs:405`); `ApprovalPath::highest` (`approval.rs:158`); the daemon derives the path from region bindings: `WardConfig::compiled_approval_tiers` (`coven ward.rs:589`), `revalidate_scheduled_approval_policy` (`api.rs:8176`) | Threads file unchanged; Coven functions relocated |
+| 2. Delayed apply only; close reason field | `WindowCloseReason` (`approval.rs:471`), `ProposalWindowCloseAuditDetail` (`approval.rs:537`), `ProposalApprovalAuditDetail` (`approval.rs:553`); due rule (`api.rs:11790-11798`); `proposal_decision_semantics` (`api.rs:7995`) refuses early approval (`proposal-minimum-visibility-open`, `proposal-veto-window-open`) | No provisional-apply path found |
+| 3. Classify regions first; forward-only promotion | `affected_regions` on `ProposalClassification`; `SurfaceRegionRegistry::classify_all` (`surface_regions.rs:627`) and `path_tier_floor` (`641`); `validate_region_evidence` (`proposal_scheduler.rs:270`) | Promotion code still absent; vacuous |
+| 4. Deterministic where possible; ambiguity fails closed | `IdentityInvariantSet::compile` (`identity_invariants.rs:211`), `evaluate` (`263`), `IdentityAwarePattern` (`327`), `AdvisoryProbes` separate (`885`); daemon `enum ProbeId` (`coven ward.rs:254`) | Threads file unchanged |
+| 5. Upstream RFC amendments before freeze | Process decision; external repository not inspected | Same bound as T-SEP |
+| 6. Daemon contract before Cave | `ApprovalPathWireEnvelope` (`approval.rs:572`) emitted by `ApprovalPathWireEnvelope::from_classification` (`api.rs:7856`) in `threads_proposals_response` (`api.rs:7617`) | Coven relocated; the Cave side is not re-inspected at this producer |
+| 7. Display labels as a daemon wire contract | Criterion 7 row | — |
+| 8. `proposal_window_opened` audit event | `AuditEventType::ProposalWindowOpened` (`audit.rs:148`), detail validated in `validate_event_detail` (`audit.rs:472`), written by `ensure_proposal_window_opened_audit_with_conn` (`api.rs:12167`) | Since T-SEP, `audit.rs` gained only `for_ward_updated` and memory-admission channel recording (four commits, `0021fd26..4955cf8d`), neither of which touches decisions 2 or 8 |
+
+No §6 decision is contradicted at T-REL. Decision 3's forward-only rule and decision 5 keep their T-SEP bounds.
+
+## Supporting tuple, T-NOW
+
+| Element | Value |
+| --- | --- |
+| Coven | `9415c3098f9635963db593970b8943370e90bf81`, Coven main from 2026-11-25 through this packet |
+| Threads core compiled | `4955cf8dc97e7fde07adf4e233fd6e060ee584e4`, Threads main, through the local Cargo override (`local_threads_override_active: true`, `threads_dirty: false`). Coven main's own pin is Threads `7b5a9e68`; the core diff from there to `4955cf8d` is confined to `automation_authority` and the unpublished model crate. |
+| Cave / producer | **None at this producer.** Cave main `d67f1559` pins its live-daemon harness to producer Coven `b07935f0` (`tests/threads-live-daemon/compatibility.json`), which is T-CAVE2. |
+
+**Execution:** hosted scheduled run [`46036830391`](https://github.com/OpenCoven/coven-threads/actions/runs/46036830391), "Daemon observation (advisory)", 2026-11-27 16:49–16:54 UTC.
+
+| Run detail | Value |
+| --- | --- |
+| Platform | Linux, rustc 1.99.1 as recorded |
+| Target | `threads_e2e` only |
+| Artifact | `threads-daemon-observation-46036830391-1`, SHA-256 `866f76175ef593124b5a7cb30681aaa2e7491f077bde11c242a8ff90cd5a6f11` as downloaded; retention ends 14 days after the run |
+| Coven tree | Dirty only through the recorded overlay: config overlay `3546b5a6…`, lock overlay `67dc2a9b…` |
+
+The run is advisory and not required. I replayed its retained bytes offline:
+
+- **Journeys:** all 134 have JUnit `failures="0"` and a manifest result of `passed`. Every manifest names the same Coven/Threads pair with the override active.
+- **Windows:** 51 opened, and all 51 are `typed_terminal_recorded` in their window census, with 0 unresolved histories.
+- **Closes:** 13 `applied`, 2 `vetoed`, 20 `evidence_diverged`, 15 `revalidation_failed`, 1 `superseded`.
+- **Paths:** 20 windows on `auto`, 31 on `familiar_review`.
+
+**Not executed in this run:** the other three required daemon targets (`threads_identity_invariants`, `threads_protected_intake`, `threads_terminal_recovery`), macOS and Windows, and any Cave journey. The required pinned check executes those four targets at Coven `226bfcc8`, a different tuple. For Threads main that is run [`45976553628`](https://github.com/OpenCoven/coven-threads/actions/runs/45976553628).
+
+### All four targets at the same production source
+
+Another session's qualification, recorded on draft [#128](https://github.com/OpenCoven/coven-threads/blob/088379dd8c8b2d592cdf893851aaee6d72e9b13d/docs/reviews/2026-11-28-coherence-evidence.md) and Coven #1716, ran signed candidate `da5d07437e149416f1a5e058c577dfe20332f3ee` with Threads `4955cf8d` through the local core override, on macOS ARM64. I did not run it, and I cite its record as written.
+
+| Detail | Value |
+| --- | --- |
+| Targets | `threads_e2e` 135, `threads_identity_invariants` 45, `threads_protected_intake` 39, `threads_terminal_recovery` 34; all passed, 0 ignored |
+| Lifecycle census | 8 journeys and 25 read-only comparisons. 2 settled with a typed close; 3 ended quarantined, 1 orphaned and 2 unprovable. |
+| Core on Rust 1.88.0 | 14 RFC §5, 17 C7 and 11 advisory-probe tests passed |
+
+I checked, read-only, that `da5d0743` descends from `9415c309` through a single commit (`git diff --name-status 9415c309 da5d0743`). That commit touches only `crates/coven-cli/tests/support/`: one file added, one modified, +477 lines. The daemon's production source is therefore T-NOW's.
+
+It is still a different Coven revision. Whether a delta confined to test support counts as one tuple is Val's call. The rows below cite this run as "at the T-NOW production source" and never as "at T-NOW".
+
+## Per-criterion status at T-NOW
+
+| # | Criterion | Evidence at T-NOW | Not shown at T-NOW | Status |
+| --- | --- | --- | --- | --- |
+| 1 | RFC round-trip | Threads core at `4955cf8d`: `rfc0001_s5_conformance` 14/14, `c7_roundtrip` 17/17, `phase5_retired_ward_corpus` 4/4. Local rustc 1.99.1, and in hosted CI run [`45976553539`](https://github.com/OpenCoven/coven-threads/actions/runs/45976553539). Related daemon identity journeys passed: `identity-intake-changed`, `identity-intake-missing`, the identity-replay cases `scheduled-valid-identity-bytes-live/restart`, and `scheduled-window-identity-changed/unavailable`. | `threads_identity_invariants` (45) passed on macOS only at the T-NOW production source (`da5d0743`), not at `9415c309` itself. The criterion still needs the Phase-5 defaults and daemon behavior mapped to the RFC, as #128 notes. | Partly shown |
+| 2 | Gate-4 revalidation by every reachable ApprovalPath | Every window on `auto` (20) and `familiar_review` (31) reached a typed close, including 15 `revalidation_failed` and 20 `evidence_diverged`. Human-path journeys passed: `reviewed-human-no-window`, `changed-human-path-opened-window`, and the five `final-commit-*` release and identity-drift journeys. | Same bound as T-SEP: the journeys exercise the paths `threads_e2e` reaches, not every route. Protected Tier-0 stays unschedulable. `threads_protected_intake` (39) passed only at the T-NOW production source. The [code trace](#code-trace-for-criteria-2-and-5) shows that the close-time and final-commit checks do not depend on the path, but no route-by-route execution exists. | Partly shown; the code trace is complete |
+| 3 | Descriptor is not authority | `protected-proposal-route-prohibition` (403), `protected-rejection-audit` and `smoke-unsigned-protected-rejection` passed. A static dispatch census ran at this Coven with the Set C method (see [Criterion 3 census](#criterion-3-census-at-9415c309)). All 84 Set C arm headers are unchanged. Three arms were added. Two are `/internal/ward/power-loss`, compiled only under the `threads-test-clock` feature, and refuse any transport other than owner IPC. | One new arm, `/host/*` (Castle folder sync, #1809 and #1830), lets the daemon write peer-synchronized bytes under a folder the owner chooses, with no Ward gate. It refuses only overlap with the daemon home. A familiar workspace configured outside the home is not refused, and `SOUL.md`, `IDENTITY.md` and `ward.toml` are not in the sync exclusions. Val must classify this path as outside or inside criterion 3. The ten new Ward- or Threads-referencing files are classified below, and none adds an authority source. Static reading only. | **Not shown**: one unclassified write path |
+| 4 | Audit completeness and typed reason | Supported intake: 51 of 51 opened windows have exactly one typed close, covering all five reasons, with 0 unresolved histories. | Damaged histories (quarantined, orphaned, untrusted, unprovable apply) have no close path at this Coven. The [options memo](2026-11-29-criterion-4-options.md) on this branch records why and proposes option A, which awaits Val's decision. At the T-NOW production source, `threads_terminal_recovery` (34) passed, and the #1716 lifecycle census still leaves 6 of 8 histories without a close: 3 quarantined, 1 orphaned, 2 unprovable. Memo §7 gives the expected option-A disposition for each of the eight cases. The two quarantined-claim rows are inferences. | **Not met** |
+| 5 | Replay hash present and enforced | 20 `evidence_diverged` closes. `scheduled-window-surface-diverged`, `out-of-band-reviewed-drift` and the `output-auto-drift-*` families passed. From the retained audit rows, for all 51 windows (see [Criterion 5 binding](#criterion-5-binding-from-retained-rows)): the opening's `evidence_replay_hash_hex` equals the 32-byte submission `classification.evidence_replay_hash`; `replay_hash_matched` follows the Threads rule for every reason; and every one of the 13 `applied` closes is preceded by a `proposal-apply-intent` verdict carrying before-images and a 32-byte recovery commitment. | The retained rows do not carry the hash re-derived at close or the final target bytes. The [code trace](#code-trace-for-criteria-2-and-5) shows where each is checked, and the passing divergence journeys exercise those checks, but no byte values were retained to replay. `apply_audit` rows exist only for `Tier::Logged` writes (`ward.rs:2879`), which explains why 1 of 13 applied windows has one. | Partly shown; the code trace is complete |
+| 6 | Minimum visibility and reachable pending state | Daemon side: `retired-corpus-scheduled-restart` passed. It asserts that the durable pending record and the submission audit bind the same classification, that `earliest_close` and the deadline equal the corpus policy, and that the target bytes are unchanged one second before minimum visibility, across a restart (Coven `tests/threads_e2e.rs:405-460`). | No Cave journey exists at this producer. The Cave harness pins `b07935f0`. Showing it needs a reviewed Cave harness repin to `9415c309` and a dispatch, and that dispatch was not authorized tonight. | **Not shown** |
+| 7 | Load-time label/variant mapping | All 17 `approval_tier_load_*` journeys: the 4 valid configurations returned 200; the unknown tier and 12 mismatches returned 500 `ward_config_invalid`. The pattern matches T-LOAD. | Linux only; not every load-error class, the same bound as T-LOAD. | Shown, within that bound |
+| 8 | Advisory probes separated, Gate-3 only | `output-auto-advisory-isolation` and the `output-auto-regression-gates` and `-floors` journeys passed. | No model probe is wired into the daemon, so separation is vacuous at the daemon, as at T-SEP. Kani is unrun (#125). | Shown as separation only |
+
+## What this means for #13
+
+**T-REL (Coven `v0.5.1` + pinned core `7b5a9e68`) is the recommended common tuple.**
+
+- It shows criteria 1, 2, 5, 7 and 8.
+- It does not show criterion 3, which waits on Val's Castle-sync classification, or criterion 6, which needs a Cave repin and dispatch.
+- It does not meet criterion 4, which needs Val's options decision and then Coven implementation.
+
+Under T-NOW, the override tuple, the list below still applies.
+
+- **Criterion 4** is not met at any tuple. This is now a design question; see the options memo.
+- **Criterion 3** has a rerun dispatch census and file classification at this Coven. The one open item is Val's classification of the `/host/*` Castle sync path.
+- **Criterion 6** needs a Cave harness repin and a live dispatch.
+- **Criteria 1, 2 and 5** have all four required targets passing at the T-NOW production source (`da5d0743`, macOS), and `threads_e2e` at `9415c309` (Linux). Val decides whether the test-support delta counts as one tuple. For criteria 2 and 5 the code trace below is complete. What remains is execution evidence route by route, and retained byte values. Criterion 1 needs the RFC mapping of the Phase-5 defaults.
+
+To finish a common-tuple packet, in order:
+
+1. Val decides the criterion-4 options and classifies the Castle sync path for criterion 3.
+2. The Coven owner implements the chosen recovery semantics, with daemon-boundary regressions. If Val places Castle sync inside criterion 3, the same owner adds a refusal of Castle roots that overlap a familiar workspace.
+3. Run all four required targets at the resulting Coven with the current Threads override active, on Linux and macOS.
+4. Rerun the dispatch census and the file classification there by the method below.
+5. Repin the Cave harness to that producer and dispatch the live journeys.
+
+## Criterion 3 census at `9415c309`
+
+This census uses the method of the Set B packet (`2026-10-13-coherence-packet-f772b513.md`, "Dispatch census"). It counts the arm headers of `match (method, route.as_ref())` in `crates/coven-cli/src/api.rs`, meaning lines starting with eight spaces and `(`, and then diffs the header text. I read the source with `git show <rev>:<path>` and changed no Coven checkout.
+
+| Revision | Match span | Arms | Default arm |
+| --- | --- | --- | --- |
+| `c658603d` (Set C) | `L885-1478` | 84 | yes |
+| `9415c309` (T-NOW) | `L938-1557` | 87 | yes |
+
+The header diff contains exactly three additions and no removals or edits. I also compared each arm's text, from its header to the next header, with whitespace collapsed. All 84 Set C arm bodies, and the default arm, are unchanged. The only textual difference was the `#[cfg]` attribute of the new power-loss arm, which follows `/internal/threads/test-clock/tick`. Most arms delegate to functions, so an unchanged arm does not show an unchanged callee. The callee changes that bear on Ward or Threads are the files classified below.
+
+| New arm | Location | Reading |
+| --- | --- | --- |
+| `(_, route) if route.starts_with("/host/")` | `api.rs:950` → `host_sync.rs` (`Workers::route` `L44`, `dispatch` `L426`) | Refuses anything other than `OwnerLocalIpc` (403 `owner_local_required`). `POST /host/init` binds a Castle root and refuses overlap with the daemon home (`L431-435`). Sync and resolve then write peer-committed bytes under that root through `coven-host` `d031b333`. Its name filter (`lib.rs:18-33`) excludes dotfiles, credentials and similar names, not `SOUL.md`, `IDENTITY.md` or `ward.toml`. Familiar workspaces can be configured outside the daemon home (`cockpit_sources.rs:96-118`), and no check compares the root with them. There is no Ward or Threads call on this path. |
+| `(_, "/internal/ward/power-loss") if !authority.allows_ward_proposal_access()` | `api.rs:1132` | `#[cfg(feature = "threads-test-clock")]`; refusal-only 403 `transport_forbidden`, `writeApplied: false`. The feature is not in `default` (`crates/coven-cli/Cargo.toml`). |
+| `("POST", "/internal/ward/power-loss")` | `api.rs:1192` → `ward_power_loss_fixture_response` (`L15308`) | The same feature gate. It controls the synthetic power-loss fixture (#1640). It is absent in a default build, which a Coven test asserts (`api.rs:38343`). |
+
+**Whole-tree census.** I grepped `crates/coven-cli/src` with the Set B pattern set. The set of files that match grew from 17 to 29:
+
+| File (production part) | What it is | Authority source | Ward/Threads mutation decided, permitted or fed? |
+| --- | --- | --- | --- |
+| `api/proposal_decision_origin.rs` | It decides which actor a persisted decision may be attributed to. It is new code that replaces the Set C `trusted_decision_approver` in `api.rs`. | The purpose of the server-written reservation in `coven_ward_audit_reservations`. That purpose binds the SHA-256 of the exact request (`bound_proposal_decision_purpose`). The daemon writes the owner-local purpose only when the router passes the hard-coded `OWNER_LOCAL_DECISION_ACTOR` (`decide_threads_proposal`, `api.rs:8457-8470`). The approve and reject arms, and their `allows_ward_proposal_access` guard, are byte-identical to Set C. Historical requests must match the recorded apply intent. | **Refuses**: every mismatch is an invalid origin or requires renewed review. It narrows Set C and grants nothing new. |
+| `api/proposal_apply_intent.rs` | Appends and reads the durable apply intent, a `validation_verdict` row with `proposal-apply-intent`, before any file change. | The approver comes from the origin above. All other fields are derived by the daemon. | **Feeds** recovery. The `ward_audit` insert count is unchanged (13). |
+| `api/proposal_document.rs` | The typed, persisted proposal envelope, its stored form and its revision digest (`authority_bytes` → `revision`, SHA-256 over canonical JSON). | Daemon-written pending files, decoded after preflight. | **Feeds** the expected-revision comparison. It adds no grant. |
+| `api/proposal_preflight.rs` | Envelope preflight. 16 of its 20 functions are byte-identical moves from Set C `api.rs`; 4 are new validators (collection, combined bytes, limits). | none | **Refuses** only. |
+| `api/proposal_revision.rs` | Canonical-JSON hashing for revisions. | none | No. |
+| `automations/threads_decisions.rs`, `automations/trusted_authority.rs` | #857 Runtime Authority: signed automation-dispatch decisions. | The owner activation, the daemon key store and `coven_threads_core::automation_authority`. | **No** for Ward. They write only `automation_threads_decisions` and `automation_threads_store_events`, and reference no `ward`, `threads_gate` or proposal module. |
+| `proposal_store.rs` (+99) | The scheduler batch moved here (#1634), plus a scheduler cursor file. 22 of 27 functions are byte-identical. | none | **No.** It orders scheduling and decides nothing. |
+| test files (four) | tests | — | — |
+
+**Grep census.** Each pattern was counted over `api.rs` plus `api/*.rs`, test files excluded, with the same method at all three revisions. These whole-file counts are not comparable to the production-range table in the Set B packet.
+
+- `f772b513` and `c658603d` give identical counts for all 15 patterns.
+- From `c658603d` to `9415c309`, only four counts change:
+  - `trusted_decision_approver` +2: a visibility and import change from the module split.
+  - `allows_*(` +1: the power-loss guard.
+  - `api_error(` +8: the power-loss fixture (5) and host sync (3).
+  - `bail!|ensure!` +3: `writeScope` launch checks (#1651, owner-IPC only, `api.rs:4162-4172`) and a runtime-envelope check.
+- The count of `INSERT INTO ward_audit` is unchanged. The new `ward_manifest` upsert at `api.rs:469` is inside `#[cfg(test)]`.
+
+## Code trace for criteria 2 and 5
+
+This is a static trace of `crates/coven-cli/src` at Coven `9415c309`, read with `git show`. It covers a scheduled proposal from load to final bytes.
+
+1. **The stored hash is re-derived at every load.** `ScheduledProposal::from_persisted_parts` recomputes `evidence_replay_hash(materialized_diff, region_evidence)`. It refuses the load if the result differs from `classification.evidence_replay_hash`, with "classification replay hash does not commit the materialized evidence" (`proposal_scheduler.rs:86-88`). The persisted envelope is decoded through this function (`api/proposal_document.rs`). Before re-deriving, it also refuses a path tier floor of 0 (protected Tier-0) and reviewed Tier-1 on `AutoRegression` (`proposal_scheduler.rs:66-79`).
+2. **Live bytes are compared at the close-time decision.** In `decide_threads_proposal_inner`, every scheduled proposal with no applying state runs these checks, in this order, whatever its `ApprovalPath`:
+   - identity revalidation (`api.rs:10528-10544`);
+   - `revalidate_auto_regression`;
+   - live tier escalation;
+   - `revalidate_scheduled_materialized_before` (`api.rs:8145-8172`), which compares each surface's committed `before` bytes, or its absence, with the live file;
+   - `revalidate_scheduled_approval_policy` (`api.rs:10615-10640`).
+
+   A difference becomes a typed rejection with `replay_hash_matched: Some(false)`: `evidence_diverged` for byte divergence, `revalidation_failed` otherwise.
+3. **The decision.** `Applied` with `Some(true)` is assigned only after those checks (`proposal_decision_semantics`, `api.rs:8114-8121`). Each path's own preconditions are enforced in the same function (`api.rs:8044-8105`):
+   - `FamiliarCoherence` and vetoable `AutoRegression` need minimum visibility and an elapsed deadline before approval.
+   - `HumanApprovalWithRationale` needs a non-empty rationale.
+   - Non-vetoable `AutoRegression` cannot be rejected by a human.
+
+   The four `ApprovalPath` kinds are `AutoRegression`, `FamiliarCoherence`, `HumanApproval` and `HumanApprovalWithRationale` (Threads `approval.rs:231-239`, identical at the pinned `7b5a9e68`). All four reach steps 2, 4 and 5.
+4. **Final commit.** The initial apply (`ApprovedApplyMode::Initial`, `api.rs:11170`) runs `ensure_proposal_final_authority_unchanged` (`api.rs:13908`) as a callback inside the Ward apply, after the apply intent and before commit. It refuses three kinds of drift:
+   - a changed Ward config;
+   - a recomputed recovery commitment that differs from the intent's;
+   - an auto-regression check that no longer passes.
+
+   On drift, the apply rolls back and the window gets one typed `revalidation_failed` close (`append_open_window_revalidation_failure`, `api.rs:11191`). Recovery-mode applies (`api.rs:10761`, `10857`) re-check the Ward config first (`api.rs:10711`).
+5. **Final bytes.** `finalize_approved_proposal` (`api.rs:14855`) writes the apply audit and advances each gated surface's baseline in one durable transaction. `advance_surface_baseline_from_bytes` refuses if the bytes on disk differ from the approved bytes: "changed after approved apply; baseline not advanced" (`threads_gate.rs:951-953`).
+
+The retained journeys that drive these checks include:
+
+- `scheduled-window-surface-diverged` for step 2;
+- `final-commit-identity-drift`, `output-auto-final-policy` and `output-auto-final-surface` for step 4;
+- `out-of-band-reviewed-drift`.
+
+All of them passed at T-NOW. What remains unshown is execution route by route, and retained byte values for the re-derived hash and the final bytes.
+
+## Criterion 5 binding from retained rows
+
+I checked run `46036830391` (artifact SHA-256 above) offline with `python3 -I`, keeping the scripts outside the artifact directory.
+
+- **Windows:** 51 opened, with exactly one submission, one opening and one terminal each, and no terminal recorded before its opening.
+- **Hashes:** 51/51 submission hashes are 32 bytes, and 51/51 openings carry the same hash as hex.
+- **Close detail:** 51/51 follow `validate_window_close_detail`: `applied` with `Some(true)`, `evidence_diverged` and `revalidation_failed` with `Some(false)`, and `vetoed` and `superseded` with `None`.
+- **Apply intent:**
+  - All 13 `applied` windows have a `proposal-apply-intent` verdict before the terminal, with before-images and a 32-byte recovery commitment.
+  - 3 rejected windows also have an apply intent before a typed close: `final-commit-identity-drift` and `output-auto-final-policy` (`revalidation_failed`), and `output-auto-final-surface` (`evidence_diverged`). In each, drift found at final commit, after the intent was written, closed the window live. If that live close is missing, option A in the memo holds this history shape instead of closing it.
+  - The other 35 non-applied windows have none.
+- **Not retained:** the re-derived hash at close, the final target bytes, and the pending record (except where a journey asserts it in Coven's own test).
+
+Every later Coven or Threads commit makes a new tuple.
+
+## Residuals
+
+- The run is advisory and scheduled, not the required check.
+- The artifact expires after 14 days. Archive it before then if it will be relied on.
+- The criterion-3 census is static and text-based. It compares arm text and classifies files that reference Ward or Threads. A writer that reaches a protected surface without referencing those modules, as `/host/*` does, is found only by reading the new arms. A full writer inventory, including writers outside the API as #128 notes, is still open. The `/host/*` reading was not exercised at runtime.
+- The `coven-host` source was read from the local Cargo checkout at the pinned rev `d031b33`, not from a fresh clone.
+- This packet reads retained evidence; it reran nothing at the daemon boundary.

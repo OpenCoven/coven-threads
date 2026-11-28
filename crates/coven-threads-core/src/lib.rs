@@ -69,6 +69,7 @@ pub mod surface_regions;
 pub mod thread;
 pub mod validate;
 pub mod weave;
+pub mod window_recovery;
 
 pub use approval::{
     ApprovalPath, ApprovalPathKind, ApprovalPathWireEnvelope, ProposalApprovalAuditDetail,
