@@ -1,5 +1,7 @@
 # Phases
 
+**November 28, 2026.** Phases 0–4 remain frozen. Val deferred Phase 5 on November 26–27. Seven coherence criteria have acceptances limited to specific revisions. Audit completeness remains unresolved, and all eight criteria need evidence on one common set of revisions before Val can reconsider coherence and then freeze. [Coherence decision](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591) · [Freeze decision](https://github.com/OpenCoven/coven-threads/issues/14#issuecomment-7214040820) · [Delivery plan](strategy.md#work-remaining-for-phase-5)
+
 **Additive observation, 2026-11-16:** the [source addendum](reviews/2026-11-16-coherence-addendum.md) records the #123 batch delivery on Threads main, Coven #1652's single-transaction direct Ward evidence, #1665's behavior-preserving decision-origin move and #1674's launch-folder reaper, with Coven v0.5.0 excluding all three. The required daemon pin, all eight human criteria, four accepted dossiers and the native source hold are unchanged, and Cave was not refreshed. Val's coherence and subsequent freeze decisions remain outstanding.
 
 **Additive observation, 2026-11-08, after delivery:** the [approval-tier load supplement](reviews/2026-11-08-approval-tier-load-supplement.md) records authorized #120 delivery, the subsequent native-source handoff, 17 supplemental macOS probes and the proposed permanent daemon regressions in Coven #1695. The initial allocation blocker was resolved; local workspace and current-pair daemon proof now exist, with original failures and source limits retained. Hosted verification, review and delivery remain separate, criterion-4/6 qualifications persist, and no fully qualified coherence prerequisite is transferred to the later freeze gate.
@@ -8,7 +10,7 @@
 
 **Additive observation, 2026-11-06:** the [coherence evidence addendum](reviews/2026-11-06-coherence-addendum.md) records the later Coven #1643/#1622 durability repairs, current source/release limits, older-pin native pilot and prospective reliability window. It preserves the immutable October handoff and all eight unselected human criterion dispositions. Val's coherence and subsequent freeze/reaffirmation decisions remain outstanding.
 
-**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+**October 28 checkpoint.** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
 
 > This page separates design approval, merged implementation, release provenance, and end-to-end proof. `[FROZEN]` means design complete and change-controlled; `[MERGED]` means present on downstream `main`; `[IN RELEASE TAG]` means included in a published release's source revision, not a claim about any running installation; `[ENGINEERING FROZEN]` means implementation complete at the recorded checkpoint. `[ACTIVE]`, `[BLOCKED]`, and `[NOT STARTED]` describe remaining work.
 >
@@ -26,7 +28,7 @@ original dates; a later observation does not transfer acceptance between heads.
 
 ## Current decision
 
-Keep Phase 5 active and prepare Val’s separate decisions using the [October 28 packet](reviews/2026-10-28-current-coherence.md). Preserve the completed profile census, native follow-up dispositions and Cave window within their exact limits. Do not reopen accepted finite engineering roots or rebuild delivered work. The September checkpoints below retain their original evidence dates.
+Resume the Coven audit-lifecycle qualification, then collect evidence for all eight criteria at one common set of revisions. Val’s November deferrals govern the next review. [Delivery plan](strategy.md#work-remaining-for-phase-5)
 
 The [September 14 reliability handoff](reviews/2026-09-14-native-reliability.md)
 records subsequent fixture corrections and accepted Unix/Windows diagnostics.
@@ -547,7 +549,7 @@ those owner-specific integrations separate from Phase-5 closure.
 | 2 | Daemon integration | `[FROZEN; IN RELEASE TAG]`; `.14`, `.20`, and `.19` closed | Phase-5 route and replay defects remain separate |
 | 3 | Portability format | `[ENGINEERING FROZEN]`; `.21`, `.16`, and exporter follow-up `threads-jq4` closed | No `.af` import or authority-preserving `.af` round-trip |
 | 4 | Coven Cave UX | `[COMPLETE; FROZEN 2026-07-17]`; `threads-986.17`, adapter follow-up `threads-v3g`, and degraded-familiar follow-up `threads-k9s` closed | New Phase-5 live-daemon acceptance remains separate |
-| 5 | Approval semantics | `[ACTIVE]`; all four root engineering blockers closed, `threads-980` last on 2026-09-17 | Broader acceptance (native reliability, live Cave), then Val coherence acceptance (`.9`, now dependency-clear) and scoped freeze/reaffirmation (`.10`) |
+| 5 | Approval semantics | `[ACTIVE]`; all four root engineering blockers closed, `threads-980` last on 2026-09-17 | Resolve criterion 4 and qualify all eight criteria together for Val’s coherence review (#13), followed by scoped freeze review (#14) |
 
 ## Known housekeeping discrepancies
 

@@ -1,6 +1,6 @@
 # coven-threads documentation
 
-**Current status, 2026-10-28:** Phases 0–4 remain frozen and Phase 5 remains active. The four accepted September root dossiers retain their recorded scope. Coven #1305 repaired the Set B durability defect on main; the latest published Coven v0.4.10 predates that repair. Cave #5256/#6187 delivered the qualified 30-day window at its older producer pin. Current-head execution, inspected deployment and Val’s #13 → #14 decisions remain separate. The [current eight-item packet](reviews/2026-10-28-current-coherence.md) records full source tuples, receipts, unknowns and residuals. Earlier dated checkpoints below are historical evidence.
+**November 28, 2026.** Phases 0–4 remain frozen. Val deferred Phase 5 on November 26–27. Seven coherence criteria have acceptances limited to specific revisions. Audit completeness remains unresolved, and all eight criteria need evidence on one common set of revisions before Val can reconsider coherence and then freeze. [Coherence decision](https://github.com/OpenCoven/coven-threads/issues/13#issuecomment-7207324591) · [Freeze decision](https://github.com/OpenCoven/coven-threads/issues/14#issuecomment-7214040820) · [Delivery plan](strategy.md#work-remaining-for-phase-5)
 
 `coven-threads` is OpenCoven's **protected-authority validator**, imported by the
 trusted `coven` daemon. The daemon owns authentication and effects; Threads
